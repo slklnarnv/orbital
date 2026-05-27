@@ -61,11 +61,11 @@ void main() {
 
     glow = limb_core + limb_band + limb_haze;
 
-    // Forward scattering sun-facing rim compression:
+    // Strengthened forward scattering sun-facing rim response:
     // As the camera looks towards the sun, the limb overexposes into a thin, brilliant, white-hot thread.
     float viewSunDot = dot(viewDir, normalize(sunDirection));
-    float forwardScatter = pow(max(viewSunDot, 0.0), 5.0);
-    glow += forwardScatter * 3.8 * pow(hFactor, 16.0);
+    float forwardScatter = pow(max(viewSunDot, 0.0), 6.0); // Slightly tightened angular compression
+    glow += forwardScatter * 5.2 * pow(hFactor, 16.0); // Strengthened rim scattering multiplier (was 3.8)
 
     // Color blend is also driven by altitude, concentrating white/cyan strictly to the surface thread
     colorBlend = pow(hFactor, 12.0);

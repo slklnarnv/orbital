@@ -174,17 +174,25 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       lightSecondaryRef.current.intensity = 0.8 * smoothMultiplier * shadowExposureBoost
     }
     if (lightAmbientRef.current) {
-      lightAmbientRef.current.intensity = 0.05 * smoothMultiplier * shadowExposureBoost // Faint ambient fill to prevent total black crush
+      // Dynamic ambient fill: lifts shadowed module details dynamically when zoomed in close.
+      // Soft fill when sunlit (0.24) to keep contrast, and a richer lift when shadowed (0.42) to simulate camera exposure adaptation.
+      const baseAmbientIntensity = isShadowed ? 0.42 : 0.24
+      lightAmbientRef.current.intensity = baseAmbientIntensity * smoothMultiplier
     }
 
     // 3d. Dynamic camera-linked inspection headlight
-    // Active strictly close-up (< 100 km), scaling up smoothly as the camera approaches minDistance
+    // Active close-up (scaled to remain active in tracking/follow/inspect modes up to 3000 km)
     if (lightInspectionRef.current) {
+      // Position the light exactly at the camera in the local space of the ISS
       _inspectionLightPos.subVectors(state.camera.position, worldPos.current)
       lightInspectionRef.current.position.copy(_inspectionLightPos)
-      const headlightFactor = 1.0 - THREE.MathUtils.clamp((distanceKm - 5.0) / 95.0, 0.0, 1.0)
+
+      const headlightFactor = 1.0 - THREE.MathUtils.clamp((distanceKm - 5.0) / 2995.0, 0.0, 1.0)
       const smoothHeadlight = Math.pow(headlightFactor, 2.0)
-      lightInspectionRef.current.intensity = 0.45 * smoothHeadlight * shadowExposureBoost
+
+      // Direct specular/diffuse fill: warm white tone, 0.35 in sunlit and 0.75 in shadowed scenes
+      const baseHeadlightIntensity = isShadowed ? 0.75 : 0.35
+      lightInspectionRef.current.intensity = baseHeadlightIntensity * smoothHeadlight
     }
 
     // 4. Mutate Three.js object visibility and matrices directly (bypasses React virtual DOM rendering)
@@ -312,21 +320,21 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         color="#e6f0ff"
       />
 
-      {/* ─── Dynamic Camera-Linked Warm Soft Inspection Headlight ─── */}
+      {/* ─── Dynamic Camera-Linked Warm Soft Inspection Headlight (Infinite range, zero decay) ─── */}
       <pointLight
         ref={lightInspectionRef}
         intensity={0.0}
-        distance={75.0}
-        decay={1.0}
+        distance={0.0} // Infinite range to bypass arbitrary distance cutoffs
+        decay={0.0}    // Zero distance decay, intensity is explicitly driven by useFrame
         color="#ffeedb" // Warm soft tone to capture module details beautifully
       />
 
-      {/* ─── Very subtle ambient-style orbital fill attached only near the ISS group, dynamically scaled ─── */}
+      {/* ─── High-fidelity ambient orbital fill, providing beautiful wrap-around readability close-up ─── */}
       <hemisphereLight
         ref={lightAmbientRef}
         intensity={0.0}       // Mutated dynamically in useFrame loop
-        color="#dfe8ff"       // Cool neutral space bounce
-        groundColor="#030305" // Deep dark space ground bounce
+        color="#ffffff"       // Crisp sunlight ambient reflection
+        groundColor="#a2cbf0" // Luminous ice-blue atmospheric Earth bounce
       />
     </group>
   )

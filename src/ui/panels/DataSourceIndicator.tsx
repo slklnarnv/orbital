@@ -15,15 +15,15 @@ export function DataSourceIndicator(): JSX.Element {
     telemetry.mode === 'LIVE'
       ? 'text-emerald-400'
       : telemetry.mode === 'HYBRID'
-      ? 'text-amber-400'
-      : 'text-rose-400'
+        ? 'text-amber-400'
+        : 'text-rose-400'
 
   const dotColorClass =
     telemetry.mode === 'LIVE'
       ? 'bg-emerald-500 shadow-emerald-500/20'
       : telemetry.mode === 'HYBRID'
-      ? 'bg-amber-500 shadow-amber-500/20'
-      : 'bg-rose-500 shadow-rose-500/20'
+        ? 'bg-amber-500 shadow-amber-500/20'
+        : 'bg-rose-500 shadow-rose-500/20'
 
   return (
     <GlassPanel className="w-80 flex flex-col gap-3">

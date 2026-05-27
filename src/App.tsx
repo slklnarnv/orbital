@@ -126,15 +126,15 @@ function LoadingScreen(): JSX.Element | null {
       // Delay slightly (e.g. 400ms) so the user can see 100% loaded state, then trigger fade out
       const fadeTimer = setTimeout(() => {
         setFadeOut(true)
-        
+
         // Complete unmount after CSS fade-out transition completes (800ms)
         const unmountTimer = setTimeout(() => {
           setMounted(false)
         }, 800)
-        
+
         return () => clearTimeout(unmountTimer)
       }, 400)
-      
+
       return () => clearTimeout(fadeTimer)
     } else {
       // If it starts loading again for some reason, ensure it stays mounted
@@ -162,10 +162,9 @@ function LoadingScreen(): JSX.Element | null {
   }
 
   return (
-    <div 
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] loading-grid scanline-effect select-none transition-opacity duration-800 ease-in-out ${
-        fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}
+    <div
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] loading-grid scanline-effect select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
     >
       {/* Decorative Spinning Concentric Orbits (SpaceX / JPL visual aesthetic) */}
       <div className="absolute top-1/2 left-1/2 w-[540px] h-[540px] border border-blue-500/10 rounded-full animate-spin-cw pointer-events-none" />
@@ -233,7 +232,7 @@ function LoadingScreen(): JSX.Element | null {
 
           {/* Glowing Gradient Loading Bar Container */}
           <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
-            <div 
+            <div
               className="h-full loading-gradient-bar"
               style={{ width: `${progress}%` }}
             />

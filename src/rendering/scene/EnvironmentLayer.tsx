@@ -30,7 +30,7 @@ function generateRestrainedStars(count: number) {
     // Generate uniform random spherical coordinates
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos((Math.random() * 2) - 1)
-    
+
     // Placed far outside the Earth/ISS orbits (radius ~280,000 to 295,000 km)
     const r = 280000 + Math.random() * 15000
 
@@ -45,19 +45,19 @@ function generateRestrainedStars(count: number) {
     else if (randTemp > 0.90 && randTemp <= 0.98) baseColor = colorTemps[2]
     else if (randTemp > 0.98) baseColor = colorTemps[3]
 
-    // Astro-luminance hierarchy - calibrated to be extremely dim to act as nearby stellar depth
+    // Astro-luminance hierarchy - calibrated to complement the real NASA starmap
     const randLuminance = Math.random()
     let brightness = 0.0
-    
+
     if (randLuminance <= 0.95) {
-      // Faint background stars (0.018 to 0.045 brightness)
-      brightness = 0.018 + Math.random() * 0.027
+      // Faint background stars (1.5x boosted: 0.027 to 0.068 brightness)
+      brightness = 0.027 + Math.random() * 0.041
     } else if (randLuminance > 0.95 && randLuminance <= 0.995) {
-      // Medium stars (0.045 to 0.09 brightness)
-      brightness = 0.045 + Math.random() * 0.045
+      // Medium stars (1.5x boosted: 0.068 to 0.135 brightness)
+      brightness = 0.068 + Math.random() * 0.067
     } else {
-      // Bright primary stars (0.09 to 0.18 brightness)
-      brightness = 0.09 + Math.random() * 0.09
+      // Bright primary stars (1.5x boosted: 0.135 to 0.27 brightness)
+      brightness = 0.135 + Math.random() * 0.135
     }
 
     colors[i * 3] = baseColor.r * brightness
@@ -98,10 +98,11 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
   // Pre-generate static procedural star coordinates once to guarantee 0 per-frame garbage collection
   const stars = useMemo(() => generateRestrainedStars(40000), []) // Reduced density to complement panorama
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!sunLightRef.current) return
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
+    const sunDirVec = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize()
 
     // Position sun light at a distance well beyond orbital scale (e.g. 300,000 units)
     // 1 unit = 1 km, Earth radius = 6371 units, ISS radius = 6779 units
@@ -121,6 +122,19 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       )
       sunMeshRef.current.lookAt(state.camera.position)
     }
+
+    // ─── Dynamic Camera-Solar Exposure Adaptation ─────────────────────────────
+    // Calculate the camera forward vector alignment relative to the Sun
+    const cameraDir = new THREE.Vector3()
+    state.camera.getWorldDirection(cameraDir)
+    const cameraSunDot = cameraDir.dot(sunDirVec) // -1.0 (looking away) to 1.0 (looking at sun)
+
+    // Blinding sun adjusts exposure down to 0.75; dark space boosts it up to 1.05
+    const sunAlignment = Math.max(0.0, cameraSunDot)
+    const targetExposure = 1.05 - 0.30 * Math.pow(sunAlignment, 2.0)
+
+    // Smoothly interpolate the renderer's exposure using dynamic temporal damping
+    gl.toneMappingExposure = THREE.MathUtils.damp(gl.toneMappingExposure, targetExposure, 4.0, delta)
   })
 
   return (
@@ -136,9 +150,9 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
         castShadow={false}
       />
 
-      {/* ─── Procedural Cinematic Solar Presence ─── */}
+      {/* ─── Procedural Cinematic Solar Presence (Expanded non-clipped billboard) ─── */}
       <mesh ref={sunMeshRef}>
-        <planeGeometry args={[24000, 24000]} />
+        <planeGeometry args={[110000, 110000]} />
         <shaderMaterial
           vertexShader={sunVert}
           fragmentShader={sunFrag}
@@ -162,11 +176,11 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
           />
         </bufferGeometry>
         <pointsMaterial
-          size={0.78}                 // Slightly larger, sharp, premium star points
+          size={0.85}                 // Boosted star point legibility
           vertexColors={true}
           sizeAttenuation={false}    // Positioned at infinity; bypass size oblique math on GPU
           transparent={true}
-          opacity={0.78}             // Boosted star field opacity for rich photographic look
+          opacity={0.88}             // Dense background stars
           depthWrite={false}
         />
       </points>
@@ -180,7 +194,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
             map={starmapTex}
             side={THREE.BackSide}        // Render on inside faces
             transparent={true}
-            opacity={0.26}                // Moderately boosted to reveal rich Milky Way dust lanes (matching reference)
+            opacity={0.48}                // Boosted to 0.48 to reveal rich galactic dust lanes and Milky Way (matching reference)
             depthWrite={false}
             toneMapped={false}           // Keeps black levels deep and unaffected by ACES exposure
             blending={THREE.NormalBlending} // Contributes deep black structure rather than glow

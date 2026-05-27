@@ -24,7 +24,7 @@ const _currentTarget = new THREE.Vector3()
 
 export const CameraController = React.memo(function CameraController(): null {
   const { camera } = useThree()
-  
+
   // Read camera states from our Zustand store
   const mode = useCameraStore((state) => state.mode)
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
@@ -32,7 +32,7 @@ export const CameraController = React.memo(function CameraController(): null {
   const setMode = useCameraStore((state) => state.setMode)
   const completeTransition = useCameraStore((state) => state.completeTransition)
   const setZoomProgress = useCameraStore((state) => state.setZoomProgress)
-  
+
   // Flag to lock and prevent auto-transitions while user is actively navigating
   const isUserNavigatingRef = useRef<boolean>(false)
 
@@ -65,15 +65,15 @@ export const CameraController = React.memo(function CameraController(): null {
 
     if (mode === 'PLANETARY' || mode === 'ORBITAL') {
       controls.getTarget(_earthCenterTarget)
-      
+
       if (_earthCenterTarget.length() > 10) { // If offset is significant (Earth center is 0,0,0)
         controls.getPosition(_earthCenterPos)
-        
+
         // Calculate new camera position centered around Earth, keeping the same relative distance
         const dist = _earthCenterPos.distanceTo(_earthCenterTarget)
         _earthCenterDirection.subVectors(_earthCenterPos, _earthCenterTarget).normalize()
         _earthCenterNewCamPos.copy(_earthCenterDirection).multiplyScalar(dist)
-        
+
         void controls.setLookAt(
           _earthCenterNewCamPos.x, _earthCenterNewCamPos.y, _earthCenterNewCamPos.z, // Center-adjusted eye position
           0, 0, 0,                                                                  // Earth center look-at
@@ -193,7 +193,7 @@ export const CameraController = React.memo(function CameraController(): null {
         // Check if the user is actively panning (right-click dragging target away)
         controls.getTarget(_currentTarget)
         const panDistance = _currentTarget.distanceTo(_currentISSPos)
-        
+
         // If the user right-click drags/pans the target away by more than 10 km, they break active lock
         if (panDistance > 10) {
           setMode('FREE')
@@ -201,7 +201,7 @@ export const CameraController = React.memo(function CameraController(): null {
           return
         }
       }
-      
+
       // Directly move the controls focus to the exact current ISS position.
       // This shifts both the target and camera position in lockstep every frame,
       // completely eliminating target drift/offset and locking target focus perfectly 
@@ -220,7 +220,7 @@ export const CameraController = React.memo(function CameraController(): null {
 
     // Calculate normalized progress (0-1) for UI meters
     const zoomProgress = CameraStateMachine.getZoomProgress(distanceToEarth, distanceToISS, mode)
-    
+
     // NEW-07: Throttle Zustand writes inside frame loop to prevent 60 FPS panel re-renders
     const currentProgress = useCameraStore.getState().zoomProgress
     if (Math.abs(zoomProgress - currentProgress) > 0.01) {
@@ -234,7 +234,7 @@ export const CameraController = React.memo(function CameraController(): null {
         distanceToISS,
         mode
       )
-      
+
       if (targetMode !== mode) {
         // Safe programmatic mode updates
         setMode(targetMode)

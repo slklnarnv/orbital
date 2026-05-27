@@ -4,11 +4,11 @@ import { CameraMode, ModeRange } from '@/types/camera'
 // Distances are expressed in kilometers (Three.js units)
 export const CAMERA_ZOOM_RANGES: Record<CameraMode, ModeRange> = {
   PLANETARY: { minDistance: 35000, maxDistance: 500000 },
-  ORBITAL:   { minDistance: 12000, maxDistance: 35000 },
-  APPROACH:  { minDistance: 3000,  maxDistance: 12000 },
-  FOLLOW:    { minDistance: 200,   maxDistance: 3000 },
-  INSPECT:   { minDistance: 5,     maxDistance: 200 },
-  FREE:      { minDistance: 5,     maxDistance: 500000 }
+  ORBITAL: { minDistance: 12000, maxDistance: 35000 },
+  APPROACH: { minDistance: 3000, maxDistance: 12000 },
+  FOLLOW: { minDistance: 200, maxDistance: 3000 },
+  INSPECT: { minDistance: 5, maxDistance: 200 },
+  FREE: { minDistance: 5, maxDistance: 500000 }
 };
 
 /**
@@ -18,51 +18,51 @@ export const CAMERA_ZOOM_RANGES: Record<CameraMode, ModeRange> = {
 const VALID_TRANSITIONS: Record<CameraMode, Record<CameraMode, boolean>> = {
   PLANETARY: {
     PLANETARY: true,
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   false, // Cannot inspect straight from planetary without intermediate steps
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: false, // Cannot inspect straight from planetary without intermediate steps
+    FREE: true
   },
   ORBITAL: {
     PLANETARY: true,
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   false,
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: false,
+    FREE: true
   },
   APPROACH: {
     PLANETARY: true,
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   true,
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: true,
+    FREE: true
   },
   FOLLOW: {
     PLANETARY: true,
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   true,
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: true,
+    FREE: true
   },
   INSPECT: {
     PLANETARY: false, // Must go out through follow/approach first
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   true,
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: true,
+    FREE: true
   },
   FREE: {
     PLANETARY: true,
-    ORBITAL:   true,
-    APPROACH:  true,
-    FOLLOW:    true,
-    INSPECT:   true,
-    FREE:      true
+    ORBITAL: true,
+    APPROACH: true,
+    FOLLOW: true,
+    INSPECT: true,
+    FREE: true
   }
 };
 
@@ -111,14 +111,14 @@ export class CameraStateMachine {
       if (distanceToISSKm < CAMERA_ZOOM_RANGES.APPROACH.maxDistance) {
         return 'APPROACH';
       }
-      
+
       // If we zoomed out past approach limits, drop back to Earth-relative orbital mode
       return 'ORBITAL';
     }
 
     return currentMode;
   }
-  
+
   /**
    * Normalizes a distance to a 0-1 scale progress value across the entire mission range.
    * 0 represents furthest zoom-out (planetary limits), 1 represents closest zoom-in (inspect limits).
@@ -126,17 +126,17 @@ export class CameraStateMachine {
   public static getZoomProgress(distanceToEarthKm: number, distanceToISSKm: number, currentMode: CameraMode): number {
     const minD = CAMERA_ZOOM_RANGES.INSPECT.minDistance;
     const maxD = CAMERA_ZOOM_RANGES.PLANETARY.maxDistance;
-    
+
     let activeDistance = distanceToEarthKm;
     if (currentMode === 'FOLLOW' || currentMode === 'INSPECT' || currentMode === 'APPROACH') {
       activeDistance = distanceToISSKm;
     }
-    
+
     // Logarithmic scale mapping for visual balance across exponential distances
     const logMin = Math.log(minD);
     const logMax = Math.log(maxD);
     const logCurrent = Math.log(Math.max(minD, Math.min(maxD, activeDistance)));
-    
+
     // Invert so 1.0 is closest (zoom-in) and 0.0 is furthest (zoom-out)
     return 1.0 - (logCurrent - logMin) / (logMax - logMin);
   }

@@ -3,43 +3,47 @@
 /* ─── Design Tokens ─────────────────────────────────────────── */
 :root {
   /* Color palette — aerospace dark */
-  --color-bg:             #0B1020;
-  --color-panel:          #111827;
-  --color-panel-hover:    #1a2235;
-  --color-border:         rgba(255, 255, 255, 0.08);
-  --color-border-subtle:  rgba(255, 255, 255, 0.04);
-  --color-text-primary:   #E5E7EB;
+  --color-bg: #0B1020;
+  --color-panel: #111827;
+  --color-panel-hover: #1a2235;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-text-primary: #E5E7EB;
   --color-text-secondary: #9CA3AF;
-  --color-text-muted:     #6B7280;
-  --color-accent:         #60A5FA;
-  --color-accent-dim:     rgba(96, 165, 250, 0.15);
-  --color-orbit:          #93C5FD;
-  --color-success:        #34D399;
-  --color-warning:        #FBBF24;
-  --color-error:          #F87171;
+  --color-text-muted: #6B7280;
+  --color-accent: #60A5FA;
+  --color-accent-dim: rgba(96, 165, 250, 0.15);
+  --color-orbit: #93C5FD;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-error: #F87171;
 
   /* Typography */
-  --font-ui:      'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono:    'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
   --font-heading: 'Inter', system-ui, sans-serif;
 
   /* Spacing */
   --spacing-panel-pad: 1rem;
 
   /* Transitions */
-  --transition-ui:     150ms ease;
-  --transition-panel:  250ms ease;
-  --transition-scene:  800ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-ui: 150ms ease;
+  --transition-panel: 250ms ease;
+  --transition-scene: 800ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Reset & Base ──────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -107,30 +111,68 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-.status-dot--live    { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-.status-dot--hybrid  { background: var(--color-warning); }
-.status-dot--offline { background: var(--color-text-muted); }
-.status-dot--error   { background: var(--color-error); }
+.status-dot--live {
+  background: var(--color-success);
+  box-shadow: 0 0 6px var(--color-success);
+}
+
+.status-dot--hybrid {
+  background: var(--color-warning);
+}
+
+.status-dot--offline {
+  background: var(--color-text-muted);
+}
+
+.status-dot--error {
+  background: var(--color-error);
+}
 
 /* ─── Scrollbars (minimal) ──────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
 
 /* ─── Loading Screen Animations & Utilities ─────────────────── */
 @keyframes spin-slow-cw {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 
 @keyframes spin-slow-ccw {
-  0% { transform: translate(-50%, -50%) rotate(360deg); }
-  100% { transform: translate(-50%, -50%) rotate(0deg); }
+  0% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
 }
 
 @keyframes pulse-subtle {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.85; }
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.85;
+  }
 }
 
 .animate-spin-cw {
@@ -154,7 +196,10 @@ html, body, #root {
   content: " ";
   display: block;
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
   background-size: 100% 4px;
   pointer-events: none;
@@ -166,4 +211,3 @@ html, body, #root {
   box-shadow: 0 0 10px rgba(96, 165, 250, 0.4);
   transition: width 0.3s cubic-bezier(0.1, 0.8, 0.2, 1);
 }
-
