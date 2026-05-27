@@ -1,0 +1,7 @@
+{
+  "_comment": "Fallback TLE for ISS (NORAD 25544). Updated periodically with each release. Used when CelesTrak is unreachable and IndexedDB cache is empty. Accuracy degrades after ~7 days from TLE epoch.",
+  "line1": "1 25544U 98067A   26144.84170369  .00008909  00000-0  16754-3 0  9997",
+  "line2": "2 25544  51.6327  55.6720 0007494  94.5162 265.6683 15.49354393568137",
+  "epoch": "2026-05-24T20:12:03Z",
+  "source": "fallback"
+}
