@@ -113,8 +113,8 @@ function WebGLDiagnosticScreen(): JSX.Element {
 }
 
 /**
- * High-Fidelity Cinematic Loading Screen.
- * Displays concentric rotating telemetry circles, SVG loading arc, and dynamic aerospace boot statuses.
+ * Minimalist, high-fidelity loading screen with a rotating tilted Earth logo
+ * and clear progress percentage.
  */
 function LoadingScreen(): JSX.Element | null {
   const { active, progress } = useProgress()
@@ -137,7 +137,6 @@ function LoadingScreen(): JSX.Element | null {
 
       return () => clearTimeout(fadeTimer)
     } else {
-      // If it starts loading again for some reason, ensure it stays mounted
       setMounted(true)
       setFadeOut(false)
     }
@@ -145,118 +144,58 @@ function LoadingScreen(): JSX.Element | null {
 
   if (!mounted) return null
 
-  // Map progress to beautiful aerospace boot messages
-  let statusText = "SYSTEM BOOTSTRAP IN PROGRESS..."
-  if (progress < 20) {
-    statusText = "ALLOCATING WEBGL GRAPHICS CONTEXT..."
-  } else if (progress < 45) {
-    statusText = "COMPILING ATMOSPHERIC SCATTERING SHADERS..."
-  } else if (progress < 70) {
-    statusText = "DESERIALIZING 8K BLUE MARBLE TEXTURES..."
-  } else if (progress < 90) {
-    statusText = "ESTABLISHING ISS REAL-TIME TELEMETRY STREAM..."
-  } else if (progress < 100) {
-    statusText = "STABILIZING ORBITAL LIGHTING HIERARCHY..."
-  } else {
-    statusText = "FLIGHT DECK INITIALIZED. WELCOME ABOARD."
-  }
-
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] loading-grid scanline-effect select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        }`}
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] select-none transition-opacity duration-800 ease-in-out ${
+        fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
     >
-      {/* Decorative Spinning Concentric Orbits (SpaceX / JPL visual aesthetic) */}
-      <div className="absolute top-1/2 left-1/2 w-[540px] h-[540px] border border-blue-500/10 rounded-full animate-spin-cw pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 w-[380px] h-[380px] border border-dashed border-blue-400/5 rounded-full animate-spin-ccw pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 w-[220px] h-[220px] border border-blue-500/10 rounded-full pointer-events-none -translate-x-1/2 -translate-y-1/2 opacity-30 animate-pulse-subtle" />
-
-      {/* Central Dashboard Panel */}
-      <div className="glass-panel p-8 w-[400px] flex flex-col items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-10 border-blue-500/15">
-        <div className="flex flex-col items-center w-full">
-          <span className="text-[10px] tracking-[0.25em] text-[var(--color-accent)] font-mono uppercase animate-pulse-subtle">
-            ORBITAL VISUALIZATION
-          </span>
-          <h2 className="text-display text-white text-base tracking-widest font-semibold uppercase mt-1 font-sans">
-            SYSTEM INITIALIZATION
-          </h2>
-        </div>
-
-        <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-        {/* Glowing Circular Progress indicator */}
-        <div className="relative w-36 h-36 flex items-center justify-center">
-          {/* Outer dotted tracking circle */}
-          <svg className="w-full h-full transform -rotate-90">
+      <div className="flex flex-col items-center justify-center">
+        {/* Rotating Minimalist Earth wireframe logo (tilted at 23.5 degrees) */}
+        <div
+          className="relative w-28 h-28 flex items-center justify-center pointer-events-none animate-pulse-subtle"
+          style={{ transform: 'rotate(23.5deg)' }}
+        >
+          <svg
+            className="w-full h-full text-blue-400 animate-spin-earth"
+            viewBox="0 0 100 100"
+            fill="none"
+          >
+            {/* Earth outer outline with light drop glow */}
             <circle
-              cx="72"
-              cy="72"
-              r="54"
-              stroke="rgba(96,165,250,0.06)"
-              strokeWidth="2"
-              fill="transparent"
+              cx="50"
+              cy="50"
+              r="46"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="opacity-90"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(96, 165, 250, 0.5))' }}
             />
-            <circle
-              cx="72"
-              cy="72"
-              r="54"
-              stroke="var(--color-accent)"
-              strokeWidth="3.5"
-              fill="transparent"
-              strokeDasharray={339}
-              strokeDashoffset={339 - (339 * progress) / 100}
-              className="transition-all duration-300 ease-out"
-              strokeLinecap="round"
-              style={{ filter: 'drop-shadow(0 0 4px rgba(96,165,250,0.5))' }}
-            />
+
+            {/* Latitude Grid lines */}
+            <ellipse cx="50" cy="50" rx="46" ry="16" stroke="currentColor" strokeWidth="1" className="opacity-40" />
+            <ellipse cx="50" cy="50" rx="46" ry="32" stroke="currentColor" strokeWidth="1" className="opacity-20" />
+            <line x1="4" y1="50" x2="96" y2="50" stroke="currentColor" strokeWidth="1" className="opacity-50" />
+
+            {/* Longitude Grid lines */}
+            <ellipse cx="50" cy="50" rx="16" ry="46" stroke="currentColor" strokeWidth="1" className="opacity-60" />
+            <ellipse cx="50" cy="50" rx="32" ry="46" stroke="currentColor" strokeWidth="1" className="opacity-30" />
+            <line x1="50" y1="4" x2="50" y2="96" stroke="currentColor" strokeWidth="1" className="opacity-50" />
           </svg>
-          <div className="absolute flex flex-col items-center justify-center">
-            <span className="text-2xl font-mono text-white font-light tracking-tighter">
-              {Math.round(progress)}
-              <span className="text-xs text-[var(--color-accent)] ml-0.5">%</span>
-            </span>
-            <span className="text-[8px] font-mono tracking-widest text-[var(--color-text-secondary)] uppercase mt-1">
-              LNK_LOAD
-            </span>
-          </div>
         </div>
 
-        <div className="w-full flex flex-col gap-2">
-          {/* Fine HUD Readout Text */}
-          <div className="flex justify-between items-center text-[9px] font-mono text-[var(--color-text-secondary)] px-1">
-            <span className="tracking-wide">TELEMETRY_LINK: STATUS_OK</span>
-            <span className="text-[var(--color-accent)] font-semibold">
-              {Math.round(progress * 10) / 10} / 100.0
-            </span>
-          </div>
-
-          {/* Glowing Gradient Loading Bar Container */}
-          <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
-            <div
-              className="h-full loading-gradient-bar"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-        {/* Tactical Status Label */}
-        <div className="flex flex-col items-center">
-          <span className="text-[9px] font-mono text-[var(--color-text-secondary)] text-center tracking-wide min-h-[14px]">
-            {statusText}
-          </span>
-        </div>
-      </div>
-
-      {/* JPL/SpaceX Inspired Bottom Telemetry Link watermark */}
-      <div className="absolute bottom-10 flex flex-col items-center opacity-40">
-        <span className="text-[8px] font-mono tracking-[0.3em] text-[var(--color-text-secondary)] uppercase">
-          JPL | SPX | NASA FLIGHT SOFTWARE
+        {/* Minimal loading text with percentage indicator */}
+        <span className="text-xs font-mono tracking-[0.25em] text-[var(--color-text-secondary)] mt-6 uppercase">
+          Loading {Math.round(progress)}%
         </span>
-        <span className="text-[8px] font-mono text-[var(--color-text-muted)] mt-1">
-          SECURE LINK // 2461187.91323 JD
-        </span>
+
+        {/* Clean, minimalist progress line */}
+        <div className="w-48 h-0.5 bg-white/5 rounded-full overflow-hidden mt-3 border border-white/5">
+          <div
+            className="h-full bg-blue-500 transition-all duration-300 ease-out shadow-[0_0_8px_rgba(96,165,250,0.6)]"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
     </div>
   )

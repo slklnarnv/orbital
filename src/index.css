@@ -211,3 +211,16 @@ body,
   box-shadow: 0 0 10px rgba(96, 165, 250, 0.4);
   transition: width 0.3s cubic-bezier(0.1, 0.8, 0.2, 1);
 }
+
+@keyframes spin-earth-axis {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-earth {
+  animation: spin-earth-axis 20s linear infinite;
+}
