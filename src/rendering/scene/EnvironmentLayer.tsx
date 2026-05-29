@@ -11,6 +11,19 @@ import sunFrag from '../shaders/sun.frag'
 // Pre-warms the new high-quality starmap immediately on page startup
 useTexture.preload('/textures/starmap-4k.jpg')
 
+// ─── Hoisted Static Vectors for Zero-GC Frame Loop ───────────────────────────
+// Reused every frame inside useFrame; never re-allocated after module init.
+const _sunDirVec = new THREE.Vector3()
+const _cameraDir = new THREE.Vector3()
+
+// ─── Starmap Sphere Orientation Constants ─────────────────────────────────────
+// Orients the NASA starmap panorama so the galactic plane runs at a natural
+// oblique angle and the Milky Way core sits in the lower-right quadrant of view.
+// Values were tuned against astrophotographic reference imagery.
+const STARMAP_ROTATION_X = Math.PI * 0.15  // Tilt galactic plane
+const STARMAP_ROTATION_Y = Math.PI * 0.45  // Azimuthal alignment to galactic core
+const STARMAP_ROTATION_Z = Math.PI * 0.08  // Minor roll correction for star density
+
 /**
  * Generates randomly distributed stars on a single sphere with varying physical color temperatures and luminances.
  * Highly restrained and dim to complement the real NASA starmap-4k.jpg panorama backdrop.
@@ -102,7 +115,9 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     if (!sunLightRef.current) return
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
-    const sunDirVec = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize()
+
+    // Reuse hoisted vector — zero GC allocation
+    _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
 
     // Position sun light at a distance well beyond orbital scale (e.g. 300,000 units)
     // 1 unit = 1 km, Earth radius = 6371 units, ISS radius = 6779 units
@@ -115,19 +130,34 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
 
     // Position and orient the procedural sun billboard
     if (sunMeshRef.current) {
+      // Place the sun billboard at 270,000 km from Earth center in the sun direction
+      const sunBillboardDist = 270000
       sunMeshRef.current.position.set(
-        sunDir.x * 270000,
-        sunDir.y * 270000,
-        sunDir.z * 270000
+        sunDir.x * sunBillboardDist,
+        sunDir.y * sunBillboardDist,
+        sunDir.z * sunBillboardDist
       )
       sunMeshRef.current.lookAt(state.camera.position)
+
+      // Dynamically scale the sun billboard to maintain a constant apparent angular size.
+      // Without this, zooming out to maxDistance (500,000 km) makes the billboard resolve
+      // into a visible finite-size plane instead of looking like a distant point source.
+      //
+      // Physics: the real sun subtends ~0.53° (0.00925 rad) from 1 AU. The shader's bright
+      // core disc occupies ~3% of billboard UV space, so a billboard angular size of 0.20 rad
+      // yields a core of 0.20 × 0.03 = 0.006 rad ≈ 0.34° — slightly smaller than the real
+      // sun for a restrained, cinematic look. Corona extends to ~0.20 × 0.20 = 0.04 rad (~2.3°).
+      const camToSun = state.camera.position.distanceTo(sunMeshRef.current.position)
+      const targetAngularSize = 0.20 // radians — yields ~0.34° core + ~2.3° corona glow
+      const dynamicScale = camToSun * targetAngularSize
+      sunMeshRef.current.scale.setScalar(dynamicScale / 110000) // normalize against the base 110K geometry
     }
 
     // ─── Dynamic Camera-Solar Exposure Adaptation ─────────────────────────────
     // Calculate the camera forward vector alignment relative to the Sun
-    const cameraDir = new THREE.Vector3()
-    state.camera.getWorldDirection(cameraDir)
-    const cameraSunDot = cameraDir.dot(sunDirVec) // -1.0 (looking away) to 1.0 (looking at sun)
+    // Reuse hoisted vector — zero GC allocation
+    state.camera.getWorldDirection(_cameraDir)
+    const cameraSunDot = _cameraDir.dot(_sunDirVec) // -1.0 (looking away) to 1.0 (looking at sun)
 
     // Blinding sun adjusts exposure down to 0.75; dark space boosts it up to 1.05
     const sunAlignment = Math.max(0.0, cameraSunDot)
@@ -150,8 +180,14 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
         castShadow={false}
       />
 
-      {/* ─── Procedural Cinematic Solar Presence (Expanded non-clipped billboard) ─── */}
-      <mesh ref={sunMeshRef}>
+      {/* ─── Procedural Cinematic Solar Presence ─── */}
+      {/* renderOrder=2: renders LAST in the transparent pass, ensuring the sun's
+          AdditiveBlending composites on top of stars and starmap, never behind them.
+          depthTest=true: the opaque Earth writes to the depth buffer and correctly
+          occludes the sun when it's behind the planet. Stars and starmap all have
+          depthWrite=false, so they can never occlude the sun via depth testing —
+          the renderOrder alone handles their compositing sequence. */}
+      <mesh ref={sunMeshRef} renderOrder={2}>
         <planeGeometry args={[110000, 110000]} />
         <shaderMaterial
           vertexShader={sunVert}
@@ -164,7 +200,10 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       </mesh>
 
       {/* ─── Layered Starfield System (THREE.Points) ─── */}
-      <points>
+      {/* renderOrder=1: renders AFTER the starmap sphere but BEFORE the sun billboard.
+          This prevents star points (NormalBlending) from painting dark pixels over the
+          sun's AdditiveBlending glow — the sun always composites on top. */}
+      <points renderOrder={1}>
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
@@ -186,8 +225,10 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       </points>
 
       {/* ─── Real NASA Astrophotography Background Sphere ─── */}
+      {/* renderOrder=0: renders FIRST in the transparent pass — serves as the deepest
+          background layer behind all star points and the sun billboard. */}
       {starmapTex && (
-        <mesh rotation={[Math.PI * 0.15, Math.PI * 0.45, Math.PI * 0.08]}>
+        <mesh rotation={[STARMAP_ROTATION_X, STARMAP_ROTATION_Y, STARMAP_ROTATION_Z]} renderOrder={0}>
           {/* Extremely large inverted sphere to enclose the starfield and camera paths (16x16 segments saves obverse triangles) */}
           <sphereGeometry args={[296000, 16, 16]} />
           <meshBasicMaterial

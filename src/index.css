@@ -100,7 +100,9 @@ body,
   backdrop-filter: blur(12px) saturate(1.2);
   -webkit-backdrop-filter: blur(12px) saturate(1.2);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  /* Matches Tailwind's `rounded-sm` (2px) used on active HUD instrument panels.
+     Maintains the sharp, technical aerospace instrument aesthetic. */
+  border-radius: 2px;
 }
 
 /* ─── Status Badge ──────────────────────────────────────────── */

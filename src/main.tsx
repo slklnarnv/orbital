@@ -73,6 +73,16 @@ window.addEventListener('error', (event) => {
   console.error('[Global Runtime Error]', event.error || event.message)
 })
 
+// NOTE: React.StrictMode is intentionally NOT used here.
+//
+// In development, StrictMode double-invokes effects and mounts components twice
+// to help surface side effects. However, React Three Fiber's WebGL canvas creates
+// a GPU rendering context that is destroyed and recreated on double-mount — wiping
+// all GPU state (shaders, textures, buffers). This produces a reliable black screen
+// in development with Strict Mode enabled, with no benefit for WebGL applications.
+//
+// The ErrorBoundary above provides the safety net for render-phase crashes. Strict
+// Mode's double-mount guarantees are not applicable to imperative WebGL rendering.
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <App />

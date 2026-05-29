@@ -54,7 +54,7 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
       ref={(c) => { cameraControlsRef.current = c }}
       makeDefault={true}
       minDistance={minDistance} // Bound to reactive dynamic distance constraints
-      maxDistance={500000}       // Cap maximum zoom-out distance
+      maxDistance={100000}       // Cap maximum zoom-out distance (matches CAMERA_ZOOM_RANGES)
     />
   )
 })

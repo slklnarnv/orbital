@@ -3,12 +3,12 @@ import { CameraMode, ModeRange } from '@/types/camera'
 // ─── Canonical Mode Boundaries ────────────────────────────────────────────────
 // Distances are expressed in kilometers (Three.js units)
 export const CAMERA_ZOOM_RANGES: Record<CameraMode, ModeRange> = {
-  PLANETARY: { minDistance: 35000, maxDistance: 500000 },
+  PLANETARY: { minDistance: 35000, maxDistance: 100000 },
   ORBITAL: { minDistance: 12000, maxDistance: 35000 },
   APPROACH: { minDistance: 3000, maxDistance: 12000 },
   FOLLOW: { minDistance: 200, maxDistance: 3000 },
   INSPECT: { minDistance: 5, maxDistance: 200 },
-  FREE: { minDistance: 5, maxDistance: 500000 }
+  FREE: { minDistance: 5, maxDistance: 100000 }
 };
 
 /**

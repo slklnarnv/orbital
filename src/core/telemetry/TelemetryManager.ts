@@ -30,6 +30,8 @@ export class TelemetryManager {
   private _lastState: OrbitalState | null = null
   private _isFetching = false
   private _unsubscribeNetworkStatus: (() => void) | null = null
+  /** Timestamp of last STATE_UPDATE bus emission (used for 10 Hz throttle). */
+  private _lastBusEmitTime = 0
 
   constructor(entity: OrbitalEntity) {
     this._entity = entity
@@ -73,7 +75,18 @@ export class TelemetryManager {
     const smoothed = this._interpolation.smooth(rawState, simTime.deltaMs)
     this._lastState = smoothed
 
-    telemetryBus.emit('STATE_UPDATE', smoothed)
+    // Throttle STATE_UPDATE bus emissions to 10 Hz (100ms intervals).
+    // Rendering components read position directly from `telemetryManager.lastState`
+    // every frame, so they are unaffected by this throttle.
+    // UI subscribers (e.g. telemetryStore) already throttle to 1 Hz internally,
+    // so 10 Hz bus emissions still provide 10× more update opportunities than needed
+    // while eliminating ~50 no-op dispatch iterations per second.
+    const now = Date.now()
+    if (now - this._lastBusEmitTime >= 100) {
+      telemetryBus.emit('STATE_UPDATE', smoothed)
+      this._lastBusEmitTime = now
+    }
+
     return smoothed
   }
 

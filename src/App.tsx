@@ -10,16 +10,20 @@ import { DataSourceIndicator } from '@/ui/panels/DataSourceIndicator'
 
 /**
  * Pure JavaScript utility to check if WebGL is available in the current browser session.
+ *
+ * IMPORTANT: We always attempt actual context creation rather than checking for the
+ * constructor (e.g. `window.WebGL2RenderingContext`). The constructor is present on
+ * the Window object in all modern browsers regardless of GPU driver status — checking
+ * for it always returns true even when the GPU is driver-blocklisted or hardware
+ * acceleration is disabled. Only a canvas.getContext() call reveals the real picture.
  */
 function checkWebGLSupport(): boolean {
   try {
     const canvas = document.createElement('canvas')
     return !!(
-      window.WebGL2RenderingContext ||
-      (window.WebGLRenderingContext &&
-        (canvas.getContext('webgl2') ||
-          canvas.getContext('webgl') ||
-          canvas.getContext('experimental-webgl')))
+      canvas.getContext('webgl2') ||
+      canvas.getContext('webgl') ||
+      canvas.getContext('experimental-webgl')
     )
   } catch (e) {
     return false
@@ -90,13 +94,16 @@ function WebGLDiagnosticScreen(): JSX.Element {
           <span className="text-label text-red-400 text-xs">To Resolve This Issue:</span>
           <ul className="list-decimal pl-5 text-xs text-[var(--color-text-primary)] flex flex-col gap-1.5 leading-relaxed">
             <li>
-              <strong>Enable Graphics Acceleration:</strong> Go to Chrome <code>Settings &gt; System</code> and ensure <strong>"Use graphics acceleration when available"</strong> is toggled <strong>ON</strong>.
+              <strong>Enable Hardware Acceleration:</strong> In your browser settings, locate the <strong>System</strong> or <strong>Advanced</strong> section and ensure <strong>"Use hardware acceleration when available"</strong> (or equivalent) is toggled <strong>ON</strong>.
             </li>
             <li>
-              <strong>Bypass Driver Blocking:</strong> Open a new tab to <code>chrome://flags</code>, search for <strong>"Override software rendering list"</strong>, and set it to <strong>Enabled</strong>.
+              <strong>Update Your Graphics Drivers:</strong> Visit your GPU manufacturer&apos;s website (NVIDIA, AMD, or Intel) and install the latest display drivers for your hardware.
             </li>
             <li>
-              <strong>Relaunch Your Browser:</strong> Click the <strong>Relaunch</strong> button or completely restart Chrome to apply the hardware override.
+              <strong>Relaunch Your Browser:</strong> Fully close and reopen your browser after changing settings to apply hardware changes.
+            </li>
+            <li>
+              <strong>Try a Different Browser:</strong> If the issue persists, try opening this application in Chrome, Firefox, or Edge to isolate browser-specific blocklisting.
             </li>
           </ul>
         </div>
@@ -122,20 +129,27 @@ function LoadingScreen(): JSX.Element | null {
   const [fadeOut, setFadeOut] = useState(false)
 
   useEffect(() => {
+    // Hoist unmountTimer to effect scope so the cleanup return can clear both
+    // timers, preventing setMounted(false) from being called on an unmounted component.
+    let unmountTimer: ReturnType<typeof setTimeout> | undefined
+
     if (progress >= 100 && !active) {
       // Delay slightly (e.g. 400ms) so the user can see 100% loaded state, then trigger fade out
       const fadeTimer = setTimeout(() => {
         setFadeOut(true)
 
         // Complete unmount after CSS fade-out transition completes (800ms)
-        const unmountTimer = setTimeout(() => {
+        unmountTimer = setTimeout(() => {
           setMounted(false)
         }, 800)
-
-        return () => clearTimeout(unmountTimer)
       }, 400)
 
-      return () => clearTimeout(fadeTimer)
+      // Single unified cleanup: clears both timers to prevent stale state updates
+      // on an unmounted component if the effect re-runs or the tree unmounts mid-fade.
+      return () => {
+        clearTimeout(fadeTimer)
+        if (unmountTimer !== undefined) clearTimeout(unmountTimer)
+      }
     } else {
       setMounted(true)
       setFadeOut(false)

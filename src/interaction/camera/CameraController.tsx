@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 
 import { useCameraStore } from '@/stores/cameraStore'
 import { CameraStateMachine } from './CameraStateMachine'
@@ -22,16 +23,46 @@ const _transCamPos = new THREE.Vector3()
 const _currentISSPos = new THREE.Vector3()
 const _currentTarget = new THREE.Vector3()
 
+// ─── Floating Origin Shift (Phase 3 Scaffolding) ────────────────────────────────
+/**
+ * Scaffolding interface for future Phase 3 precision origin shift.
+ * At extremely close inspect distances (< 100 km), float32 precision degrades,
+ * requiring the scene graph to center around the ISS at (0,0,0) with Earth offset.
+ *
+ * Defined at module scope (not inside the component) to avoid recreating the
+ * function reference on every render, which would introduce stale-closure risk
+ * inside useFrame.
+ */
+function handleFloatingOriginShift(_distanceToISSKm: number): void {
+  if (_distanceToISSKm < 100) {
+    // Future Phase 3 hook trigger boundary
+    // Trigger a store event or emit a warning if drift exceeds acceptable limits
+  }
+}
+
 export const CameraController = React.memo(function CameraController(): null {
   const { camera } = useThree()
 
-  // Read camera states from our Zustand store
-  const mode = useCameraStore((state) => state.mode)
-  const isTransitioning = useCameraStore((state) => state.isTransitioning)
-  const transition = useCameraStore((state) => state.transition)
-  const setMode = useCameraStore((state) => state.setMode)
-  const completeTransition = useCameraStore((state) => state.completeTransition)
-  const setZoomProgress = useCameraStore((state) => state.setZoomProgress)
+  // Batch all camera store subscriptions into a single shallow selector to minimise
+  // subscription count and prevent unnecessary re-renders when unrelated store
+  // fields change. Previously 6 separate useCameraStore() calls.
+  const {
+    mode,
+    isTransitioning,
+    transition,
+    setMode,
+    completeTransition,
+    setZoomProgress,
+  } = useCameraStore(
+    useShallow((state) => ({
+      mode: state.mode,
+      isTransitioning: state.isTransitioning,
+      transition: state.transition,
+      setMode: state.setMode,
+      completeTransition: state.completeTransition,
+      setZoomProgress: state.setZoomProgress,
+    }))
+  )
 
   // Flag to lock and prevent auto-transitions while user is actively navigating
   const isUserNavigatingRef = useRef<boolean>(false)
@@ -245,18 +276,12 @@ export const CameraController = React.memo(function CameraController(): null {
     handleFloatingOriginShift(distanceToISS)
   })
 
-  /**
-   * Scaffolding interface for future Phase 3 precision origin shift.
-   * At extremely close inspect distances (< 100 km), float32 precision degrades,
-   * requiring the scene graph to center around the ISS at (0,0,0) with Earth offset.
-   */
-  const handleFloatingOriginShift = (distanceToISSKm: number) => {
-    // Scaffolded check and callback hooks
-    if (distanceToISSKm < 100) {
-      // Future Phase 3 hook trigger boundary
-      // Trigger a store event or emit a warning if drift exceeds acceptable limits
-    }
-  }
+  // MOUNT ORDER NOTE: AppCameraControls (which owns the CameraControls instance and
+  // populates cameraControlsRef) is declared AFTER CameraController in SceneRoot's JSX.
+  // CameraControls.update() is called by Drei's internal loop, which runs after all
+  // useFrame hooks registered in JSX order. CameraController's moveTo() mutations are
+  // therefore always flushed before AppCameraControls.update() executes — preserving
+  // deterministic frame-loop ordering. This implicit dependency MUST be maintained.
 
   return null
 })

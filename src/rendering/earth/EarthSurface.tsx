@@ -114,14 +114,31 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     })
   }, [lowRes.day, lowRes.night, gl, loader])
 
-  // Clean up manually loaded 8K textures on unmount to prevent GPU memory leaks
+  // Clean up manually loaded 8K textures on unmount to prevent GPU memory leaks.
+  //
+  // IMPORTANT: We must NOT dispose Drei-managed low-res placeholder textures.
+  // `useTexture` caches textures globally. Calling .dispose() on a cached texture
+  // permanently invalidates it — if the component remounts (HMR, Strict Mode, routes),
+  // Drei returns the disposed texture and Earth renders as a broken solid black sphere.
+  //
+  // Guard: only dispose if the current texture has been swapped out for the high-res
+  // version (i.e. is no longer the cached placeholder). Pattern mirrors CloudLayer.tsx.
   useEffect(() => {
     return () => {
-      if (uniformsRef.current.dayMap.value) uniformsRef.current.dayMap.value.dispose()
-      if (uniformsRef.current.nightMap.value) uniformsRef.current.nightMap.value.dispose()
-      if (uniformsRef.current.specularMap.value) uniformsRef.current.specularMap.value.dispose()
+      const maps = uniformsRef.current
+      if (maps.dayMap.value && maps.dayMap.value !== lowRes.day) {
+        maps.dayMap.value.dispose()
+      }
+      if (maps.nightMap.value && maps.nightMap.value !== lowRes.night) {
+        maps.nightMap.value.dispose()
+      }
+      // specularMap is never Drei-managed (initialized as 1×1 black CanvasTexture,
+      // then replaced by a manually loaded 8K map) — always safe to dispose.
+      if (maps.specularMap.value) {
+        maps.specularMap.value.dispose()
+      }
     }
-  }, [])
+  }, [lowRes.day, lowRes.night])
 
   useFrame(() => {
     const simTime = simulationClock.now()

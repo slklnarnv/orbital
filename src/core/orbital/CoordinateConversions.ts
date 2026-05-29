@@ -134,8 +134,19 @@ const _cachedSunDirection: Vec3 = { x: 0, y: 0, z: 0 }
  * Convert a TEME sun direction to Three.js world space.
  * Applies the same axis mapping as temeToWorld().
  *
- * Memoized to prevent redundant heavy trigonometric calculations across multiple
- * frame-loop rendering calls per frame.
+ * **Intra-frame deduplication** (not temporal caching):
+ * This function is called 5 times per frame tick from different useFrame hooks:
+ * EnvironmentLayer, EarthSurface, CloudLayer, AtmosphereShell, and ISSModel.
+ * All callers receive the same `julianDate` value from `simulationClock.now()`,
+ * which caches its result for the duration of a single frame.
+ *
+ * The strict `===` equality check works correctly because:
+ * - Within a frame: all 5 callers pass the exact same float reference → cache hits
+ * - Between frames: the Julian date changes → cache misses once → trig recalculated
+ *
+ * This eliminates 4 redundant sets of trigonometric calculations per frame without
+ * any approximation. Do NOT replace with a tolerance-based check — the exact equality
+ * is the intentional mechanism for intra-frame deduplication.
  */
 export function sunDirectionWorld(julianDate: number): Vec3 {
   if (julianDate === _lastJulianDate) {
