@@ -31,9 +31,9 @@ Layered geometry stack rendered back-to-front:
 
 | Pass | Radius | Description |
 |:---|:---|:---|
-| Star field | Background | 4K NASA starmap + procedural point stars. Pure black scene — no tone mapping. |
-| Surface | 1.000× | NASA Blue Marble 8K day albedo blended with Black Marble 8K city lights via GLSL terminator. |
-| Cloud layer | 1.003× | Grayscale alphaMap with slow wind-drift rotation. Temporarily disabled pending alpha blending refinement. |
+| Star field | Background | NASA starmap + procedural point stars |
+| Surface | 1.000× | NASA Blue Marble day albedo blended with Black Marble city lights via GLSL terminator |
+| Cloud layer | 1.003× | Grayscale alphaMap with slow wind-drift rotation |
 | Atmosphere | 1.025× | Fresnel rim halo on `BackSide` with `AdditiveBlending`. Horizon-compressed density falloff. |
 
 The surface shader blends day and night textures using a `smoothstep` terminator driven by the dot product of the world-space vertex normal and sun direction. Both vectors must be in world space — a camera/world space mismatch was the root cause of the initial dark-globe bug:
