@@ -77,6 +77,15 @@ void main() {
     // Smooth transition from peak horizon intensity (7.8 + 0.15 + 0.005 = 7.955)
     glow = 7.955 * pow(fadeFactor, 3.0);
 
+    // ATM-1 FIX: Mirror the forward-scatter term into the inside-disk branch.
+    // Without this, the sun-facing limb glow contribution abruptly drops to zero at
+    // the horizon boundary (dotNV = 0.22016), creating a subtle darkening seam
+    // visible from space on the sunward limb. The tapered amplitude ensures the
+    // extra glow fades to zero within the same ~1.5° arc as the base glow.
+    float viewSunDot2 = dot(viewDir, normalize(sunDirection));
+    float forwardScatter2 = pow(max(viewSunDot2, 0.0), 6.0);
+    glow += forwardScatter2 * 5.2 * pow(fadeFactor, 3.0);
+
     // Maintain white thread right at the boundary, fading to blue as we go inward
     colorBlend = pow(fadeFactor, 4.0);
   }

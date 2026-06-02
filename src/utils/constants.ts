@@ -43,8 +43,9 @@ export const SUN_DISTANCE_KM = 149_597_870.7;
 
 // ─── Time Constants ───────────────────────────────────────────────────────────
 
-/** Julian date of Unix epoch (Jan 1, 1970 00:00:00 UTC) */
+/** Julian date of J2000.0 epoch (Jan 1, 2000 12:00:00 TT) */
 export const JULIAN_DATE_J2000 = 2451545.0;
+/** Julian date of Unix epoch (Jan 1, 1970 00:00:00 UTC) */
 export const UNIX_EPOCH_JULIAN = 2440587.5;
 
 // ─── TLE Refresh Policy ───────────────────────────────────────────────────────

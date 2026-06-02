@@ -221,6 +221,9 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
           transparent={true}
           opacity={0.88}             // Dense background stars
           depthWrite={false}
+          blending={THREE.AdditiveBlending} // ENV-1 FIX: Stars should add luminance only.
+          // NormalBlending caused dark-per-fragment compositing that painted black
+          // pixels over the Milky Way in the NASA starmap, darkening bright nebula lanes.
         />
       </points>
 

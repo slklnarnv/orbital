@@ -32,6 +32,8 @@ export class TelemetryManager {
   private _unsubscribeNetworkStatus: (() => void) | null = null
   /** Timestamp of last STATE_UPDATE bus emission (used for 10 Hz throttle). */
   private _lastBusEmitTime = 0
+  /** Timestamp of last mode recalculation (B-6: keep mode fresh between fetches). */
+  private _lastModeRecalcMs = 0
 
   constructor(entity: OrbitalEntity) {
     this._entity = entity
@@ -42,8 +44,16 @@ export class TelemetryManager {
   async start(): Promise<void> {
     networkMonitor.start()
 
-    // Subscribe to network changes to trigger mode recalculation
-    this._unsubscribeNetworkStatus = telemetryBus.on('NETWORK_STATUS', () => this._recalculateMode())
+    // Subscribe to network changes to trigger mode recalculation and recovery
+    this._unsubscribeNetworkStatus = telemetryBus.on('NETWORK_STATUS', () => {
+      this._recalculateMode()
+      // N-1 FIX: When coming back online, reset backoff so we retry immediately
+      // rather than waiting out the remaining backoff window (up to 30 min).
+      if (networkMonitor.isOnline) {
+        this._rateLimiter.resetBackoff()
+        this._refreshTLEAsync() // fire-and-forget
+      }
+    })
 
     // Try to load cached TLE, then attempt live fetch
     await this._bootstrap()
@@ -69,6 +79,14 @@ export class TelemetryManager {
       this._refreshTLEAsync() // fire-and-forget
     }
 
+    // B-6 FIX: Recalculate mode every 60s to keep mode/confidence fresh as the
+    // TLE ages across LIVE→HYBRID→stale thresholds between 4-hour fetches.
+    const now = Date.now()
+    if (now - this._lastModeRecalcMs >= 60_000) {
+      this._lastModeRecalcMs = now
+      this._recalculateMode()
+    }
+
     const rawState = this._entity.propagate(simTime)
     if (!rawState) return null
 
@@ -81,7 +99,6 @@ export class TelemetryManager {
     // UI subscribers (e.g. telemetryStore) already throttle to 1 Hz internally,
     // so 10 Hz bus emissions still provide 10× more update opportunities than needed
     // while eliminating ~50 no-op dispatch iterations per second.
-    const now = Date.now()
     if (now - this._lastBusEmitTime >= 100) {
       telemetryBus.emit('STATE_UPDATE', smoothed)
       this._lastBusEmitTime = now
@@ -181,7 +198,14 @@ export class TelemetryManager {
     } else if (tle && tleAge < TLE_STALE_THRESHOLD_MS * 7) {
       newMode = online ? 'HYBRID' : 'OFFLINE'
     } else if (online && this._mode === 'OFFLINE') {
+      // TEL-2 FIX: RECOVERY is now actionable — it triggers an immediate TLE re-fetch
+      // rather than being a vestigial one-tick state. The fetch attempts to get a fresh
+      // TLE; on success, _recalculateMode will run again and transition to LIVE/HYBRID.
       newMode = 'RECOVERY'
+      if (!this._isFetching) {
+        this._rateLimiter.resetBackoff()
+        this._refreshTLEAsync() // fire-and-forget recovery fetch
+      }
     } else {
       newMode = 'OFFLINE'
     }

@@ -121,7 +121,13 @@ export const CameraController = React.memo(function CameraController(): null {
     if (!controls || !transition || transition.isCompleted) return
 
     const state = telemetryManager.lastState
-    if (!state) return
+    if (!state) {
+      // CAM-4 FIX: Must call completeTransition() on ALL early-return paths.
+      // Returning without it permanently latches isTransitioning=true, which disables
+      // both the tracking branch and auto-transitions with no recovery path.
+      completeTransition()
+      return
+    }
 
     // Retrieve ISS coordinates and velocity at transition epoch
     const ix = state.positionECI.x
@@ -141,7 +147,11 @@ export const CameraController = React.memo(function CameraController(): null {
       // This naturally captures the Earth's curvature, the glowing blue atmospheric limb,
       // and silhouettes the detailed ISS against the deep starfield.
       const issDistFromCenter = _transIssPos.length()
-      if (issDistFromCenter < 1) return
+      if (issDistFromCenter < 1) {
+        // CAM-4 FIX: Also call completeTransition() on this early-return path.
+        completeTransition()
+        return
+      }
 
       _transU.copy(_transIssPos).normalize() // Radial Vertical Vector
       // Project velocity to be strictly orthogonal to U in the orbital plane (In-track)

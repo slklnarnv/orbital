@@ -1,14 +1,26 @@
-import { useOrbitalState } from '@/hooks/useOrbitalState'
+import { useTelemetryStore } from '@/stores/telemetryStore'
+import { useShallow } from 'zustand/react/shallow'
 import { GlassPanel } from '../common/GlassPanel'
 import { MonoValue } from '../common/MonoValue'
+import type { TelemetryMode } from '@/types/orbital'
 
 /**
  * DataSourceIndicator provides detailed TLE data link diagnostics.
  * Implements restrained color highlights matching the NASA/JPL/ESA styling rules.
+ *
+ * Store-1 FIX: Subscribes only to the 3 fields actually rendered here.
+ * The previous useOrbitalState() subscription included latitude/longitude/speed/altitude,
+ * which are updated by the 1 Hz throttle but were never used by this component,
+ * causing up to 9 unnecessary re-renders per second.
  */
 export function DataSourceIndicator(): JSX.Element {
-  // Subscribe to the 1Hz throttled orbital/telemetry state
-  const telemetry = useOrbitalState()
+  const telemetry = useTelemetryStore(
+    useShallow((state) => ({
+      mode: state.mode as TelemetryMode,
+      confidence: state.confidence,
+      tleAgeHours: state.tleAgeHours,
+    }))
+  )
 
   // Dynamic color coding for telemetry modes
   const modeColorClass =
@@ -16,14 +28,18 @@ export function DataSourceIndicator(): JSX.Element {
       ? 'text-emerald-400'
       : telemetry.mode === 'HYBRID'
         ? 'text-amber-400'
-        : 'text-rose-400'
+        : telemetry.mode === 'RECOVERY'
+          ? 'text-sky-400'
+          : 'text-rose-400'
 
   const dotColorClass =
     telemetry.mode === 'LIVE'
       ? 'bg-emerald-500 shadow-emerald-500/20'
       : telemetry.mode === 'HYBRID'
         ? 'bg-amber-500 shadow-amber-500/20'
-        : 'bg-rose-500 shadow-rose-500/20'
+        : telemetry.mode === 'RECOVERY'
+          ? 'bg-sky-500 shadow-sky-500/20'
+          : 'bg-rose-500 shadow-rose-500/20'
 
   return (
     <GlassPanel className="w-80 flex flex-col gap-3">
@@ -63,3 +79,4 @@ export function DataSourceIndicator(): JSX.Element {
     </GlassPanel>
   )
 }
+

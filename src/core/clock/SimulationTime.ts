@@ -12,7 +12,7 @@ export type { SimulationTime }
  */
 export function computeGMST(julianDate: number): number {
   const T = (julianDate - 2451545.0) / 36525.0;
-  // GMST in seconds of arc
+  // GMST in seconds of time (IAU-1982 polynomial — output is seconds of sidereal time)
   let gmst =
     67310.54841 +
     (876600 * 3600 + 8640184.812866) * T +

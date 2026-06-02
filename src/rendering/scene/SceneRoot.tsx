@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react'
+import React, { Suspense, useCallback, Component, type ReactNode } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -11,6 +11,33 @@ import { OrbitLine } from '../iss/OrbitLine'
 import { CameraController } from '@/interaction/camera/CameraController'
 import { cameraControlsRef } from './cameraControlsRef'
 import { useCameraStore } from '@/stores/cameraStore'
+
+/**
+ * F-02 FIX: Error boundary that catches asset-load failures inside the 3D scene.
+ * Wraps ISS model/orbit subtrees so a GLB or Draco decode failure degrades
+ * gracefully (ISS disappears + logs) rather than crashing the entire app to
+ * the top-level red error screen.
+ */
+class CanvasErrorBoundary extends Component<
+  { children: ReactNode; name?: string },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    const name = (this.props as { name?: string }).name ?? 'unknown'
+    console.error(`[SceneRoot:${name}] Asset load error caught — degrading gracefully:`, error)
+  }
+
+  render() {
+    if (this.state.hasError) return null // Fail silently inside the Canvas
+    return this.props.children
+  }
+}
 
 /**
  * Internal loop controller that executes once per frame inside the Canvas context.
@@ -45,13 +72,30 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const activeTargetMode = (isTransitioning && transition) ? transition.toMode : mode
 
   // Dynamic minDistance:
-  // - Focused on Earth (PLANETARY/ORBITAL/FREE) -> 6,500 km to prevent camera clipping inside the Earth sphere.
-  // - Focused on/tracking the ISS (FOLLOW/INSPECT/APPROACH) -> 5 km to enable close-up visual module inspection.
-  const minDistance = (activeTargetMode === 'PLANETARY' || activeTargetMode === 'ORBITAL' || activeTargetMode === 'FREE') ? 6500 : 5
+  // - PLANETARY/ORBITAL (Earth-focused): 6,500 km prevents camera clipping inside Earth sphere.
+  // - FREE: 5 km — CAM-1 FIX: FREE was previously grouped with Earth modes (6,500 km), which
+  //   ejected the camera to 6,500 km the instant the user panned away from the ISS in close-up.
+  //   FREE must allow close proximity so panning from INSPECT/FOLLOW stays at the same distance.
+  // - INSPECT: 60 km — N-3 FIX: The ISS is rendered ~109 km wide (1000× real size for visibility).
+  //   The model's half-span is ~55 km, so 5 km places the camera inside the solar arrays.
+  //   60 km keeps the camera just outside the full model extent.
+  // - FOLLOW/APPROACH: 5 km (well outside model at those ranges).
+  const minDistance =
+    (activeTargetMode === 'PLANETARY' || activeTargetMode === 'ORBITAL') ? 6500
+    : activeTargetMode === 'INSPECT' ? 60
+    : 5
+
+  // Store-2 FIX: Hoist ref callback with useCallback so it is not recreated every render.
+  // An inline arrow function causes React to call ref(null) then ref(instance) on every
+  // AppCameraControls re-render (every camera-mode change), briefly nulling the shared ref.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const setCameraRef = useCallback((c: any) => {
+    cameraControlsRef.current = c
+  }, [])
 
   return (
     <CameraControls
-      ref={(c) => { cameraControlsRef.current = c }}
+      ref={setCameraRef}
       makeDefault={true}
       minDistance={minDistance} // Bound to reactive dynamic distance constraints
       maxDistance={100000}       // Cap maximum zoom-out distance (matches CAMERA_ZOOM_RANGES)
@@ -100,14 +144,20 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           {/*
            * ─── ISS Entity Integration ────────────────────────────────────────
            * ISSGroup does NOT rotate — it stays in the ECI inertial frame.
+           * F-02: Wrapped in CanvasErrorBoundary so a GLB / Draco decode failure
+           * degrades gracefully (ISS disappears) rather than crashing the whole app.
            */}
-          <ISSGroup />
+          <CanvasErrorBoundary name="ISSGroup">
+            <ISSGroup />
+          </CanvasErrorBoundary>
 
           {/*
            * ─── Orbit Prediction Arc ───────────────────────────────────────
            * MUST be at scene root.
            */}
-          <OrbitLine />
+          <CanvasErrorBoundary name="OrbitLine">
+            <OrbitLine />
+          </CanvasErrorBoundary>
 
           {/* Foundational Camera System (Layer 4) */}
           <CameraController />

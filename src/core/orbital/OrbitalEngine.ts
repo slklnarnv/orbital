@@ -3,7 +3,7 @@ import type { TLEData, OrbitalState, SimulationTime } from '@/types/orbital'
 import {
   temeToGeodetic,
 } from './CoordinateConversions'
-import { getTLEAgeHours, tleConfidence } from './TLEParser'
+import { getTLEAgeHours, tleConfidence, extractTLEEpoch } from './TLEParser'
 import { vec3Length } from '@/utils/math'
 
 // ─── Orbital Engine ───────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ export class OrbitalEngine {
   private _entityId: string
   private _tle: TLEData | null = null
   private _satrec: satellite.SatRec | null = null
+  /** Cached TLE epoch in milliseconds (parsed once at loadTLE() to avoid per-propagation string parsing) */
+  private _cachedEpochMs: number | null = null
 
   constructor(entityId: string) {
     this._entityId = entityId
@@ -34,6 +36,10 @@ export class OrbitalEngine {
       }
       this._tle = tle
       this._satrec = satrec
+      // F-06 FIX: Cache the TLE epoch at load time to avoid re-parsing the string on
+      // every call to propagate() (~60×/s at 60 fps). Each parse does a substring +
+      // parseInt + parseFloat + Date construction per frame, wasting ~1 μs per frame.
+      this._cachedEpochMs = extractTLEEpoch(tle.line1).getTime()
       return true
     } catch (err) {
       console.error(`[OrbitalEngine:${this._entityId}] Failed to load TLE:`, err)
@@ -82,7 +88,10 @@ export class OrbitalEngine {
     const meanMotionRadPerMin = this._satrec.no // radians/min
     const orbitalPeriod = (2 * Math.PI / meanMotionRadPerMin) // minutes
 
-    const tleAgeHours = getTLEAgeHours(this._tle, simTime.epochMs)
+    // F-06: Use cached epoch for age calculation (avoids per-propagation string parsing)
+    const tleAgeHours = this._cachedEpochMs !== null
+      ? (simTime.epochMs - this._cachedEpochMs) / (1000 * 3600)
+      : getTLEAgeHours(this._tle, simTime.epochMs)
     const confidence = tleConfidence(tleAgeHours)
 
     return {
@@ -96,7 +105,12 @@ export class OrbitalEngine {
       speed,
       orbitalPeriod,
       inclination: this._satrec.inclo * (180 / Math.PI), // convert rad to deg
-      source: this._tle.source === 'fallback' ? 'propagated' : 'cached',
+      // N-5 FIX: Correctly map TLE source to OrbitalState source.
+      // Previously 'celestrak' was mapped to 'cached' (same as IndexedDB-cached TLEs),
+      // obscuring which data came from the network vs. the local cache.
+      source: this._tle.source === 'fallback' ? 'propagated'
+            : this._tle.source === 'celestrak' ? 'live'
+            : 'cached',
       tleAgeHours,
       confidence,
     }

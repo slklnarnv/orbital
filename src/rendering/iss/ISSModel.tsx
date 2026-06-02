@@ -1,9 +1,16 @@
-// ─── ISSModel — Normalized Production Geometry & LOD ─────────────────────────
+// ─── ISSModel — Scaled Visual Geometry & LOD ─────────────────────────────────
 //
-// Represents the ISS at true physical scale and centered rotation, utilizing
-// Draco-compressed high-detail models and lightweight LOD fallbacks.
+// Represents the ISS at a visually readable render scale and centered rotation,
+// utilizing Draco-compressed high-detail models and lightweight LOD fallbacks.
 //
-// Physical ISS dimensions:
+// IMPORTANT — Scale Intentionality:
+//   The ISS is rendered ~1,000× larger than real-world dimensions (per DEVELOPER NOTE).
+//   This is intentional for orbital-scale readability: the real ISS (109 m wingspan)
+//   is sub-pixel at typical viewing distances (408 km altitude, 6,779 km from Earth center).
+//   Render wingspan: ~109 km (NOT 109 m). Camera minDistance is set to 60 km to keep
+//   the camera outside the model's ~55 km half-span even in INSPECT mode.
+//
+// Physical ISS dimensions (real-world, for reference only):
 //   Solar array wingspan: ~109 m (0.109 km)
 //   Truss / module length: ~73 m  (0.073 km)
 //   Height extents: ~30 m (0.030 km)
@@ -23,12 +30,18 @@
 //   - Module-level preloading via useGLTF.preload() to prevent shader/texture hitching.
 //   - Group ref visibility mutated directly inside useFrame() to avoid React state re-renders.
 
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+
+// ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
+// Instead of the gstatic.com CDN (blocked in offline/private-network environments),
+// we ship the decoder WASM and JS files in public/draco/ and point useGLTF at them.
+// This guarantees Draco-compressed models decode regardless of CDN availability.
+useGLTF.setDecoderPath('/draco/')
 
 // ─── Preload Assets ──────────────────────────────────────────────────────────
 // Pre-warmed on page startup to bypass loading delays and frame drops
@@ -38,17 +51,19 @@ useGLTF.preload('/models/International Space Station (ISS) (A).glb')
 // ─── Normalization & Pivot Offsets Constants ─────────────────────────────────
 // Computed from physical extents and binary glTF bounds analysis
 
-/** Physical wingspan of the real-world ISS solar arrays (meters) */
-const PHYSICAL_ISS_WINGSPAN_M = 109.0
+/** Render-scale ISS wingspan in Three.js world units (km).
+ * The ISS is intentionally rendered ~1,000× oversize for orbital-scale readability.
+ * Real ISS wingspan: ~109 m = 0.109 km. Render wingspan: 109 km. */
+const RENDER_ISS_WINGSPAN_UNITS = 109.0
 
 // Model Draco: Max dimensions [31.070, 24.200, 75.109]m. Wingspan is Z-extent (75.109m).
 const MODEL_DRACO_WINGSPAN_M = 75.109
-const NORMALIZATION_SCALE_DRACO = PHYSICAL_ISS_WINGSPAN_M / MODEL_DRACO_WINGSPAN_M // ≈ 1.451
+const NORMALIZATION_SCALE_DRACO = RENDER_ISS_WINGSPAN_UNITS / MODEL_DRACO_WINGSPAN_M // ≈ 1.451
 const PIVOT_OFFSET_DRACO_Y = 3.506 // Center of geometry is offset by -3.506m in local space
 
 // Model A: Max dimensions [37.772, 22.671, 23.539]m. Max extent is X truss span (37.772m).
 const MODEL_A_WINGSPAN_M = 37.772
-const NORMALIZATION_SCALE_A = PHYSICAL_ISS_WINGSPAN_M / MODEL_A_WINGSPAN_M // ≈ 2.885
+const NORMALIZATION_SCALE_A = RENDER_ISS_WINGSPAN_UNITS / MODEL_A_WINGSPAN_M // ≈ 2.885
 const PIVOT_OFFSET_A_X = -0.002
 const PIVOT_OFFSET_A_Y = 5.720
 const PIVOT_OFFSET_A_Z = 2.196
@@ -93,23 +108,13 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const dracoScene = useMemo(() => dracoGltf.scene.clone(), [dracoGltf.scene])
   const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
 
-  // Dispose cloned geometries and materials on unmount to prevent GPU resource leaks
-  useEffect(() => {
-    return () => {
-      const disposeScene = (scene: THREE.Group) => {
-        scene.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            (child as THREE.Mesh).geometry?.dispose()
-            const mat = (child as THREE.Mesh).material
-            if (Array.isArray(mat)) mat.forEach(m => m.dispose())
-            else mat?.dispose()
-          }
-        })
-      }
-      disposeScene(dracoScene)
-      disposeScene(fallbackScene)
-    }
-  }, [dracoScene, fallbackScene])
+  // NOTE: No manual geometry/material disposal on unmount.
+  // dracoScene and fallbackScene are produced by scene.clone(), which shallow-clones
+  // materials — they still reference the same underlying geometries and material instances
+  // held in Drei's internal GLTF cache. Disposing them here would corrupt the cache and
+  // cause future loads (e.g. hot-reload, Suspense remount) to reference freed GPU memory.
+  // Drei's useGLTF manages GLTF asset lifecycle; external disposal is incorrect.
+
 
   useFrame((state) => {
     if (!groupRef.current) return

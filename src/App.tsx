@@ -20,11 +20,17 @@ import { DataSourceIndicator } from '@/ui/panels/DataSourceIndicator'
 function checkWebGLSupport(): boolean {
   try {
     const canvas = document.createElement('canvas')
-    return !!(
-      canvas.getContext('webgl2') ||
-      canvas.getContext('webgl') ||
-      canvas.getContext('experimental-webgl')
+    const gl = (
+      canvas.getContext('webgl2') as WebGLRenderingContext | null ||
+      canvas.getContext('webgl') as WebGLRenderingContext | null ||
+      canvas.getContext('experimental-webgl') as WebGLRenderingContext | null
     )
+    // Release the probed context immediately — browsers cap at ~16 live contexts.
+    // Not releasing it here wastes one slot for the lifetime of the tab.
+    if (gl) {
+      gl.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+    return !!gl
   } catch (e) {
     return false
   }
@@ -111,7 +117,7 @@ function WebGLDiagnosticScreen(): JSX.Element {
         <div className="h-px bg-white/10" />
 
         <div className="flex justify-between items-center text-xs opacity-50">
-          <span>Client Environment: Windows WebGL 1.0/2.0</span>
+          <span>Client Environment: {navigator.platform || navigator.userAgent.split(' ')[0]} — WebGL Unavailable</span>
           <span className="font-mono">Error Code: E_CONTEXT_ALLOCATION_FAIL</span>
         </div>
       </div>
@@ -222,17 +228,17 @@ function LoadingScreen(): JSX.Element | null {
  * and NEVER re-renders, preventing 3D scene-graph rebuilds and WebGL state resets.
  */
 export default function App(): JSX.Element {
-  const [webGlSupported, setWebGlSupported] = useState(true)
+  // APP-1 FIX: Use lazy initial state so checkWebGLSupport() runs BEFORE any render.
+  // Previously this was in a useEffect (post-render), which meant R3F's Canvas mounted
+  // and threw before the check could set webGlSupported=false. The lazy initializer
+  // runs synchronously during the first render, gating Canvas mount correctly.
+  const [webGlSupported] = useState(() => checkWebGLSupport())
 
   useEffect(() => {
-    // 1. Validate WebGL capability in the active session
-    const isSupported = checkWebGLSupport()
-    setWebGlSupported(isSupported)
-
-    // 2. Initialize store listeners to bridge event bus to Zustand state
+    // 1. Initialize store listeners to bridge event bus to Zustand state
     const unsubscribeListeners = initTelemetryStoreListeners()
 
-    // 3. Start the telemetry manager network checks, cached TLE load, and live fetches
+    // 2. Start the telemetry manager network checks, cached TLE load, and live fetches
     telemetryManager.start()
 
     return () => {

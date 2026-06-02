@@ -44,8 +44,11 @@ export function formatKilometersPerSecond(kms: number, precision = 2): string {
  * Example: 92.68 -> "92m 41s"
  */
 export function formatPeriod(periodMinutes: number): string {
-  const mins = Math.floor(periodMinutes)
-  const secs = Math.round((periodMinutes - mins) * 60)
+  let mins = Math.floor(periodMinutes)
+  let secs = Math.round((periodMinutes - mins) * 60)
+  // FMT-1 FIX: Math.round() can produce secs=60 for inputs like 92.9999 min.
+  // Without this carry, the display shows "92m 60s" which is invalid.
+  if (secs === 60) { secs = 0; mins++ }
   return `${mins}m ${secs.toString().padStart(2, '0')}s`
 }
 

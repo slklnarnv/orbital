@@ -15,7 +15,8 @@
 // Visual encoding:
 //   alpha = 0.0  → trailing edge (past orbit)  → nearly transparent
 //   alpha = 1.0  → leading edge (future arc)   → full brightness
-//   Shader applies cubic ease-in for natural luminosity falloff.
+//   Per-vertex alpha values are passed directly to the shader (linear gradient,
+//   not cubic ease-in as previously documented).
 
 import { useMemo, useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'

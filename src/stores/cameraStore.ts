@@ -6,9 +6,6 @@ interface CameraStoreState {
   // Current camera operational mode
   mode: CameraMode;
   
-  // Previous camera mode, useful for backtrack or landing zones
-  previousMode: CameraMode | null;
-  
   // High-level tracking flags for HUD/UI presentation
   isTransitioning: boolean;
   isTracking: boolean; // True when camera is actively locking target
@@ -21,7 +18,6 @@ interface CameraStoreState {
   
   // Programmatic actions
   setMode: (mode: CameraMode) => void;
-  startTransition: (toMode: CameraMode, durationMs?: number) => void;
   completeTransition: () => void;
   setZoomProgress: (progress: number) => void;
   
@@ -31,7 +27,6 @@ interface CameraStoreState {
 
 export const useCameraStore = create<CameraStoreState>((set) => ({
   mode: 'PLANETARY',
-  previousMode: null,
   isTransitioning: false,
   isTracking: false,
   transition: null,
@@ -44,25 +39,8 @@ export const useCameraStore = create<CameraStoreState>((set) => ({
     const isTracking = mode === 'FOLLOW' || mode === 'INSPECT' || mode === 'APPROACH';
     
     return {
-      previousMode: state.mode,
       mode,
       isTracking,
-    };
-  }),
-  
-  startTransition: (toMode, durationMs = 1500) => set((state) => {
-    const isTracking = toMode === 'FOLLOW' || toMode === 'INSPECT' || toMode === 'APPROACH';
-    
-    return {
-      isTransitioning: true,
-      isTracking,
-      transition: {
-        fromMode: state.mode,
-        toMode,
-        startTime: Date.now(),
-        durationMs,
-        isCompleted: false,
-      }
     };
   }),
   
@@ -98,3 +76,4 @@ export const useCameraStore = create<CameraStoreState>((set) => ({
     };
   })
 }));
+
