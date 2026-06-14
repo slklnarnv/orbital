@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'http';
+// No-import type definition bypass for Node.js runtime
 
 // NORAD ID for ISS
 const ISS_NORAD_ID = 25544;
@@ -84,7 +84,7 @@ async function fetchAndParse(
   };
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: any, res: any) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
