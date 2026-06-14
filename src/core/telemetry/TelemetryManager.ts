@@ -34,6 +34,13 @@ export class TelemetryManager {
   private _lastBusEmitTime = 0
   /** Timestamp of last mode recalculation (B-6: keep mode fresh between fetches). */
   private _lastModeRecalcMs = 0
+  /**
+   * Tracks the previous online state so the NETWORK_STATUS handler can distinguish
+   * a genuine offline→online recovery from a routine event (e.g. successful fetch).
+   * Resetting backoff on every NETWORK_STATUS event caused a feedback loop that
+   * prevented backoff from ever engaging (Bug A).
+   */
+  private _wasOffline = false
 
   constructor(entity: OrbitalEntity) {
     this._entity = entity
@@ -47,11 +54,25 @@ export class TelemetryManager {
     // Subscribe to network changes to trigger mode recalculation and recovery
     this._unsubscribeNetworkStatus = telemetryBus.on('NETWORK_STATUS', () => {
       this._recalculateMode()
-      // N-1 FIX: When coming back online, reset backoff so we retry immediately
-      // rather than waiting out the remaining backoff window (up to 30 min).
-      if (networkMonitor.isOnline) {
-        this._rateLimiter.resetBackoff()
-        this._refreshTLEAsync() // fire-and-forget
+      // Only reset backoff and force a retry on a true offline → online transition.
+      // Bug A fix: Previously resetBackoff() was called on every NETWORK_STATUS event
+      // (including the one emitted by recordFailure()), creating a loop where every
+      // 10s timeout immediately triggered another fetch, bypassing all backoff logic.
+      // Now _wasOffline tracks whether we were actually disconnected, so a browser
+      // online event (navigator.onLine flip) is the only trigger for an eager retry.
+      //
+      // Additionally guarded by !_isFetching: if a fetch is already in-flight,
+      // resetBackoff() would set _lastRequestMs=0, _currentDelay=0, but the in-flight
+      // fetch's _isFetching guard prevents recordRequest() from running, leaving
+      // shouldRequest() returning true at 60fps until the fetch completes.
+      if (networkMonitor.isOnline && this._wasOffline) {
+        this._wasOffline = false
+        if (!this._isFetching) {
+          this._rateLimiter.resetBackoff()
+          this._refreshTLEAsync() // fire-and-forget
+        }
+      } else if (!networkMonitor.isOnline) {
+        this._wasOffline = true
       }
     })
 
@@ -74,8 +95,15 @@ export class TelemetryManager {
    * Returns the current OrbitalState (or null if not ready).
    */
   update(simTime: SimulationTime): OrbitalState | null {
-    // Check if TLE refresh is due
-    if (this._rateLimiter.shouldRequest()) {
+    // Check if TLE refresh is due.
+    // CRITICAL: Gate on !_isFetching BEFORE evaluating shouldRequest().
+    // Without this, when resetBackoff() is called while a fetch is in-flight
+    // (e.g. by the RECOVERY branch or NETWORK_STATUS handler), it sets
+    // _lastRequestMs=0 and _currentDelay=0. The in-flight fetch's _isFetching
+    // guard prevents recordRequest() from ever running, so shouldRequest()
+    // returns `now - 0 >= 0` = true EVERY FRAME at 60fps — a fetch storm of
+    // hundreds of no-op calls per second until the in-flight fetch completes.
+    if (!this._isFetching && this._rateLimiter.shouldRequest()) {
       this._refreshTLEAsync() // fire-and-forget
     }
 
@@ -197,15 +225,10 @@ export class TelemetryManager {
       newMode = 'LIVE'
     } else if (tle && tleAge < TLE_STALE_THRESHOLD_MS * 7) {
       newMode = online ? 'HYBRID' : 'OFFLINE'
-    } else if (online && this._mode === 'OFFLINE') {
-      // TEL-2 FIX: RECOVERY is now actionable — it triggers an immediate TLE re-fetch
-      // rather than being a vestigial one-tick state. The fetch attempts to get a fresh
-      // TLE; on success, _recalculateMode will run again and transition to LIVE/HYBRID.
+    } else if (online) {
+      // Bug B FIX: When TLE age exceeds 7 days (or no TLE at all) AND we are online,
+      // always enter RECOVERY regardless of the current mode.
       newMode = 'RECOVERY'
-      if (!this._isFetching) {
-        this._rateLimiter.resetBackoff()
-        this._refreshTLEAsync() // fire-and-forget recovery fetch
-      }
     } else {
       newMode = 'OFFLINE'
     }
@@ -213,6 +236,18 @@ export class TelemetryManager {
     if (newMode !== this._mode) {
       this._mode = newMode
       telemetryBus.emit('MODE_CHANGE', newMode)
+
+      // Trigger a recovery fetch ONLY on the initial transition INTO RECOVERY.
+      // Previously this was in the mode-determination block above and ran on
+      // every 60s B-6 recalculation while mode was already RECOVERY — that
+      // called resetBackoff() every 60s, defeating the exponential ramp
+      // (5s → 10s → 20s → ... → 30min) and capping retries at 60s intervals.
+      // Now: initial entry resets backoff and fires one fetch; subsequent retries
+      // are driven by the update() loop with proper exponential backoff.
+      if (newMode === 'RECOVERY' && !this._isFetching) {
+        this._rateLimiter.resetBackoff()
+        this._refreshTLEAsync()
+      }
     }
   }
 }

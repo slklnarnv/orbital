@@ -43,6 +43,7 @@ export class NetworkMonitor {
       consecutiveFailures: 0,
       online: true,
     }
+    // Emit NETWORK_STATUS so TelemetryManager can recalculate mode after a successful fetch.
     telemetryBus.emit('NETWORK_STATUS', this._status)
   }
 
@@ -51,7 +52,12 @@ export class NetworkMonitor {
       ...this._status,
       consecutiveFailures: this._status.consecutiveFailures + 1,
     }
-    telemetryBus.emit('NETWORK_STATUS', this._status)
+    // Bug A FIX: Do NOT emit NETWORK_STATUS on failure.
+    // Previously emitting here created a feedback loop:
+    //   fetch → timeout → recordFailure() → NETWORK_STATUS event
+    //   → TelemetryManager resets backoff → immediate re-fetch → timeout → loop.
+    // Backoff was completely bypassed. Only the browser online/offline events
+    // (which represent actual network state changes) should emit NETWORK_STATUS.
   }
 
   private _handleOnline(): void {

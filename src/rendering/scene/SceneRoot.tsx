@@ -115,12 +115,35 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
       <Canvas
         gl={{
           antialias: true,
+          powerPreference: 'high-performance', // Bug C: reduces chance of browser downgrading context in long-running tabs
         }}
-        onCreated={({ gl, scene }) => {
+        onCreated={({ gl, scene, camera }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.0 // Calibrated highlight compression for deep blacks
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
+
+          // Bug C FIX: Handle WebGL context loss (common in long-running tabs, >5 days).
+          // preventDefault() signals to the browser that we intend to restore the context;
+          // without it, the context stays lost permanently.
+          // On restore we reload the page — it is the only reliable recovery path;
+          // shader programs, VBOs, and texture state are all lost on context loss and
+          // partial recovery typically results in a permanently black or corrupted render.
+          const canvas = gl.domElement
+          canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault()
+            console.warn('[SceneRoot] WebGL context lost. Will reload on restore.')
+          })
+          canvas.addEventListener('webglcontextrestored', () => {
+            console.warn('[SceneRoot] WebGL context restored. Reloading page to reinitialize GPU state.')
+            window.location.reload()
+          })
+
+          // Pre-compile all shader programs during the loading screen so the GPU is
+          // warm before the user can interact. Without this, shaders are compiled lazily
+          // on first render — e.g. the ISS material shaders only compile when the ISS
+          // first enters the camera frustum (clicking "locate"), causing a ~1s stutter.
+          gl.compile(scene, camera)
         }}
         camera={{
           fov: 45,
