@@ -61,8 +61,11 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     night: PLACEHOLDERS.night,
   })
 
-  // Re-use single loader instance across frames
-  const loader = useMemo(() => new THREE.TextureLoader(), [])
+  // Re-use an isolated loading manager so background progressive loads don't interfere with the global DefaultLoadingManager (and thus the loading screen)
+  const loader = useMemo(() => {
+    const manager = new THREE.LoadingManager()
+    return new THREE.TextureLoader(manager)
+  }, [])
 
   // Initialize uniforms with placeholders — specularMap initialized to matte black to prevent pop-in flash
   const uniformsRef = useRef({

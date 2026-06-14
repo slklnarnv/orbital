@@ -133,13 +133,20 @@ function LoadingScreen(): JSX.Element | null {
   const { active, progress } = useProgress()
   const [mounted, setMounted] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   useEffect(() => {
+    // If we have already fully loaded once, do not run the fade/reset sequence again.
+    // This provides robust regression protection against future developers adding
+    // dynamic asset loaders that might temporarily reset DefaultLoadingManager.
+    if (hasLoaded) return
+
     // Hoist unmountTimer to effect scope so the cleanup return can clear both
     // timers, preventing setMounted(false) from being called on an unmounted component.
     let unmountTimer: ReturnType<typeof setTimeout> | undefined
 
     if (progress >= 100 && !active) {
+      setHasLoaded(true)
       // Delay slightly (e.g. 400ms) so the user can see 100% loaded state, then trigger fade out
       const fadeTimer = setTimeout(() => {
         setFadeOut(true)
@@ -160,7 +167,7 @@ function LoadingScreen(): JSX.Element | null {
       setMounted(true)
       setFadeOut(false)
     }
-  }, [progress, active])
+  }, [progress, active, hasLoaded])
 
   if (!mounted) return null
 
