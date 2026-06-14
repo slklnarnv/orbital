@@ -123,20 +123,17 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
 
-          // Bug C FIX: Handle WebGL context loss (common in long-running tabs, >5 days).
-          // preventDefault() signals to the browser that we intend to restore the context;
-          // without it, the context stays lost permanently.
-          // On restore we reload the page — it is the only reliable recovery path;
-          // shader programs, VBOs, and texture state are all lost on context loss and
-          // partial recovery typically results in a permanently black or corrupted render.
+          // Forward WebGL context events to the window so the application layer (App.tsx)
+          // can manage recovery HUD states and reload policies in isolation.
           const canvas = gl.domElement
           canvas.addEventListener('webglcontextlost', (e) => {
             e.preventDefault()
-            console.warn('[SceneRoot] WebGL context lost. Will reload on restore.')
+            console.warn('[SceneRoot] WebGL context lost.')
+            window.dispatchEvent(new CustomEvent('webgl-context-lost'))
           })
           canvas.addEventListener('webglcontextrestored', () => {
-            console.warn('[SceneRoot] WebGL context restored. Reloading page to reinitialize GPU state.')
-            window.location.reload()
+            console.warn('[SceneRoot] WebGL context restored.')
+            window.dispatchEvent(new CustomEvent('webgl-context-restored'))
           })
 
           // Pre-compile all shader programs during the loading screen so the GPU is

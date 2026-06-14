@@ -19,59 +19,143 @@ const CELESTRAK_COM = (id: number) =>
 /** wheretheiss.at — CORS-open, mirrors Space-Track TLEs, ISS only */
 const WHERETHEISS_TLE = `https://api.wheretheiss.at/v1/satellites/${ISS_NORAD_ID}/tles?format=text`
 
-/** Attempt a fetch with a per-source timeout. Returns null on any failure. */
-async function tryFetch(url: string, timeoutMs: number): Promise<string | null> {
+/**
+ * Attempt a fetch linked to a parent abort signal and an individual source timeout.
+ * Returns null on any failure, timeout, or abort.
+ */
+async function tryFetchWithSignal(
+  url: string,
+  timeoutMs: number,
+  parentSignal: AbortSignal
+): Promise<string | null> {
+  const controller = new AbortController()
+
+  // Forward the parent signal abort to our local fetch controller
+  const onParentAbort = () => controller.abort()
+  parentSignal.addEventListener('abort', onParentAbort)
+
+  // Enforce the individual timeout by aborting the local fetch controller
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
   try {
     const res = await fetch(url, {
       headers: { Accept: 'text/plain' },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: controller.signal,
     })
     if (!res.ok) return null
     return await res.text()
   } catch {
     return null
+  } finally {
+    clearTimeout(timeoutId)
+    parentSignal.removeEventListener('abort', onParentAbort)
   }
 }
 
 /**
- * Fetches a fresh ISS TLE from CelesTrak, falling back to wheretheiss.at.
+ * Fetch from a source and validate the parsed TLE. Rejects (throws) on any failure.
+ */
+async function fetchAndParse(
+  url: string,
+  timeoutMs: number,
+  parentSignal: AbortSignal,
+  sourceName: string
+): Promise<TLEData> {
+  const startTime = performance.now()
+  let text: string | null = null
+  try {
+    text = await tryFetchWithSignal(url, timeoutMs, parentSignal)
+    const elapsed = performance.now() - startTime
+
+    if (!text) {
+      console.warn(`[TLE] ${sourceName} failed in ${elapsed.toFixed(0)}ms`)
+      throw new Error(`Fetch failed or timed out for ${sourceName}`)
+    }
+
+    console.log(`[TLE] ${sourceName} success in ${elapsed.toFixed(0)}ms`)
+  } catch (err) {
+    const elapsed = performance.now() - startTime
+    if (parentSignal.aborted) {
+      console.log(`[TLE] ${sourceName} aborted/cancelled in ${elapsed.toFixed(0)}ms`)
+    } else if (text === null) {
+      console.warn(`[TLE] ${sourceName} failed in ${elapsed.toFixed(0)}ms`)
+    }
+    throw err
+  }
+
+  const tle = parseTLEString(text, 'celestrak')
+  if (!tle) {
+    console.warn(`[TLE] parse failed for ${sourceName}`)
+    throw new Error(`Failed to parse TLE from ${sourceName}`)
+  }
+
+  console.log(`[TLE] parse succeeded for ${sourceName}`)
+  return tle
+}
+
+/**
+ * Fetches a fresh ISS TLE.
+ * Attempts to load from the serverless API proxy (`/api/tle`) first to minimize client load
+ * and bypass regional ISP CelesTrak blocks. Falls back to a concurrent client-side race if needed.
  *
- * Source priority:
+ * Client sources raced:
  *   1. celestrak.org  (primary, 10 s timeout)
  *   2. celestrak.com  (alternate domain, 10 s timeout)
- *   3. wheretheiss.at (CORS-open fallback, 8 s timeout, ISS-only)
- *
- * Returns null only when all three sources fail, so the caller falls back
- * to the IndexedDB-cached or bundled fallback TLE.
+ *   3. wheretheiss.at (CORS-open fallback, 20 s timeout, ISS-only)
  */
 export async function fetchTLEFromCelesTrak(
   noradId: number = ISS_NORAD_ID
 ): Promise<TLEData | null> {
-  // Source 1: CelesTrak primary
-  const text1 = await tryFetch(CELESTRAK_ORG(noradId), 10_000)
-  if (text1) {
-    const tle = parseTLEString(text1, 'celestrak')
-    if (tle) { networkMonitor.recordSuccess(); return tle }
-  }
+  // 1. Try Vercel Serverless Proxy first
+  try {
+    const startTime = performance.now()
+    const response = await fetch('/api/tle', {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000), // 10s timeout for the proxy fetch
+    })
+    const elapsed = performance.now() - startTime
 
-  // Source 2: CelesTrak alternate domain
-  const text2 = await tryFetch(CELESTRAK_COM(noradId), 10_000)
-  if (text2) {
-    const tle = parseTLEString(text2, 'celestrak')
-    if (tle) { networkMonitor.recordSuccess(); return tle }
-  }
-
-  // Source 3: wheretheiss.at (ISS only — ignore noradId for non-ISS calls)
-  if (noradId === ISS_NORAD_ID) {
-    const text3 = await tryFetch(WHERETHEISS_TLE, 8_000)
-    if (text3) {
-      const tle = parseTLEString(text3, 'celestrak')
-      if (tle) { networkMonitor.recordSuccess(); return tle }
+    if (response.ok) {
+      const tle = await response.json() as TLEData
+      if (tle && tle.line1 && tle.line2) {
+        console.log(`[TLE] Serverless proxy success in ${elapsed.toFixed(0)}ms`)
+        console.log(`[TLE] parse succeeded for serverless-proxy`)
+        networkMonitor.recordSuccess()
+        return tle
+      }
     }
+    console.warn(`[TLE] Serverless proxy failed with status ${response.status} in ${elapsed.toFixed(0)}ms`)
+  } catch (err) {
+    console.warn(`[TLE] Serverless proxy unreachable, falling back to client-side race...`)
   }
 
-  networkMonitor.recordFailure()
-  console.warn('[CelesTrakClient] All TLE sources failed (CelesTrak ×2, wheretheiss.at). Will retry after backoff.')
-  return null
+  // 2. Fallback: Concurrent Client-Side Race
+  const controller = new AbortController()
+  const signal = controller.signal
+
+  const promises: Promise<TLEData>[] = [
+    fetchAndParse(CELESTRAK_ORG(noradId), 10_000, signal, 'celestrak-org'),
+    fetchAndParse(CELESTRAK_COM(noradId), 10_000, signal, 'celestrak-com'),
+  ]
+
+  if (noradId === ISS_NORAD_ID) {
+    promises.push(fetchAndParse(WHERETHEISS_TLE, 20_000, signal, 'wheretheiss'))
+  }
+
+  try {
+    const tle = await Promise.any(promises)
+    // Cancel the other pending requests as we have a winner
+    controller.abort()
+    networkMonitor.recordSuccess()
+    return tle
+  } catch (err) {
+    // In case of any leftover requests (though all should have rejected/failed)
+    controller.abort()
+    networkMonitor.recordFailure()
+    console.warn(
+      '[CelesTrakClient] All TLE sources failed (CelesTrak ×2, wheretheiss.at). Will retry after backoff.'
+    )
+    return null
+  }
 }
 

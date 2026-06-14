@@ -2,12 +2,6 @@ import type { TLEData } from '@/types/orbital'
 
 // ─── TLE Parser ───────────────────────────────────────────────────────────────
 
-/** Validate basic TLE line format */
-function isValidTLELine(line: string, expectedLineNumber: number): boolean {
-  if (!line || line.length < 69) return false
-  const lineNum = parseInt(line[0])
-  return lineNum === expectedLineNumber
-}
 
 /** Parse a raw TLE string block into a TLEData object */
 export function parseTLEString(
@@ -19,21 +13,22 @@ export function parseTLEString(
     .map(l => l.trim())
     .filter(l => l.length > 0)
 
-  // Accept 2-line or 3-line TLE (3-line has name on first line)
-  let line1: string, line2: string
+  // Find the first line starting with "1 " and the first line starting with "2 " of valid TLE length
+  const line1 = lines.find(l => l.startsWith('1 ') && l.length >= 68)
+  const line2 = lines.find(l => l.startsWith('2 ') && l.length >= 68)
 
-  if (lines.length >= 3 && isValidTLELine(lines[1], 1) && isValidTLELine(lines[2], 2)) {
-    line1 = lines[1]
-    line2 = lines[2]
-  } else if (lines.length >= 2 && isValidTLELine(lines[0], 1) && isValidTLELine(lines[1], 2)) {
-    line1 = lines[0]
-    line2 = lines[1]
-  } else {
-    console.warn('[TLEParser] Could not parse TLE from string:', raw.substring(0, 100))
-    return null
+  if (line1 && line2) {
+    const cat1 = line1.substring(2, 7).trim()
+    const cat2 = line2.substring(2, 7).trim()
+    if (cat1 === cat2) {
+      return { line1, line2, fetchedAt: Date.now(), source }
+    } else {
+      console.warn(`[TLEParser] Catalog numbers do not match: ${cat1} vs ${cat2}`)
+    }
   }
 
-  return { line1, line2, fetchedAt: Date.now(), source }
+  console.warn('[TLEParser] Could not parse TLE from string:', raw.substring(0, 100))
+  return null
 }
 
 /** Extract the TLE epoch as a JS Date from line 1 */
