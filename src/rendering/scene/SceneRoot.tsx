@@ -82,8 +82,8 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   // - FOLLOW/APPROACH: 5 km (well outside model at those ranges).
   const minDistance =
     (activeTargetMode === 'PLANETARY' || activeTargetMode === 'ORBITAL') ? 6500
-    : activeTargetMode === 'INSPECT' ? 60
-    : 5
+      : activeTargetMode === 'INSPECT' ? 60
+        : 5
 
   // Store-2 FIX: Hoist ref callback with useCallback so it is not recreated every render.
   // An inline arrow function causes React to call ref(null) then ref(instance) on every
@@ -103,6 +103,8 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   )
 })
 
+
+
 /**
  * SceneRoot bootstraps the React Three Fiber rendering pipeline.
  *
@@ -117,17 +119,11 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           antialias: true,
           powerPreference: 'high-performance', // Bug C: reduces chance of browser downgrading context in long-running tabs
         }}
-        onCreated={({ gl, scene, camera }) => {
+        onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.0 // Calibrated highlight compression for deep blacks
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
-
-          // Pre-compile all shader programs during the loading screen so the GPU is
-          // warm before the user can interact. Without this, shaders are compiled lazily
-          // on first render — e.g. the ISS material shaders only compile when the ISS
-          // first enters the camera frustum (clicking "locate"), causing a ~1s stutter.
-          gl.compile(scene, camera)
         }}
         camera={{
           fov: 45,
@@ -171,6 +167,8 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
 
           {/* Isolated programmatic camera controls */}
           <AppCameraControls />
+
+
         </Suspense>
       </Canvas>
     </div>

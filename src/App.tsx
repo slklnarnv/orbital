@@ -7,6 +7,7 @@ import { TopBar } from '@/ui/layout/TopBar'
 import { TelemetryPanel } from '@/ui/panels/TelemetryPanel'
 import { CameraPanel } from '@/ui/panels/CameraPanel'
 import { DataSourceIndicator } from '@/ui/panels/DataSourceIndicator'
+import { useLoadingStore } from '@/stores/loadingStore'
 
 /**
  * Pure JavaScript utility to check if WebGL is available in the current browser session.
@@ -130,52 +131,50 @@ function WebGLDiagnosticScreen(): JSX.Element {
  * and clear progress percentage.
  */
 function LoadingScreen(): JSX.Element | null {
-  const { active, progress, total } = useProgress()
+  const { active, progress } = useProgress()
+  const prewarmingComplete = useLoadingStore((state) => state.prewarmingComplete)
   const [mounted, setMounted] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
 
+  // Freeze the displayed progress at 100% once we start the fade-out sequence
+  // to prevent the visual "double load" glitch (0->100->0->100).
+  const displayProgress = hasLoaded ? 100 : progress
+
+  // Dynamic message to keep the user informed during download vs. GPU initialization stages
+  const statusMessage = (!prewarmingComplete && progress >= 100 && !active)
+    ? 'Initializing Graphics'
+    : `Loading ${Math.round(displayProgress)}%`
+
   useEffect(() => {
-    // If we have already fully loaded once, do not run the fade/reset sequence again.
-    // This provides robust regression protection against future developers adding
-    // dynamic asset loaders that might temporarily reset DefaultLoadingManager.
+    // If we have already started the exit sequence, ignore further useProgress updates.
+    // This prevents the loading screen from returning once it starts fading out.
     if (hasLoaded) return
 
-    // Hoist unmountTimer to effect scope so the cleanup return can clear both
-    // timers, preventing setMounted(false) from being called on an unmounted component.
-    let unmountTimer: ReturnType<typeof setTimeout> | undefined
-
-    if (progress >= 100 && !active && total > 0) {
+    // Wait until downloads complete (progress >= 100 & !active) AND the GPU prewarmer completes
+    if (progress >= 100 && !active && prewarmingComplete) {
       setHasLoaded(true)
-      // Delay slightly (e.g. 400ms) so the user can see 100% loaded state, then trigger fade out
-      const fadeTimer = setTimeout(() => {
+
+      // We purposefully DO NOT return a cleanup function (clearTimeout) here.
+      // If we did, the re-render caused by setHasLoaded(true) would execute the
+      // cleanup function, cancelling the timers and permanently freezing the 
+      // loading screen at 100%. 
+      setTimeout(() => {
         setFadeOut(true)
 
-        // Complete unmount after CSS fade-out transition completes (800ms)
-        unmountTimer = setTimeout(() => {
+        setTimeout(() => {
           setMounted(false)
         }, 800)
       }, 400)
-
-      // Single unified cleanup: clears both timers to prevent stale state updates
-      // on an unmounted component if the effect re-runs or the tree unmounts mid-fade.
-      return () => {
-        clearTimeout(fadeTimer)
-        if (unmountTimer !== undefined) clearTimeout(unmountTimer)
-      }
-    } else {
-      setMounted(true)
-      setFadeOut(false)
     }
-  }, [progress, active, hasLoaded, total])
+  }, [progress, active, prewarmingComplete, hasLoaded])
 
   if (!mounted) return null
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] select-none transition-opacity duration-800 ease-in-out ${
-        fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
     >
       <div className="flex flex-col items-center justify-center">
         {/* Rotating Minimalist Earth wireframe logo (tilted at 23.5 degrees) */}
@@ -211,16 +210,16 @@ function LoadingScreen(): JSX.Element | null {
           </svg>
         </div>
 
-        {/* Minimal loading text with percentage indicator */}
+        {/* Minimal loading text with percentage/status indicator */}
         <span className="text-xs font-mono tracking-[0.25em] text-[var(--color-text-secondary)] mt-6 uppercase">
-          Loading {Math.round(progress)}%
+          {statusMessage}
         </span>
 
         {/* Clean, minimalist progress line */}
         <div className="w-48 h-0.5 bg-white/5 rounded-full overflow-hidden mt-3 border border-white/5">
           <div
             className="h-full bg-blue-500 transition-all duration-300 ease-out shadow-[0_0_8px_rgba(96,165,250,0.6)]"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${displayProgress}%` }}
           />
         </div>
       </div>
