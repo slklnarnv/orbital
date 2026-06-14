@@ -130,7 +130,7 @@ function WebGLDiagnosticScreen(): JSX.Element {
  * and clear progress percentage.
  */
 function LoadingScreen(): JSX.Element | null {
-  const { active, progress } = useProgress()
+  const { active, progress, total } = useProgress()
   const [mounted, setMounted] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -145,7 +145,7 @@ function LoadingScreen(): JSX.Element | null {
     // timers, preventing setMounted(false) from being called on an unmounted component.
     let unmountTimer: ReturnType<typeof setTimeout> | undefined
 
-    if (progress >= 100 && !active) {
+    if (progress >= 100 && !active && total > 0) {
       setHasLoaded(true)
       // Delay slightly (e.g. 400ms) so the user can see 100% loaded state, then trigger fade out
       const fadeTimer = setTimeout(() => {
@@ -167,7 +167,7 @@ function LoadingScreen(): JSX.Element | null {
       setMounted(true)
       setFadeOut(false)
     }
-  }, [progress, active, hasLoaded])
+  }, [progress, active, hasLoaded, total])
 
   if (!mounted) return null
 
@@ -234,7 +234,7 @@ function LoadingScreen(): JSX.Element | null {
  */
 function WebglLostOverlay(): JSX.Element {
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 select-none animate-fade-in">
+    <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 select-none animate-fade-in">
       <div className="glass-panel p-8 max-w-md w-full flex flex-col items-center gap-6 shadow-2xl border border-sky-500/20 text-center">
         <div className="relative w-16 h-16 flex items-center justify-center">
           <div className="absolute inset-0 rounded-full border border-sky-400 opacity-20 animate-ping" />
@@ -262,7 +262,7 @@ function WebglLostOverlay(): JSX.Element {
  */
 function WebglFailedOverlay(): JSX.Element {
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 select-none animate-fade-in">
+    <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 select-none animate-fade-in">
       <div className="glass-panel p-8 max-w-md w-full flex flex-col items-center gap-6 shadow-2xl border border-red-500/25 text-center">
         <div className="relative w-16 h-16 flex items-center justify-center">
           <div className="absolute inset-0 rounded-full border border-red-500 opacity-20 animate-pulse" />
@@ -323,41 +323,51 @@ export default function App(): JSX.Element {
   useEffect(() => {
     let timerId: ReturnType<typeof setTimeout> | null = null
 
-    const handleLost = () => {
-      setWebglStatus('lost')
+    const handleLost = (e: Event) => {
+      // Intercept context loss only for canvas elements that are currently part of the active DOM.
+      // This filters out the temporary off-screen context checks in checkWebGLSupport.
+      if (e.target instanceof HTMLCanvasElement && document.body.contains(e.target)) {
+        e.preventDefault()
+        console.warn('[App] WebGL context lost detected.')
+        setWebglStatus('lost')
 
-      // Set a 5-second timer to wait for WebGL context restoration
-      timerId = setTimeout(() => {
-        // Check reload loop protection in sessionStorage (15-second window)
-        const lastReloadStr = sessionStorage.getItem('orbital_last_webgl_reload')
-        const now = Date.now()
-        if (lastReloadStr) {
-          const lastReload = parseInt(lastReloadStr, 10)
-          if (now - lastReload < 15000) {
-            // Reloaded recently, do not auto-reload again
-            setWebglStatus('failed')
-            return
+        // Set a 5-second timer to wait for WebGL context restoration
+        timerId = setTimeout(() => {
+          // Check reload loop protection in sessionStorage (15-second window)
+          const lastReloadStr = sessionStorage.getItem('orbital_last_webgl_reload')
+          const now = Date.now()
+          if (lastReloadStr) {
+            const lastReload = parseInt(lastReloadStr, 10)
+            if (now - lastReload < 15000) {
+              // Reloaded recently, do not auto-reload again
+              setWebglStatus('failed')
+              return
+            }
           }
-        }
-        // Record reload timestamp and trigger page reload
-        sessionStorage.setItem('orbital_last_webgl_reload', now.toString())
-        window.location.reload()
-      }, 5000)
+          // Record reload timestamp and trigger page reload
+          sessionStorage.setItem('orbital_last_webgl_reload', now.toString())
+          window.location.reload()
+        }, 5000)
+      }
     }
 
-    const handleRestored = () => {
-      if (timerId) clearTimeout(timerId)
-      // Hide overlay and recover normally without forced reload
-      setWebglStatus('ok')
+    const handleRestored = (e: Event) => {
+      if (e.target instanceof HTMLCanvasElement && document.body.contains(e.target)) {
+        console.warn('[App] WebGL context restored.')
+        if (timerId) clearTimeout(timerId)
+        // Hide overlay and recover normally without forced reload
+        setWebglStatus('ok')
+      }
     }
 
-    window.addEventListener('webgl-context-lost', handleLost)
-    window.addEventListener('webgl-context-restored', handleRestored)
+    // Capture phase (true) is required because webglcontextlost/restored events do not bubble
+    window.addEventListener('webglcontextlost', handleLost, true)
+    window.addEventListener('webglcontextrestored', handleRestored, true)
 
     return () => {
       if (timerId) clearTimeout(timerId)
-      window.removeEventListener('webgl-context-lost', handleLost)
-      window.removeEventListener('webgl-context-restored', handleRestored)
+      window.removeEventListener('webglcontextlost', handleLost, true)
+      window.removeEventListener('webglcontextrestored', handleRestored, true)
     }
   }, [])
 

@@ -123,19 +123,6 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
 
-          // Forward WebGL context events to the window so the application layer (App.tsx)
-          // can manage recovery HUD states and reload policies in isolation.
-          const canvas = gl.domElement
-          canvas.addEventListener('webglcontextlost', (e) => {
-            e.preventDefault()
-            console.warn('[SceneRoot] WebGL context lost.')
-            window.dispatchEvent(new CustomEvent('webgl-context-lost'))
-          })
-          canvas.addEventListener('webglcontextrestored', () => {
-            console.warn('[SceneRoot] WebGL context restored.')
-            window.dispatchEvent(new CustomEvent('webgl-context-restored'))
-          })
-
           // Pre-compile all shader programs during the loading screen so the GPU is
           // warm before the user can interact. Without this, shaders are compiled lazily
           // on first render — e.g. the ISS material shaders only compile when the ISS
