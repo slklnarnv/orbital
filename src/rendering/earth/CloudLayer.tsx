@@ -92,6 +92,9 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
         depthWrite={false}  // Prevent depth buffer sorting glitches with atmospheric rim
         depthTest={true}
         blending={THREE.NormalBlending}
+        polygonOffset={true}
+        polygonOffsetFactor={-1.0}
+        polygonOffsetUnits={-4.0}
       />
     </mesh>
   )
