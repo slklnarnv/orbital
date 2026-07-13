@@ -38,6 +38,10 @@ export class ISSEntity implements OrbitalEntity {
     return this._engine.loadTLE(tle)
   }
 
+  clearTLE(): void {
+    this._engine.clearTLE()
+  }
+
   propagate(simTime: SimulationTime): OrbitalState | null {
     return this._engine.propagate(simTime)
   }

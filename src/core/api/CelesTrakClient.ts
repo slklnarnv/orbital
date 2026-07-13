@@ -1,5 +1,4 @@
-import { parseTLEString } from '../orbital/TLEParser'
-import { networkMonitor } from '../telemetry/NetworkMonitor'
+import { parseTLEString, validateTLEData } from '../orbital/TLEParser'
 import type { TLEData } from '@/types/orbital'
 import { ISS_NORAD_ID } from '@/utils/constants'
 
@@ -59,7 +58,8 @@ async function fetchAndParse(
   url: string,
   timeoutMs: number,
   parentSignal: AbortSignal,
-  sourceName: string
+  sourceName: string,
+  expectedNoradId: number,
 ): Promise<TLEData> {
   const startTime = performance.now()
   let text: string | null = null
@@ -83,7 +83,7 @@ async function fetchAndParse(
     throw err
   }
 
-  const tle = parseTLEString(text, 'celestrak')
+  const tle = parseTLEString(text, 'celestrak', expectedNoradId)
   if (!tle) {
     console.warn(`[TLE] parse failed for ${sourceName}`)
     throw new Error(`Failed to parse TLE from ${sourceName}`)
@@ -116,16 +116,15 @@ export async function fetchTLEFromCelesTrak(
     const elapsed = performance.now() - startTime
 
     if (response.ok) {
-      const tle = await response.json() as TLEData
-      if (tle && tle.line1 && tle.line2) {
+      const candidate: unknown = await response.json()
+      const validated = validateTLEData(candidate, noradId)
+      if (validated.ok) {
         console.log(`[TLE] Serverless proxy success in ${elapsed.toFixed(0)}ms`)
-        console.log(`[TLE] parse succeeded for serverless-proxy`)
-        networkMonitor.recordSuccess()
-        return tle
+        return validated.tle
       }
     }
     console.warn(`[TLE] Serverless proxy failed with status ${response.status} in ${elapsed.toFixed(0)}ms`)
-  } catch (err) {
+  } catch {
     console.warn(`[TLE] Serverless proxy unreachable, falling back to client-side race...`)
   }
 
@@ -134,28 +133,25 @@ export async function fetchTLEFromCelesTrak(
   const signal = controller.signal
 
   const promises: Promise<TLEData>[] = [
-    fetchAndParse(CELESTRAK_ORG(noradId), 10_000, signal, 'celestrak-org'),
-    fetchAndParse(CELESTRAK_COM(noradId), 10_000, signal, 'celestrak-com'),
+    fetchAndParse(CELESTRAK_ORG(noradId), 10_000, signal, 'celestrak-org', noradId),
+    fetchAndParse(CELESTRAK_COM(noradId), 10_000, signal, 'celestrak-com', noradId),
   ]
 
   if (noradId === ISS_NORAD_ID) {
-    promises.push(fetchAndParse(WHERETHEISS_TLE, 20_000, signal, 'wheretheiss'))
+    promises.push(fetchAndParse(WHERETHEISS_TLE, 20_000, signal, 'wheretheiss', noradId))
   }
 
   try {
     const tle = await Promise.any(promises)
     // Cancel the other pending requests as we have a winner
     controller.abort()
-    networkMonitor.recordSuccess()
     return tle
-  } catch (err) {
+  } catch {
     // In case of any leftover requests (though all should have rejected/failed)
     controller.abort()
-    networkMonitor.recordFailure()
     console.warn(
       '[CelesTrakClient] All TLE sources failed (CelesTrak ×2, wheretheiss.at). Will retry after backoff.'
     )
     return null
   }
 }
-
