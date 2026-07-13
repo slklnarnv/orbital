@@ -31,7 +31,7 @@ void main() {
 
   // ── Rayleigh Sunset Warming (Terminator Glow) ─────────────────────────────────
   // Restrained twilight golden-orange sliver at terminator boundary
-  float sunsetMask = smoothstep(0.15, 0.0, abs(sunDot - 0.02));
+  float sunsetMask = 1.0 - smoothstep(0.0, 0.15, abs(sunDot - 0.02));
   vec3 sunsetGlow = vec3(0.92, 0.44, 0.10) * sunsetMask * 0.35;
 
   // ── Dayside vs. Nightside Cloud Shading ───────────────────────────────────────

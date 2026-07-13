@@ -6,7 +6,7 @@ void main() {
   float d = length(p);
   
   // 1. Ultra-Bright HDR Core (concentrated blinding white star core)
-  float disc = smoothstep(0.015, 0.006, d) * 22.0;
+  float disc = (1.0 - smoothstep(0.006, 0.015, d)) * 22.0;
   
   // 2. Medium Warm Corona (smooth, warm geocentric radial gradients)
   float innerCorona = exp(-d * 36.0) * 4.2;
@@ -16,7 +16,7 @@ void main() {
   float largeHalo = exp(-d * 2.8) * 0.28;
   
   // 4. Subtle Optical Glare diffraction ring (restrained camera lens ghost)
-  float lensRing = smoothstep(0.18, 0.20, d) * smoothstep(0.22, 0.20, d) * 0.04;
+  float lensRing = smoothstep(0.18, 0.20, d) * (1.0 - smoothstep(0.20, 0.22, d)) * 0.04;
   
   // 5. Cinematic dual-layer horizontal anamorphic streak
   float wideStreak = exp(-abs(p.y) * 80.0) * exp(-abs(p.x) * 1.5) * 0.12;
