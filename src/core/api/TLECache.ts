@@ -1,6 +1,7 @@
 import { get, set, del } from 'idb-keyval'
 import type { TLEData } from '@/types/orbital'
 import { TLE_MAX_AGE_MS } from '@/utils/constants'
+import { validateTLEData } from '@/core/orbital/TLEParser'
 
 // ─── TLE Cache ────────────────────────────────────────────────────────────────
 /**
@@ -19,15 +20,20 @@ export class TLECache {
   async get(noradId: number): Promise<TLEData | null> {
     // Check memory cache first
     if (this._memCache.has(noradId)) {
-      return this._memCache.get(noradId)!
+      const cached = this._memCache.get(noradId)!
+      if (validateTLEData(cached, noradId).ok && Date.now() - cached.fetchedAt <= TLE_MAX_AGE_MS) {
+        return cached
+      }
+      await this.remove(noradId)
+      return null
     }
 
     try {
       const stored = await get<TLEData>(this.key(noradId))
       if (!stored) return null
 
-      // Evict if too old
-      if (Date.now() - stored.fetchedAt > TLE_MAX_AGE_MS) {
+      // Treat IndexedDB as untrusted input: validate before it can reach an entity.
+      if (!validateTLEData(stored, noradId).ok || Date.now() - stored.fetchedAt > TLE_MAX_AGE_MS) {
         await this.remove(noradId)
         return null
       }
@@ -40,6 +46,9 @@ export class TLECache {
   }
 
   async set(noradId: number, tle: TLEData): Promise<void> {
+    if (!validateTLEData(tle, noradId).ok) {
+      throw new Error('Refusing to cache an invalid TLE')
+    }
     this._memCache.set(noradId, tle)
     try {
       await set(this.key(noradId), tle)

@@ -5,8 +5,10 @@ import { networkMonitor } from './NetworkMonitor'
 import { InterpolationService } from './InterpolationService'
 import { telemetryBus } from './TelemetryEventBus'
 import type { OrbitalEntity } from '../entities/OrbitalEntity'
-import type { OrbitalState, TelemetryMode, SimulationTime } from '@/types/orbital'
+import type { OrbitalState, TelemetryMode, SimulationTime, TLEData } from '@/types/orbital'
 import { TLE_REFRESH_INTERVAL_MS, TLE_STALE_THRESHOLD_MS } from '@/utils/constants'
+import { validateTLEData } from '../orbital/TLEParser'
+import { simulationClock } from '../clock/SimulationClock'
 
 // ─── Telemetry Manager ────────────────────────────────────────────────────────
 /**
@@ -28,6 +30,7 @@ export class TelemetryManager {
     maxDelayMs: 30 * 60 * 1000,
   })
   private _lastState: OrbitalState | null = null
+  private _hasValidatedState = false
   private _isFetching = false
   private _fetchPromise: Promise<void> | null = null
   private _started = false
@@ -140,6 +143,12 @@ export class TelemetryManager {
 
     const rawState = this._entity.propagate(simTime)
     if (!rawState) return null
+    if (!this._isFiniteOrbitalState(rawState)) return null
+    if (!this._hasValidatedState) {
+      const tle = this._entity.currentTLE
+      if (!tle || !validateTLEData(tle, this._entity.config.noradId).ok) return null
+      this._hasValidatedState = true
+    }
 
     const smoothed = this._interpolation.smooth(rawState, simTime.deltaMs)
     this._lastState = smoothed
@@ -176,13 +185,9 @@ export class TelemetryManager {
     if (!this.isActive(generation)) return
 
     if (cached) {
-      const prevState = this._lastState
-      this._entity.loadTLE(cached)
-      this._interpolation.onTLEUpdate(prevState)
-      telemetryBus.emit('TLE_REFRESHED', {
-        entityId: this._entity.config.id,
-        tle: cached,
-      })
+      const installed = await this._installCandidate(cached, generation, false)
+      if (!this.isActive(generation)) return
+      if (!installed) await tleCache.remove(this._entity.config.noradId)
     }
 
     // Attempt live fetch regardless (update silently if successful)
@@ -218,41 +223,90 @@ export class TelemetryManager {
       const tle = await fetchTLEFromCelesTrak(this._entity.config.noradId)
       if (!this.isActive(generation)) return
 
-      if (tle) {
-        this._rateLimiter.recordSuccess()
-        // Cache it
-        await tleCache.set(this._entity.config.noradId, tle)
+      if (tle && await this._installCandidate(tle, generation, true)) {
         if (!this.isActive(generation)) return
-
-        // Capture current state for blending
-        const prevState = this._lastState
-        // Load into entity
-        this._entity.loadTLE(tle)
-        this._interpolation.onTLEUpdate(prevState)
-
-        telemetryBus.emit('TLE_REFRESHED', {
-          entityId: this._entity.config.id,
-          tle,
-        })
+        this._rateLimiter.recordSuccess()
+        networkMonitor.recordSuccess()
         this._recalculateMode()
       } else {
-        this._rateLimiter.recordFailure()
-        telemetryBus.emit('API_ERROR', {
-          source: 'celestrak',
-          error: new Error('TLE fetch failed'),
-        })
-        this._recalculateMode()
+        if (this.isActive(generation)) this._recordRefreshFailure(new Error('TLE fetch or installation failed'))
       }
     } catch (err) {
       if (!this.isActive(generation)) return
-
-      this._rateLimiter.recordFailure()
-      telemetryBus.emit('API_ERROR', {
-        source: 'celestrak',
-        error: err instanceof Error ? err : new Error(String(err)),
-      })
-      this._recalculateMode()
+      this._recordRefreshFailure(err instanceof Error ? err : new Error(String(err)))
     }
+  }
+
+  private async _installCandidate(
+    tle: TLEData,
+    generation: number,
+    persist: boolean,
+  ): Promise<boolean> {
+    if (!validateTLEData(tle, this._entity.config.noradId).ok) return false
+
+    const previousTLE = this._entity.currentTLE
+    const previousState = this._lastState
+    const previousValidatedState = this._hasValidatedState
+    const rollback = () => {
+      if (previousTLE) this._entity.loadTLE(previousTLE)
+      else this._entity.clearTLE()
+      this._hasValidatedState = previousValidatedState
+    }
+
+    if (!this._entity.loadTLE(tle)) return false
+
+    const propagated = this._entity.propagate(simulationClock.now())
+    if (!propagated || !this._isFiniteOrbitalState(propagated)) {
+      rollback()
+      return false
+    }
+
+    try {
+      if (persist) await tleCache.set(this._entity.config.noradId, tle)
+    } catch {
+      rollback()
+      return false
+    }
+
+    if (!this.isActive(generation)) {
+      rollback()
+      return false
+    }
+
+    this._hasValidatedState = true
+    this._interpolation.onTLEUpdate(previousState)
+    if (!previousState) this._lastState = propagated
+    telemetryBus.emit('TLE_REFRESHED', {
+      entityId: this._entity.config.id,
+      tle,
+    })
+    telemetryBus.emit('STATE_UPDATE', propagated)
+    this._lastBusEmitTime = Date.now()
+    return true
+  }
+
+  private _recordRefreshFailure(error: Error): void {
+    this._rateLimiter.recordFailure()
+    networkMonitor.recordFailure()
+    telemetryBus.emit('API_ERROR', { source: 'celestrak', error })
+    this._recalculateMode()
+  }
+
+  private _isFiniteOrbitalState(state: OrbitalState): boolean {
+    const vectors = [state.positionECI, state.velocityECI]
+    const scalarValues = [
+      state.timestamp,
+      state.latitude,
+      state.longitude,
+      state.altitude,
+      state.speed,
+      state.orbitalPeriod,
+      state.inclination,
+      state.tleAgeHours,
+      state.confidence,
+    ]
+    return vectors.every(vector => [vector.x, vector.y, vector.z].every(Number.isFinite))
+      && scalarValues.every(Number.isFinite)
   }
 
   private _recalculateMode(): void {
@@ -271,9 +325,14 @@ export class TelemetryManager {
 
     let newMode: TelemetryMode
 
-    if (online && tle && tleAge < TLE_STALE_THRESHOLD_MS) {
+    if (
+      online
+      && this._hasValidatedState
+      && tle?.source === 'celestrak'
+      && tleAge < TLE_STALE_THRESHOLD_MS
+    ) {
       newMode = 'LIVE'
-    } else if (tle && tleAge < TLE_STALE_THRESHOLD_MS * 7) {
+    } else if (this._hasValidatedState && tle && tleAge < TLE_STALE_THRESHOLD_MS * 7) {
       newMode = online ? 'HYBRID' : 'OFFLINE'
     } else if (online) {
       // Bug B FIX: When TLE age exceeds 7 days (or no TLE at all) AND we are online,
