@@ -44,8 +44,8 @@ vNormal = normalize(mat3(modelMatrix) * normal);
 
 // earthSurface.frag
 float sunDot    = dot(vNormal, sunDirection);
-float dayMask   = smoothstep(-0.1, 0.2, sunDot);
-float nightMask = 1.0 - smoothstep(-0.15, 0.05, sunDot);
+float dayMask   = smoothstep(-0.08, 0.14, sunDot);
+float nightMask = 1.0 - smoothstep(-0.12, 0.04, sunDot);
 vec3  color     = dayColor * dayMask + nightColor * nightMask + specular;
 ```
 

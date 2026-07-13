@@ -107,7 +107,7 @@ void main() {
 
   // Widen twilight transition zone to a ~6° physical band centered at the terminator (sunDot ≈ 0.0)
   // Range: sunDot ∈ [-0.06, 0.08]
-  float twilightWeight = smoothstep(0.08, -0.04, sunDot) * smoothstep(-0.06, 0.04, sunDot);
+  float twilightWeight = (1.0 - smoothstep(-0.04, 0.08, sunDot)) * smoothstep(-0.06, 0.04, sunDot);
 
   // Multi-tier Rayleigh sunset gradient:
   // Crimson at dense lowest altitudes (altFactor near 1.0), gold at higher, thinner altitudes.

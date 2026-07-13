@@ -20,7 +20,7 @@ void main() {
   // twilight blend width without the terminator being too sharp or too wide.
   float dayMask   = smoothstep(-0.08, 0.14, sunDot);
   // City lights fade in on the dark side starting at sunDot=0.04 (just past terminator).
-  float nightMask = smoothstep(0.04, -0.12, sunDot);
+  float nightMask = 1.0 - smoothstep(-0.12, 0.04, sunDot);
 
   // Boost Earth albedo diffuse response by 1.15x for a majestic, alive photographic pop
   vec3 dayColor = texture2D(dayMap, vUv).rgb * 1.15;
@@ -39,7 +39,7 @@ void main() {
   // Physical basis: low-angle sunlight passes through thick atmosphere, Rayleigh
   // scattering removes blue, leaving red-orange terrain illumination.
   // Tight sliver: only active close to the terminator on the sun-facing side.
-  float sunsetFactor = smoothstep(0.12, 0.0, abs(sunDot - 0.01)) * smoothstep(-0.02, 0.05, sunDot);
+  float sunsetFactor = (1.0 - smoothstep(0.0, 0.12, abs(sunDot - 0.01))) * smoothstep(-0.02, 0.05, sunDot);
   vec3 twilightWarm = vec3(0.85, 0.42, 0.12) * sunsetFactor * 0.07; // Highly restrained, dusty golden warmth
 
   // ── Ocean Specularity & Sky Fresnel Reflection ────────────────────────────────
