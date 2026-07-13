@@ -13,7 +13,7 @@ type Unsubscribe = () => void
  *
  * Rules:
  * - No system reads Date.now() directly — they call clock.now()
- * - tick() is called exactly once per requestAnimationFrame
+ * - tick() is owned by the application runtime, never the renderer
  * - timeScale 1.0 = real-time, 10.0 = 10× speed, 0 = paused
  */
 export class SimulationClock {
@@ -39,7 +39,7 @@ export class SimulationClock {
     return this._lastSimTime
   }
 
-  /** Called once per animation frame with wall-clock delta in milliseconds */
+  /** Called by the application runtime with wall-clock delta in milliseconds */
   tick(wallDeltaMs: number): SimulationTime {
     const clampedDelta = Math.min(wallDeltaMs, 100) // guard against tab-suspension spikes
 

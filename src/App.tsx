@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useProgress } from '@react-three/drei'
 import { initTelemetryStoreListeners } from '@/stores/telemetryStore'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
+import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
 import { TopBar } from '@/ui/layout/TopBar'
 import { TelemetryPanel } from '@/ui/panels/TelemetryPanel'
@@ -309,14 +310,19 @@ export default function App(): JSX.Element {
     // 1. Initialize store listeners to bridge event bus to Zustand state
     const unsubscribeListeners = initTelemetryStoreListeners()
 
-    // 2. Start the telemetry manager network checks, cached TLE load, and live fetches
-    telemetryManager.start()
+    // 2. Start telemetry lifecycle and the application-owned simulation scheduler.
+    // The runtime can begin immediately because ISSEntity installs a fallback TLE
+    // synchronously; live/cached data replaces it when bootstrap completes.
+    void telemetryManager.start()
+    simulationRuntime.start()
 
     return () => {
-      // Clean up telemetry connections and listeners on unmount
-      unsubscribeListeners()
+      // Stop producers before removing their consumers. Both lifecycle owners are
+      // idempotent so React StrictMode's development remount cannot duplicate work.
+      simulationRuntime.stop()
       telemetryManager.stop()
-    };
+      unsubscribeListeners()
+    }
   }, [])
 
   useEffect(() => {

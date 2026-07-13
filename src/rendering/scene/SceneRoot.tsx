@@ -1,9 +1,7 @@
 import React, { Suspense, useCallback, Component, type ReactNode } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { simulationClock } from '@/core/clock/SimulationClock'
-import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { EnvironmentLayer } from './EnvironmentLayer'
 import { EarthGroup } from '../earth/EarthGroup'
 import { ISSGroup } from '../iss/ISSGroup'
@@ -38,25 +36,6 @@ class CanvasErrorBoundary extends Component<
     return this.props.children
   }
 }
-
-/**
- * Internal loop controller that executes once per frame inside the Canvas context.
- *
- * Responsibilities:
- * 1. Ticks the centralized SimulationClock with the frame delta (ms).
- * 2. Ticks the TelemetryManager to propagate orbital state updates.
- */
-const SimulationLoop = React.memo(function SimulationLoop(): null {
-  useFrame((_, delta) => {
-    // R3F frame delta is in seconds; convert to milliseconds for simulation clock
-    const simTime = simulationClock.tick(delta * 1000)
-
-    // Propagate state through orbital propagation logic
-    telemetryManager.update(simTime)
-  })
-
-  return null
-})
 
 /**
  * Sub-component isolating camera store subscriptions to protect parent Canvas from re-renders.
@@ -134,9 +113,6 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
-          {/* Centralized ticker for clock and telemetry propagation */}
-          <SimulationLoop />
-
           {/* Celestial environment (stars and solar light) */}
           <EnvironmentLayer />
 
@@ -174,4 +150,3 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
     </div>
   )
 })
-

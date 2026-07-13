@@ -28,7 +28,7 @@ export class InterpolationService {
 
   /**
    * Advance the blend and return the smoothed state.
-   * Call once per frame with the newly propagated state and deltaMs.
+   * Call once per runtime step with the newly propagated state and deltaMs.
    */
   smooth(newState: OrbitalState, deltaMs: number): OrbitalState {
     // No blending needed — return as-is

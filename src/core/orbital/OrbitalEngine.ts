@@ -47,6 +47,12 @@ export class OrbitalEngine {
     }
   }
 
+  clearTLE(): void {
+    this._tle = null
+    this._satrec = null
+    this._cachedEpochMs = null
+  }
+
   hasTLE(): boolean {
     return this._satrec !== null && this._tle !== null
   }

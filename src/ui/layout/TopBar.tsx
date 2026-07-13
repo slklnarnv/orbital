@@ -1,5 +1,6 @@
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { formatUtcClock, formatJulianDate, formatGmst } from '@/utils/formatters'
+import { useTelemetryStore } from '@/stores/telemetryStore'
 
 /**
  * TopBar represents the clean, unified aerospace header bar.
@@ -8,6 +9,7 @@ import { formatUtcClock, formatJulianDate, formatGmst } from '@/utils/formatters
 export function TopBar(): JSX.Element {
   // Subscribe to clock ticks at 1000ms (1Hz) to throttle re-renders of UTC, JD, and GMST clock text
   const simTime = useSimulationClock(1000)
+  const telemetryMode = useTelemetryStore(state => state.mode)
 
   return (
     <header
@@ -29,7 +31,7 @@ export function TopBar(): JSX.Element {
         </span>
         <div className="w-px h-3 bg-white/10" />
         <span className="text-[10px] font-mono tracking-widest text-[var(--color-text-secondary)] opacity-75 uppercase">
-          Sys_St: NOMINAL
+          Sys_St: {telemetryMode}
         </span>
       </div>
 
@@ -55,4 +57,3 @@ export function TopBar(): JSX.Element {
     </header>
   )
 }
-

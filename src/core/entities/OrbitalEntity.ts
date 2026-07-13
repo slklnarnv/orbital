@@ -15,6 +15,9 @@ export interface OrbitalEntity {
   /** Load a new TLE into this entity's engine */
   loadTLE(tle: TLEData): boolean
 
+  /** Remove the current TLE so a failed first installation can be rolled back */
+  clearTLE(): void
+
   /** Propagate position for the given simulation time */
   propagate(simTime: SimulationTime): OrbitalState | null
 

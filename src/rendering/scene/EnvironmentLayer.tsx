@@ -9,7 +9,8 @@ import sunFrag from '../shaders/sun.frag'
 
 // ─── Preload Starmap Texture at Module Scope ─────────────────────────────────
 // Pre-warms the new high-quality starmap immediately on page startup
-useTexture.preload('/textures/starmap-4k.jpg')
+const STARMAP_URL = '/textures/starmap-4k.webp'
+useTexture.preload(STARMAP_URL)
 
 // ─── Hoisted Static Vectors for Zero-GC Frame Loop ───────────────────────────
 // Reused every frame inside useFrame; never re-allocated after module init.
@@ -26,7 +27,7 @@ const STARMAP_ROTATION_Z = Math.PI * 0.08  // Minor roll correction for star den
 
 /**
  * Generates randomly distributed stars on a single sphere with varying physical color temperatures and luminances.
- * Highly restrained and dim to complement the real NASA starmap-4k.jpg panorama backdrop.
+ * Highly restrained and dim to complement the real NASA starmap panorama backdrop.
  */
 function generateRestrainedStars(count: number) {
   const positions = new Float32Array(count * 3)
@@ -92,13 +93,13 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
   const sunLightRef = useRef<THREE.DirectionalLight>(null)
   const sunMeshRef = useRef<THREE.Mesh>(null)
 
-  // Load the new high-quality starmap (starmap-4k.jpg) from MAP8K as a subtle astrophotography backdrop
-  const starmapTex = useTexture('/textures/starmap-4k.jpg')
+  // Load the runtime-sized starmap as a subtle astrophotography backdrop
+  const starmapTex = useTexture(STARMAP_URL)
 
   // Configure background starmap texture with anisotropy, mipmaps, and correct colorspace
   useEffect(() => {
     if (starmapTex) {
-      const maxAnisotropy = gl.capabilities.getMaxAnisotropy()
+      const maxAnisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy())
       starmapTex.colorSpace = THREE.SRGBColorSpace
       starmapTex.minFilter = THREE.LinearMipmapLinearFilter
       starmapTex.magFilter = THREE.LinearFilter
@@ -248,4 +249,3 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     </>
   )
 })
-
