@@ -20,7 +20,7 @@
 // Performance contract:
 //   - ZERO useState() or Zustand updates inside useFrame.
 //   - Position mutated directly on groupRef.current — Three.js ref only.
-//   - telemetryManager.lastState is the already-propagated state from SimulationLoop.
+//   - telemetryManager.lastState is the latest application-runtime snapshot.
 //     No redundant SGP4 calls occur here.
 //
 // IMPORTANT — OrbitLine is NOT a child of this group.
@@ -52,8 +52,8 @@ export function ISSGroup(): JSX.Element {
     if (!groupRef.current) return
 
     // Read the last propagated orbital state from TelemetryManager.
-    // SimulationLoop (in SceneRoot) calls telemetryManager.update() every frame,
-    // so lastState is always current — no duplicate SGP4 calls needed here.
+    // SimulationRuntime updates telemetry independently at 10 Hz. Rendering consumes
+    // the latest snapshot here — no duplicate SGP4 calls or render-owned truth.
     const state = telemetryManager.lastState
     if (!state) return
 
