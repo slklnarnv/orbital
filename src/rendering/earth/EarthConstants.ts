@@ -12,21 +12,9 @@ export const ATMOSPHERE_RADIUS = EARTH_RADIUS * ATMOSPHERE_RADIUS_FACTOR // ~653
 //   2. Remove CDN latency from the critical rendering path
 //   3. Ensure deterministic asset availability offline
 //
-// Dataset provenance:
-//   dayMap:   Three.js r128 earth_atmos_2048.jpg — NASA Blue Marble 2K (512 KB JPEG)
-//             Higher encoding quality than NASA direct land_shallow_topo (238 KB)
-//   nightMap: Three.js r128 earth_lights_2048.png — NASA Black Marble 2K (718 KB PNG)
-//             Lossless PNG encoding preserves city light gradients without JPEG banding
-//   cloudMap: NASA Earth Observatory record 57747 cloud_combined_2048.jpg (829 KB JPEG)
-//             Continuous 2048×1024 grayscale cloud density field
-//
 export const EARTH_TEXTURES = {
-  // NASA Blue Marble 8K Day Map (WebP) — locally served (no CDN latency, no CORS restriction)
-  dayMap: '/textures/bluemarblewebp.webp',
-  // NASA Black Marble 8K City Lights Map (WebP) — lossless WebP, locally served
-  nightMap: '/textures/BlackMarblewebp.webp',
-  // NASA Blue Marble 8K Cloud Density Map — locally served
-  cloudMap: '/textures/8k_earth_clouds.jpg',
-  // NASA Blue Marble 8K Ocean Specular Mask — locally served
-  specularMap: '/textures/8k_earth_specular_map.png',
+  dayMap: '/textures/earth-day-4k.webp',
+  nightMap: '/textures/earth-night-4k.webp',
+  cloudMap: '/textures/earth-clouds-4k.webp',
+  specularMap: '/textures/earth-specular-4k.webp',
 } as const

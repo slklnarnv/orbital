@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:assets": "node scripts/check-asset-budget.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run check:assets && npm run build"
   },
   "dependencies": {
     "@react-three/drei": "^9.115.0",

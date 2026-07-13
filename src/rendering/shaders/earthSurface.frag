@@ -43,7 +43,7 @@ void main() {
   vec3 twilightWarm = vec3(0.85, 0.42, 0.12) * sunsetFactor * 0.07; // Highly restrained, dusty golden warmth
 
   // ── Ocean Specularity & Sky Fresnel Reflection ────────────────────────────────
-  // Read the 8K grayscale specular mask (1.0 for ocean, 0.0 for land)
+  // Read the grayscale specular mask (1.0 for ocean, 0.0 for land)
   float oceanMask = texture2D(specularMap, vUv).r;
 
   // Reflective vector for specular calculation
