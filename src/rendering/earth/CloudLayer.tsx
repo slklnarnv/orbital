@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { CLOUD_RADIUS, EARTH_TEXTURES } from './EarthConstants'
+import { cloudRotationAtEpoch } from './CloudMotion'
 import vertexShader from '../shaders/clouds.vert'
 import fragmentShader from '../shaders/clouds.frag'
 
@@ -69,9 +70,11 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
   useFrame(() => {
     const simTime = simulationClock.now()
 
-    // 1. Slow wind current drift (auto-rotation around Y axis in ECEF, tied to simulation clock)
+    // 1. Slow wind current drift (absolute rotation tied to simulation time).
+    // Do not repeatedly integrate simDeltaMs here: the application runtime updates
+    // it at 10 Hz while this render callback may read the same snapshot many times.
     if (cloudMeshRef.current) {
-      cloudMeshRef.current.rotation.y += 0.0002 * (simTime.simDeltaMs / 1000)
+      cloudMeshRef.current.rotation.y = cloudRotationAtEpoch(simTime.epochMs)
     }
 
     // 2. Propagate dynamic sun vector uniform

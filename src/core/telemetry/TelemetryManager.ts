@@ -16,7 +16,7 @@ import { TLE_REFRESH_INTERVAL_MS, TLE_STALE_THRESHOLD_MS } from '@/utils/constan
  * - Holds reference to OrbitalEntity (ISS)
  * - Manages TLE refresh cadence
  * - Switches modes based on network status and TLE age
- * - Emits OrbitalState every frame via telemetryBus
+ * - Produces OrbitalState snapshots on the application runtime cadence
  */
 export class TelemetryManager {
   private _mode: TelemetryMode = 'OFFLINE'
@@ -29,6 +29,10 @@ export class TelemetryManager {
   })
   private _lastState: OrbitalState | null = null
   private _isFetching = false
+  private _fetchPromise: Promise<void> | null = null
+  private _started = false
+  private _lifecycleGeneration = 0
+  private _startPromise: Promise<void> | null = null
   private _unsubscribeNetworkStatus: (() => void) | null = null
   /** Timestamp of last STATE_UPDATE bus emission (used for 10 Hz throttle). */
   private _lastBusEmitTime = 0
@@ -49,6 +53,13 @@ export class TelemetryManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   async start(): Promise<void> {
+    if (this._started) {
+      await this._startPromise
+      return
+    }
+
+    this._started = true
+    const generation = ++this._lifecycleGeneration
     networkMonitor.start()
 
     // Subscribe to network changes to trigger mode recalculation and recovery
@@ -76,11 +87,24 @@ export class TelemetryManager {
       }
     })
 
-    // Try to load cached TLE, then attempt live fetch
-    await this._bootstrap()
+    // Try to load cached TLE, then attempt live fetch. The generation guard keeps
+    // an async StrictMode mount from publishing after its matching stop().
+    const startPromise = this._bootstrap(generation)
+    this._startPromise = startPromise
+    try {
+      await startPromise
+    } finally {
+      if (this._lifecycleGeneration === generation) {
+        this._startPromise = null
+      }
+    }
   }
 
   stop(): void {
+    if (!this._started) return
+
+    this._started = false
+    this._lifecycleGeneration += 1
     networkMonitor.stop()
     if (this._unsubscribeNetworkStatus) {
       this._unsubscribeNetworkStatus()
@@ -88,10 +112,10 @@ export class TelemetryManager {
     }
   }
 
-  // ── Per-Frame Update ──────────────────────────────────────────────────────
+  // ── Runtime Update ────────────────────────────────────────────────────────
 
   /**
-   * Called every frame by the rendering layer hook.
+   * Called by the application runtime independently of the rendering layer.
    * Returns the current OrbitalState (or null if not ready).
    */
   update(simTime: SimulationTime): OrbitalState | null {
@@ -101,9 +125,8 @@ export class TelemetryManager {
     // (e.g. by the RECOVERY branch or NETWORK_STATUS handler), it sets
     // _lastRequestMs=0 and _currentDelay=0. The in-flight fetch's _isFetching
     // guard prevents recordRequest() from ever running, so shouldRequest()
-    // returns `now - 0 >= 0` = true EVERY FRAME at 60fps — a fetch storm of
-    // hundreds of no-op calls per second until the in-flight fetch completes.
-    if (!this._isFetching && this._rateLimiter.shouldRequest()) {
+    // returns `now - 0 >= 0` on every runtime step until the in-flight fetch completes.
+    if (this._started && !this._isFetching && this._rateLimiter.shouldRequest()) {
       this._refreshTLEAsync() // fire-and-forget
     }
 
@@ -122,11 +145,9 @@ export class TelemetryManager {
     this._lastState = smoothed
 
     // Throttle STATE_UPDATE bus emissions to 10 Hz (100ms intervals).
-    // Rendering components read position directly from `telemetryManager.lastState`
-    // every frame, so they are unaffected by this throttle.
-    // UI subscribers (e.g. telemetryStore) already throttle to 1 Hz internally,
-    // so 10 Hz bus emissions still provide 10× more update opportunities than needed
-    // while eliminating ~50 no-op dispatch iterations per second.
+    // Rendering components read `telemetryManager.lastState` without subscribing.
+    // UI subscribers throttle further to 1 Hz, while this 10 Hz ceiling prevents
+    // accidental duplicate dispatch if the runtime cadence is ever increased.
     if (now - this._lastBusEmitTime >= 100) {
       telemetryBus.emit('STATE_UPDATE', smoothed)
       this._lastBusEmitTime = now
@@ -140,9 +161,20 @@ export class TelemetryManager {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  private async _bootstrap(): Promise<void> {
+  private isActive(generation: number): boolean {
+    return this._started && generation === this._lifecycleGeneration
+  }
+
+  private async _bootstrap(generation: number): Promise<void> {
+    // A replacement lifecycle waits for an old, cancelled fetch to settle before
+    // issuing its own request. This prevents overlap without accepting stale results.
+    if (this._fetchPromise) await this._fetchPromise
+    if (!this.isActive(generation)) return
+
     // Try IndexedDB cache first
     const cached = await tleCache.get(this._entity.config.noradId)
+    if (!this.isActive(generation)) return
+
     if (cached) {
       const prevState = this._lastState
       this._entity.loadTLE(cached)
@@ -154,28 +186,44 @@ export class TelemetryManager {
     }
 
     // Attempt live fetch regardless (update silently if successful)
-    await this._refreshTLEAsync()
-    this._recalculateMode()
+    await this._refreshTLEAsync(generation)
+    if (this.isActive(generation)) this._recalculateMode()
   }
 
-  private async _refreshTLEAsync(): Promise<void> {
-    if (this._isFetching) return
+  private _refreshTLEAsync(generation: number = this._lifecycleGeneration): Promise<void> {
+    if (!this.isActive(generation)) return Promise.resolve()
+    if (this._fetchPromise) return this._fetchPromise
+
     this._isFetching = true
+    const request = this._performRefresh(generation)
+    const trackedRequest = request.finally(() => {
+      if (this._fetchPromise === trackedRequest) {
+        this._fetchPromise = null
+        this._isFetching = false
+      }
+    })
+    this._fetchPromise = trackedRequest
+    return trackedRequest
+  }
+
+  private async _performRefresh(generation: number): Promise<void> {
     this._rateLimiter.recordRequest() // Immediately mark as requested to prevent parallel tick triggers
 
     if (!networkMonitor.isOnline) {
-      this._rateLimiter.recordFailure()
-      this._isFetching = false
+      if (this.isActive(generation)) this._rateLimiter.recordFailure()
       return
     }
 
     try {
       const tle = await fetchTLEFromCelesTrak(this._entity.config.noradId)
+      if (!this.isActive(generation)) return
 
       if (tle) {
         this._rateLimiter.recordSuccess()
         // Cache it
         await tleCache.set(this._entity.config.noradId, tle)
+        if (!this.isActive(generation)) return
+
         // Capture current state for blending
         const prevState = this._lastState
         // Load into entity
@@ -196,18 +244,20 @@ export class TelemetryManager {
         this._recalculateMode()
       }
     } catch (err) {
+      if (!this.isActive(generation)) return
+
       this._rateLimiter.recordFailure()
       telemetryBus.emit('API_ERROR', {
         source: 'celestrak',
         error: err instanceof Error ? err : new Error(String(err)),
       })
       this._recalculateMode()
-    } finally {
-      this._isFetching = false
     }
   }
 
   private _recalculateMode(): void {
+    if (!this._started) return
+
     const online = networkMonitor.isOnline
     const tle = this._entity.currentTLE
     
@@ -255,4 +305,3 @@ export class TelemetryManager {
 // ─── Singleton ────────────────────────────────────────────────────────────────
 import { issEntity } from '../entities/ISSEntity'
 export const telemetryManager = new TelemetryManager(issEntity)
-
