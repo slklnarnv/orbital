@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { useCameraStore } from '@/stores/cameraStore'
 import { CameraStateMachine } from './CameraStateMachine'
+import { applyRotationSensitivity } from './CameraSensitivity'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 
@@ -219,6 +220,12 @@ export const CameraController = React.memo(function CameraController(): null {
       listenersAttachedRef.current = true
     }
 
+    // camera-controls maps pointer movement to a fixed angular rotation. Scale
+    // only Earth-focused rotation by camera clearance so close navigation remains
+    // precise. Truck/pan already scales with target distance inside camera-controls.
+    const distanceToEarth = camera.position.length()
+    applyRotationSensitivity(controls, mode, distanceToEarth)
+
     const state = telemetryManager.lastState
     if (!state) return
 
@@ -256,7 +263,6 @@ export const CameraController = React.memo(function CameraController(): null {
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────
-    const distanceToEarth = camera.position.length()
     const distanceToISS = camera.position.distanceTo(_currentISSPos)
 
     // Calculate normalized progress (0-1) for UI meters

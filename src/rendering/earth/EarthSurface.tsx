@@ -8,8 +8,8 @@ import { EARTH_RADIUS, EARTH_TEXTURES } from './EarthConstants'
 import vertexShader from '../shaders/earthSurface.vert'
 import fragmentShader from '../shaders/earthSurface.frag'
 
-// ─── Preload 8K Earth Textures at Module Scope ────────────────────────────────
-// Pre-warms the high-resolution 8K maps via Drei's preload system, which
+// ─── Preload 4K Earth Textures at Module Scope ────────────────────────────────
+// Pre-warms the runtime-sized 4K maps via Drei's preload system, which
 // integrates with DefaultLoadingManager and is covered by the loading gate.
 useTexture.preload(EARTH_TEXTURES.dayMap)
 useTexture.preload(EARTH_TEXTURES.nightMap)
@@ -56,7 +56,7 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
   // Configure and assign the high-res textures once they are loaded
   useEffect(() => {
     if (!earthTextures.day || !earthTextures.night || !earthTextures.specular) return
-    const maxAnisotropy = gl.capabilities.getMaxAnisotropy()
+    const maxAnisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy())
 
     configureTexture(earthTextures.day, true, maxAnisotropy)
     configureTexture(earthTextures.night, true, maxAnisotropy)

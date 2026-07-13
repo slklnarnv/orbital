@@ -27,10 +27,20 @@
 //   - Exit Near Range at > 3,200 km
 //
 // Memory & Performance Guarantees:
-//   - Module-level preloading via useGLTF.preload() to prevent shader/texture hitching.
-//   - Group ref visibility mutated directly inside useFrame() to avoid React state re-renders.
+//   - The 40 KB far-range model is preloaded for first paint.
+//   - The 6.5 MB detailed model is requested only after the camera enters near range.
+//   - React state changes only at LOD boundaries; per-frame effects still mutate refs.
 
-import React, { useMemo, useRef } from 'react'
+import React, {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
@@ -43,10 +53,12 @@ import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 // This guarantees Draco-compressed models decode regardless of CDN availability.
 useGLTF.setDecoderPath('/draco/')
 
-// ─── Preload Assets ──────────────────────────────────────────────────────────
-// Pre-warmed on page startup to bypass loading delays and frame drops
-useGLTF.preload('/models/international_space_station.glb')
-useGLTF.preload('/models/International Space Station (ISS) (A).glb')
+const DETAILED_MODEL_URL = '/models/international_space_station.glb'
+const FALLBACK_MODEL_URL = '/models/International Space Station (ISS) (A).glb'
+
+// Only the tiny far-range model is part of startup. The detailed model is loaded
+// on the first transition into near range and remains cached by useGLTF thereafter.
+useGLTF.preload(FALLBACK_MODEL_URL)
 
 // ─── Normalization & Pivot Offsets Constants ─────────────────────────────────
 // Computed from physical extents and binary glTF bounds analysis
@@ -81,14 +93,66 @@ const BEACON_ACTIVATE_KM = 12000
 const _sunDirVec = new THREE.Vector3()
 const _inspectionLightPos = new THREE.Vector3()
 
+type DetailStatus = 'idle' | 'loading' | 'ready' | 'failed'
+
+interface DetailModelErrorBoundaryProps {
+  children: ReactNode
+  onError: () => void
+}
+
+interface DetailModelErrorBoundaryState {
+  failed: boolean
+}
+
+class DetailModelErrorBoundary extends Component<
+  DetailModelErrorBoundaryProps,
+  DetailModelErrorBoundaryState
+> {
+  state: DetailModelErrorBoundaryState = { failed: false }
+
+  static getDerivedStateFromError(): DetailModelErrorBoundaryState {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: unknown): void {
+    console.warn('[ISSModel] Detailed model failed to load; keeping fallback visible.', error)
+    this.props.onError()
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? null : this.props.children
+  }
+}
+
+interface DetailedISSModelProps {
+  visible: boolean
+  onReady: () => void
+}
+
+function DetailedISSModel({ visible, onReady }: DetailedISSModelProps): JSX.Element {
+  const detailedGltf = useGLTF(DETAILED_MODEL_URL)
+  const detailedScene = useMemo(() => detailedGltf.scene.clone(), [detailedGltf.scene])
+
+  useEffect(() => {
+    onReady()
+  }, [onReady])
+
+  return (
+    <group scale={NORMALIZATION_SCALE_DRACO} visible={visible}>
+      <primitive
+        object={detailedScene}
+        position={[0, PIVOT_OFFSET_DRACO_Y, 0]}
+      />
+    </group>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
 
   // Element Refs for direct vis/light mutation (zero garbage collection)
-  const dracoRef = useRef<THREE.Group>(null)
-  const fallbackRef = useRef<THREE.Group>(null)
   const beaconRef = useRef<THREE.Group>(null)
   const auraRef = useRef<THREE.Mesh>(null)
   const lightPrimaryRef = useRef<THREE.PointLight>(null)
@@ -98,23 +162,35 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
 
   // Tracking refs to maintain stable hysteresis states across frames
   const isNearRef = useRef(false)
+  const detailStatusRef = useRef<DetailStatus>('idle')
   const worldPos = useRef(new THREE.Vector3())
+  const [isNear, setIsNear] = useState(false)
+  const [detailStatus, setDetailStatus] = useState<DetailStatus>('idle')
 
-  // Load target visual assets
-  const dracoGltf = useGLTF('/models/international_space_station.glb')
-  const fallbackGltf = useGLTF('/models/International Space Station (ISS) (A).glb')
+  // The tiny schematic model is always available while detail is deferred/loading/failed.
+  const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
 
-  // Clone loaded geometries to ensure absolute instance isolation in the scene graph
-  const dracoScene = useMemo(() => dracoGltf.scene.clone(), [dracoGltf.scene])
   const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
 
   // NOTE: No manual geometry/material disposal on unmount.
-  // dracoScene and fallbackScene are produced by scene.clone(), which shallow-clones
+  // The scenes are produced by scene.clone(), which shallow-clones
   // materials — they still reference the same underlying geometries and material instances
   // held in Drei's internal GLTF cache. Disposing them here would corrupt the cache and
   // cause future loads (e.g. hot-reload, Suspense remount) to reference freed GPU memory.
   // Drei's useGLTF manages GLTF asset lifecycle; external disposal is incorrect.
 
+  const handleDetailReady = useCallback(() => {
+    detailStatusRef.current = 'ready'
+    setDetailStatus('ready')
+  }, [])
+
+  const handleDetailError = useCallback(() => {
+    // Drei caches rejected loader promises as well as successful assets. Clear the
+    // failed entry so leaving and re-entering near range can retry a transient error.
+    useGLTF.clear(DETAILED_MODEL_URL)
+    detailStatusRef.current = 'failed'
+    setDetailStatus('failed')
+  }, [])
 
   useFrame((state) => {
     if (!groupRef.current) return
@@ -124,20 +200,37 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     const distanceKm = state.camera.position.distanceTo(worldPos.current)
 
     // 1. Evaluate LOD Near/Far state using hysteresis bands
-    if (isNearRef.current) {
+    let nextIsNear = isNearRef.current
+    if (nextIsNear) {
       if (distanceKm > LOD_EXIT_NEAR_KM) {
-        isNearRef.current = false
+        nextIsNear = false
       }
     } else {
       if (distanceKm < LOD_ENTER_NEAR_KM) {
-        isNearRef.current = true
+        nextIsNear = true
       }
     }
 
-    const isNear = isNearRef.current
+    if (nextIsNear !== isNearRef.current) {
+      isNearRef.current = nextIsNear
+      setIsNear(nextIsNear)
+
+      if (
+        nextIsNear
+        && (detailStatusRef.current === 'idle' || detailStatusRef.current === 'failed')
+      ) {
+        detailStatusRef.current = 'loading'
+        setDetailStatus('loading')
+      } else if (!nextIsNear && detailStatusRef.current === 'failed') {
+        // Require a real far→near transition before retrying; this prevents a failed
+        // request from becoming a per-frame retry loop while preserving recovery.
+        detailStatusRef.current = 'idle'
+        setDetailStatus('idle')
+      }
+    }
 
     // 2. Evaluate planetary beacon visibility
-    const isBeaconVisible = !isNear && distanceKm > BEACON_ACTIVATE_KM
+    const isBeaconVisible = !nextIsNear && distanceKm > BEACON_ACTIVATE_KM
 
     // 3. Compute distance-adaptive optical glint halo (Amber/Blue glow)
     // The halo represents photovoltaic solar panel glint visible at mid-range distances.
@@ -200,13 +293,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       lightInspectionRef.current.intensity = baseHeadlightIntensity * smoothHeadlight
     }
 
-    // 4. Mutate Three.js object visibility and matrices directly (bypasses React virtual DOM rendering)
-    if (dracoRef.current) {
-      dracoRef.current.visible = isNear
-    }
-    if (fallbackRef.current) {
-      fallbackRef.current.visible = !isNear
-    }
+    // 4. Mutate high-frequency Three.js effects directly (bypasses React virtual DOM rendering)
     if (beaconRef.current) {
       beaconRef.current.visible = isBeaconVisible
       // Rotate the telemetry tracking ring to face the camera perfectly
@@ -237,22 +324,21 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   return (
     <group ref={groupRef}>
       {/* ─── Level of Detail 0: Near-Range Premium Draco Model ─── */}
-      <group
-        ref={dracoRef}
-        scale={NORMALIZATION_SCALE_DRACO}
-        visible={false} // Managed dynamically by useFrame loop
-      >
-        <primitive
-          object={dracoScene}
-          position={[0, PIVOT_OFFSET_DRACO_Y, 0]} // Center pivot translation
-        />
-      </group>
+      {(detailStatus === 'loading' || detailStatus === 'ready') && (
+        <DetailModelErrorBoundary onError={handleDetailError}>
+          <Suspense fallback={null}>
+            <DetailedISSModel
+              visible={isNear && detailStatus === 'ready'}
+              onReady={handleDetailReady}
+            />
+          </Suspense>
+        </DetailModelErrorBoundary>
+      )}
 
       {/* ─── Level of Detail 1: Far-Range Schematic Model A ─── */}
       <group
-        ref={fallbackRef}
         scale={NORMALIZATION_SCALE_A}
-        visible={true} // Managed dynamically by useFrame loop
+        visible={!isNear || detailStatus !== 'ready'}
       >
         <primitive
           object={fallbackScene}
