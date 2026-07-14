@@ -17,7 +17,7 @@ export function CameraPanel(): JSX.Element {
   }
 
   return (
-    <GlassPanel className="w-80 flex flex-col gap-3">
+    <GlassPanel className="w-full flex flex-col gap-3">
       <div>
         <h2 className="text-[10px] font-sans font-bold tracking-widest text-[var(--color-text-secondary)] uppercase opacity-75">
           Camera Navigation
