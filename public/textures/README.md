@@ -8,7 +8,7 @@ Marble, cloud, ocean-specular, and starmap assets.
 The runtime files were generated from the original source assets with ImageMagick:
 
 ```sh
-magick bluemarblewebp.webp -resize 4096x2048\! -strip -quality 84 -define webp:method=6 earth-day-4k.webp
+magick bluemarblewebp.webp -resize 4096x2048\! -strip -quality 92 -define webp:method=6 earth-day-4k.webp
 magick BlackMarblewebp.webp -resize 4096x2048\! -strip -quality 82 -define webp:method=6 earth-night-4k.webp
 magick 8k_earth_clouds.jpg -resize 4096x2048\! -strip -quality 82 -define webp:method=6 earth-clouds-4k.webp
 magick 8k_earth_specular_map.png -resize 4096x2048\! -colorspace Gray -strip -quality 90 -define webp:lossless=true -define webp:method=6 earth-specular-4k.webp

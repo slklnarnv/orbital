@@ -140,4 +140,6 @@ void main() {
   float alpha = glow * extinction * 0.92 * proximityFade;
 
   gl_FragColor = vec4(atmoColor, alpha);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }

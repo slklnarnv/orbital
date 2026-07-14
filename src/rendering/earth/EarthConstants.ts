@@ -5,6 +5,10 @@ export const EARTH_RADIUS = EARTH_RADIUS_KM // 6371.0 km (1 world unit = 1 km)
 export const CLOUD_RADIUS = EARTH_RADIUS * CLOUD_RADIUS_FACTOR // ~6390.1 km
 export const ATMOSPHERE_RADIUS = EARTH_RADIUS * ATMOSPHERE_RADIUS_FACTOR // ~6530.3 km
 
+// The Earth regularly fills a high-DPI viewport. This remains inexpensive compared
+// with the fragment-heavy surface shaders, while avoiding a faceted planet/cloud limb.
+export const EARTH_SPHERE_SEGMENTS = 128
+
 // ─── Texture Resource URLs (All locally served) ───────────────────────────────
 //
 // All assets are served from /public/textures/ to:

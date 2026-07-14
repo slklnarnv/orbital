@@ -4,7 +4,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { CLOUD_RADIUS, EARTH_TEXTURES } from './EarthConstants'
+import { CLOUD_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import { cloudRotationAtEpoch } from './CloudMotion'
 import vertexShader from '../shaders/clouds.vert'
 import fragmentShader from '../shaders/clouds.frag'
@@ -56,7 +56,7 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     // needsUpdate=true after its properties are changed (colorSpace, filtering, etc.).
     cloudTexture.colorSpace = THREE.NoColorSpace
     cloudTexture.wrapS = THREE.RepeatWrapping
-    cloudTexture.wrapT = THREE.RepeatWrapping
+    cloudTexture.wrapT = THREE.ClampToEdgeWrapping
     cloudTexture.minFilter = THREE.LinearMipmapLinearFilter
     cloudTexture.magFilter = THREE.LinearFilter
     cloudTexture.anisotropy = maxAnisotropy
@@ -83,9 +83,9 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
   })
 
   return (
-    <mesh ref={cloudMeshRef} position={[0, 0, 0]}>
+    <mesh ref={cloudMeshRef} position={[0, 0, 0]} renderOrder={10}>
       {/* Cloud shell radius is ~6,390 km (CLOUD_RADIUS_FACTOR ≈ 1.003) */}
-      <sphereGeometry args={[CLOUD_RADIUS, 64, 64]} />
+      <sphereGeometry args={[CLOUD_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_SPHERE_SEGMENTS]} />
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}
@@ -94,7 +94,10 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
         transparent={true}
         depthWrite={false}  // Prevent depth buffer sorting glitches with atmospheric rim
         depthTest={true}
+        side={THREE.FrontSide}
         blending={THREE.NormalBlending}
+        // The shell is already 19 km above terrain. A small deterministic depth
+        // bias prevents precision loss at grazing angles from producing z-fighting.
         polygonOffset={true}
         polygonOffsetFactor={-1.0}
         polygonOffsetUnits={-4.0}
@@ -102,4 +105,3 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     </mesh>
   )
 })
-
