@@ -162,15 +162,6 @@ body,
   scrollbar-gutter: stable;
 }
 
-.hud-footer {
-  padding: 4px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  background: rgba(2, 6, 23, 0.88);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
 .mobile-touch-target {
   min-height: 44px;
   padding: 8px 12px;
@@ -220,15 +211,8 @@ body,
 
   .hud-panel-stack {
     top: 96px;
-    bottom: 60px;
     left: 12px;
     width: min(320px, calc(100vw - 24px));
-    padding-bottom: 72px;
-  }
-
-  .hud-footer {
-    right: 12px;
-    bottom: 12px;
   }
 }
 
