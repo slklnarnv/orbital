@@ -10,7 +10,7 @@ varying vec3 vWorldPosition;
 
 void main() {
   // ── Cloud Density Sampling ───────────────────────────────────────────────────
-  // Read raw grayscale cloud density from the 2K density map.
+  // Read raw grayscale cloud density from the 4K density map.
   // The texture is configured as NoColorSpace in CloudLayer.tsx — the GPU delivers
   // linear float values, not gamma-corrected sRGB. This preserves the full
   // continuous tonal range (0.0–1.0) of the density field without crushing midtones.
@@ -41,9 +41,10 @@ void main() {
   float ambient = 0.04; // Tiny earthshine ambient fill on the dark side
   float lightTerm = clamp(diffuse + ambient, 0.0, 1.0);
 
-  // Volumetric Mie forward-scattering (gorgeous silver lining glint when looking towards the Sun)
+  // Tight, restrained Mie forward scattering. A broad lobe turns dense clouds
+  // into a screen-sized white wash when the camera approaches the subsolar point.
   float dotVS = dot(viewDir, normalize(sunDirection));
-  float forwardScatter = pow(max(dotVS, 0.0), 3.0) * 0.27 * dayMask; // Boosted silver lining for cinematic volumetric pop
+  float forwardScatter = pow(max(dotVS, 0.0), 8.0) * 0.08 * dayMask;
 
   // Dayside clouds: boosted photographic albedo, shaded by solar angle with dynamic silver lining
   vec3 dayColor = (vec3(1.08, 1.09, 1.12) * lightTerm) + (vec3(1.00, 1.00, 1.00) * forwardScatter) + sunsetGlow;
@@ -64,10 +65,17 @@ void main() {
   // Nightside clouds block 25% of background city lights, acting as soft dark silhouetted shadows.
   // Dayside clouds are modulated by the opacity uniform (0.32 default = subtle).
   float visibilityFactor = mix(0.25, 1.0, dayMask);
-  float alpha = cloudDensity * opacity * visibilityFactor * edgeFade;
+  // The flat density shell is convincing from orbit but becomes a screen-filling
+  // decal near the camera's minimum altitude. Fade only inside 229 km altitude;
+  // normal ISS and planetary views remain fully opaque.
+  float cameraDistance = length(cameraPosition);
+  float proximityFade = smoothstep(6425.0, 6600.0, cameraDistance);
+  float alpha = cloudDensity * opacity * visibilityFactor * edgeFade * proximityFade;
 
   // Clamp alpha to [0, 1] — prevents NaN propagation from degenerate edge cases
   alpha = clamp(alpha, 0.0, 1.0);
 
   gl_FragColor = vec4(cloudColor, alpha);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }

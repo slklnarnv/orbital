@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { ATMOSPHERE_RADIUS } from './EarthConstants'
+import { ATMOSPHERE_RADIUS, EARTH_SPHERE_SEGMENTS } from './EarthConstants'
 import vertexShader from '../shaders/atmosphere.vert'
 import fragmentShader from '../shaders/atmosphere.frag'
 
@@ -32,7 +32,7 @@ export function AtmosphereShell(): JSX.Element {
   return (
     <mesh position={[0, 0, 0]}>
       {/* Atmosphere shell is ~6,530 km in radius */}
-      <sphereGeometry args={[ATMOSPHERE_RADIUS, 64, 64]} />
+      <sphereGeometry args={[ATMOSPHERE_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_SPHERE_SEGMENTS]} />
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
