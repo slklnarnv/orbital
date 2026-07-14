@@ -51,7 +51,7 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
       <TopBar />
 
       {/* Structured Left Dashboard Grid */}
-      <div className="absolute top-16 left-6 z-10 flex flex-col gap-3 w-80 select-none">
+      <div className="hud-panel-stack z-10 flex flex-col gap-3 select-none">
         <TelemetryPanel />
         <CameraPanel />
         <DataSourceIndicator />

@@ -42,7 +42,7 @@ export function DataSourceIndicator(): JSX.Element {
           : 'bg-rose-500 shadow-rose-500/20'
 
   return (
-    <GlassPanel className="w-80 flex flex-col gap-3">
+    <GlassPanel className="w-full flex flex-col gap-3">
       <div>
         <h2 className="text-[10px] font-sans font-bold tracking-widest text-[var(--color-text-secondary)] uppercase opacity-75">
           Telemetry Link
@@ -79,4 +79,3 @@ export function DataSourceIndicator(): JSX.Element {
     </GlassPanel>
   )
 }
-

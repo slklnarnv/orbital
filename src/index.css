@@ -144,6 +144,70 @@ body,
   border-radius: 2px;
 }
 
+/* ─── Responsive HUD Layout ─────────────────────────────────── */
+.orbital-topbar {
+  height: 48px;
+}
+
+.hud-panel-stack {
+  position: absolute;
+  top: 64px;
+  bottom: 0;
+  left: 24px;
+  width: 320px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 24px;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 639px) {
+  .orbital-topbar {
+    display: grid;
+    grid-template-areas:
+      "brand"
+      "clock"
+      "metrics";
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    height: 84px;
+    padding: 6px 12px;
+    row-gap: 1px;
+  }
+
+  .orbital-topbar__brand {
+    grid-area: brand;
+    min-width: 0;
+  }
+
+  .orbital-topbar__clock {
+    grid-area: clock;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .orbital-topbar__metrics {
+    grid-area: metrics;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .orbital-topbar__separator {
+    display: none;
+  }
+
+  .hud-panel-stack {
+    top: 96px;
+    bottom: 60px;
+    left: 12px;
+    width: min(320px, calc(100vw - 24px));
+    padding-bottom: 72px;
+  }
+}
+
 /* ─── Loading Screen Animations & Utilities ─────────────────── */
 @keyframes spin-slow-cw {
   0% {
