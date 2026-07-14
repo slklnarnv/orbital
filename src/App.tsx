@@ -60,15 +60,6 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         <DataSourceIndicator />
       </main>
 
-      {/* Dynamic watermarked status indicator in the bottom right corner */}
-      <footer className="hud-footer absolute bottom-6 right-6 z-10 flex flex-col items-end select-none">
-        <span className="text-[9px] font-sans tracking-widest text-[var(--color-text-secondary)] uppercase">
-          Aerospace Visualization Platform
-        </span>
-        <span className="text-[9px] font-mono text-[var(--color-text-primary)] mt-0.5">
-          Phase 2.1 Stable
-        </span>
-      </footer>
     </>
   )
 })

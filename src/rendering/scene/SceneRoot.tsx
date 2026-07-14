@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, Component, type ReactNode } from 'react'
+import React, { Suspense, useCallback, useRef, Component, type ReactNode } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -91,6 +91,8 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
  * non-disruptive diagnostic coordinate tools.
  */
 export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
+  const issGroupRef = useRef<THREE.Group>(null)
+
   return (
     <div className="w-full h-full bg-[#000000]">
       <Canvas
@@ -127,7 +129,7 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
            * degrades gracefully (ISS disappears) rather than crashing the whole app.
            */}
           <CanvasErrorBoundary name="ISSGroup">
-            <ISSGroup />
+            <ISSGroup groupRef={issGroupRef} />
           </CanvasErrorBoundary>
 
           {/*
@@ -139,7 +141,7 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           </CanvasErrorBoundary>
 
           {/* Foundational Camera System (Layer 4) */}
-          <CameraController />
+          <CameraController issGroupRef={issGroupRef} />
 
           {/* Isolated programmatic camera controls */}
           <AppCameraControls />

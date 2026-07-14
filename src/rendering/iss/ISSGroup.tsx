@@ -31,7 +31,7 @@
 //   to spiral into Earth on the opposite side.
 //   OrbitLine is mounted at the scene root in SceneRoot.tsx instead.
 
-import { useRef } from 'react'
+import { useRef, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -47,8 +47,11 @@ import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
  * Mount as a direct child of the R3F Canvas, sibling to EarthGroup.
  * Never nest inside EarthGroup (which is ECEF/rotating).
  */
-export function ISSGroup(): JSX.Element {
-  const groupRef = useRef<THREE.Group>(null)
+interface ISSGroupProps {
+  groupRef: RefObject<THREE.Group>
+}
+
+export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
   const interpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
   const interpolator = interpolatorRef.current ??= new OrbitalRenderInterpolator()
 

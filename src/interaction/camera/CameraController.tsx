@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -8,7 +8,6 @@ import { CameraStateMachine } from './CameraStateMachine'
 import { applyRotationSensitivity } from './CameraSensitivity'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
-import { OrbitalRenderInterpolator } from '@/rendering/iss/OrbitalRenderInterpolator'
 
 // ─── Hoisted Static Vectors to Achieve Complete Zero-GC Frame Loops ──────────
 const _earthCenterTarget = new THREE.Vector3()
@@ -24,6 +23,7 @@ const _transCamPos = new THREE.Vector3()
 
 const _currentISSPos = new THREE.Vector3()
 const _currentTarget = new THREE.Vector3()
+const _currentCameraPos = new THREE.Vector3()
 
 // ─── Floating Origin Shift (Phase 3 Scaffolding) ────────────────────────────────
 /**
@@ -42,10 +42,14 @@ function handleFloatingOriginShift(_distanceToISSKm: number): void {
   }
 }
 
-export const CameraController = React.memo(function CameraController(): null {
+interface CameraControllerProps {
+  issGroupRef: RefObject<THREE.Group>
+}
+
+export const CameraController = React.memo(function CameraController({
+  issGroupRef,
+}: CameraControllerProps): null {
   const { camera } = useThree()
-  const issPositionInterpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
-  const issPositionInterpolator = issPositionInterpolatorRef.current ??= new OrbitalRenderInterpolator()
 
   // Batch all camera store subscriptions into a single shallow selector to minimise
   // subscription count and prevent unnecessary re-renders when unrelated store
@@ -133,11 +137,16 @@ export const CameraController = React.memo(function CameraController(): null {
       return
     }
 
-    // Retrieve ISS coordinates and velocity at transition epoch
-    const ix = state.positionECI.x
-    const iy = state.positionECI.z
-    const iz = -state.positionECI.y
-    _transIssPos.set(ix, iy, iz)
+    const renderedISS = issGroupRef.current
+    if (!renderedISS) {
+      completeTransition()
+      return
+    }
+
+    // Start from the exact position rendered by ISSGroup. CameraController reads
+    // this same transform every frame, so the cinematic destination can keep moving
+    // with the spacecraft instead of becoming stale during the two-second flight.
+    _transIssPos.copy(renderedISS.position)
 
     const vx = state.velocityECI.x
     const vy = state.velocityECI.z
@@ -170,11 +179,12 @@ export const CameraController = React.memo(function CameraController(): null {
         .addScaledVector(_transU, offsetRadial)
         .addScaledVector(_transInTrack, offsetInTrack)
 
-      // Trigger the camera controls smooth setLookAt animation
+      // CameraControls owns the safe spherical cinematic. The frame loop below
+      // translates its target with the rendered ISS while this flight settles.
       void controls.setLookAt(
-        _transCamPos.x, _transCamPos.y, _transCamPos.z, // Camera eye position (oblique RIC offset)
-        ix, iy, iz,                                    // Look at target (ISS center)
-        true                                           // Enable smooth transition
+        _transCamPos.x, _transCamPos.y, _transCamPos.z,
+        _transIssPos.x, _transIssPos.y, _transIssPos.z,
+        true,
       ).then(() => {
         if (!cancelled) {
           completeTransition()
@@ -190,10 +200,10 @@ export const CameraController = React.memo(function CameraController(): null {
     return () => {
       cancelled = true
     }
-  }, [transition, completeTransition])
+  }, [transition, completeTransition, issGroupRef])
 
   // Run our frame-rate independent camera tracking loop
-  useFrame(({ clock }) => {
+  useFrame(() => {
     const controls = cameraControlsRef.current
     if (!controls) return
 
@@ -226,15 +236,29 @@ export const CameraController = React.memo(function CameraController(): null {
     // camera-controls maps pointer movement to a fixed angular rotation. Scale
     // only Earth-focused rotation by camera clearance so close navigation remains
     // precise. Truck/pan already scales with target distance inside camera-controls.
-    const distanceToEarth = camera.position.length()
-    applyRotationSensitivity(controls, mode, distanceToEarth)
+    const renderedDistanceToEarth = camera.position.length()
+    applyRotationSensitivity(controls, mode, renderedDistanceToEarth)
 
     const state = telemetryManager.lastState
-    if (!state) return
+    const renderedISS = issGroupRef.current
+    if (!state || !renderedISS) return
 
-    // Use the same render-time interpolation as ISSGroup so tracking modes move the
-    // camera and spacecraft in lockstep instead of following the 10 Hz truth steps.
-    issPositionInterpolator.sample(state, clock.elapsedTime, _currentISSPos)
+    // ISSGroup's useFrame is registered before this controller in SceneRoot, so its
+    // transform is already current for this frame. Reading that transform directly
+    // guarantees the camera and visible spacecraft use one identical motion sample.
+    _currentISSPos.copy(renderedISS.position)
+
+    // Keep the cinematic's focus attached to the exact rendered spacecraft. moveTo
+    // translates the current and end target together while preserving CameraControls'
+    // in-progress spherical camera interpolation, eliminating the handoff catch-up.
+    if (isTransitioning && transition?.toMode === 'FOLLOW') {
+      void controls.moveTo(
+        _currentISSPos.x,
+        _currentISSPos.y,
+        _currentISSPos.z,
+        false,
+      )
+    }
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
     if ((mode === 'FOLLOW' || mode === 'INSPECT' || mode === 'APPROACH') && !isTransitioning) {
@@ -264,7 +288,12 @@ export const CameraController = React.memo(function CameraController(): null {
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────
-    const distanceToISS = camera.position.distanceTo(_currentISSPos)
+    // CameraControls applies commands later in this frame. Read its authoritative
+    // end position so mode classification observes the tracking command we just
+    // issued rather than the previous rendered camera pose and dropping the lock.
+    controls.getPosition(_currentCameraPos)
+    const distanceToEarth = _currentCameraPos.length()
+    const distanceToISS = _currentCameraPos.distanceTo(_currentISSPos)
 
     // Calculate normalized progress (0-1) for UI meters
     const zoomProgress = CameraStateMachine.getZoomProgress(distanceToEarth, distanceToISS, mode)
