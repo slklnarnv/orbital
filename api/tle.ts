@@ -200,4 +200,8 @@ export function createTLEHandler(fetchImplementation: FetchImplementation = fetc
   }
 }
 
-export default { fetch: createTLEHandler() }
+const handler = createTLEHandler()
+
+/** Vercel Web-standard method exports for the standalone `/api/tle` function. */
+export const GET = handler
+export const OPTIONS = handler

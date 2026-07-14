@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import tleFunction, { createTLEHandler } from '../../../api/tle'
+import { GET, OPTIONS, createTLEHandler } from '../../../api/tle'
 
 const VALID_TLE = [
   'ISS (ZARYA)',
@@ -10,8 +10,9 @@ const VALID_TLE = [
 const request = (method = 'GET') => new Request('https://orbital.example/api/tle', { method })
 
 describe('/api/tle', () => {
-  it('exports Vercel\'s Web fetch handler contract', () => {
-    expect(tleFunction).toEqual({ fetch: expect.any(Function) })
+  it('exports Vercel\'s Web HTTP method handler contract', () => {
+    expect(GET).toEqual(expect.any(Function))
+    expect(OPTIONS).toEqual(expect.any(Function))
   })
 
   it.each(['POST', 'PUT', 'DELETE'])('rejects %s without contacting an upstream', async method => {

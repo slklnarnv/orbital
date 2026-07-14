@@ -7,6 +7,13 @@ const BROWSER_FALLBACK_TIMEOUT_MS = 20_000
 const WHERETHEISS_TLE =
   `https://api.wheretheiss.at/v1/satellites/${ISS_NORAD_ID}/tles?format=text`
 
+function clampFutureFetchTime(candidate: unknown): unknown {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate
+  const fetchedAt = (candidate as { fetchedAt?: unknown }).fetchedAt
+  if (typeof fetchedAt !== 'number') return candidate
+  return { ...candidate, fetchedAt: Math.min(fetchedAt, Date.now()) }
+}
+
 async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
   if (noradId !== ISS_NORAD_ID) return null
 
@@ -87,7 +94,7 @@ export async function fetchTLEFromCelesTrak(
       return fetchBrowserFallback(noradId)
     }
 
-    const validated = validateTLEData(candidate, noradId)
+    const validated = validateTLEData(clampFutureFetchTime(candidate), noradId)
     const elapsed = performance.now() - startTime
     if (!validated.ok) {
       console.warn(`[TLE] Proxy returned invalid data in ${elapsed.toFixed(0)}ms`)

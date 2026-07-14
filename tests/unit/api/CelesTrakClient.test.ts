@@ -89,4 +89,19 @@ describe('CelesTrakClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('invalid JSON'))
   })
+
+  it('clamps a server timestamp ahead of the client clock without discarding valid telemetry', async () => {
+    const clientNow = Date.now()
+    const fetchMock = vi.fn(async () => Response.json({
+      ...VALID_TLE,
+      fetchedAt: clientNow + 10 * 60_000,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    const tle = await fetchTLEFromCelesTrak()
+    expect(tle).not.toBeNull()
+    expect(tle!.fetchedAt).toBeLessThanOrEqual(Date.now())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
