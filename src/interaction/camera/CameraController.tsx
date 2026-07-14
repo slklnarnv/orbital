@@ -44,7 +44,8 @@ function handleFloatingOriginShift(_distanceToISSKm: number): void {
 
 export const CameraController = React.memo(function CameraController(): null {
   const { camera } = useThree()
-  const issPositionInterpolatorRef = useRef(new OrbitalRenderInterpolator())
+  const issPositionInterpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
+  const issPositionInterpolator = issPositionInterpolatorRef.current ??= new OrbitalRenderInterpolator()
 
   // Batch all camera store subscriptions into a single shallow selector to minimise
   // subscription count and prevent unnecessary re-renders when unrelated store
@@ -233,7 +234,7 @@ export const CameraController = React.memo(function CameraController(): null {
 
     // Use the same render-time interpolation as ISSGroup so tracking modes move the
     // camera and spacecraft in lockstep instead of following the 10 Hz truth steps.
-    issPositionInterpolatorRef.current.sample(state, clock.elapsedTime, _currentISSPos)
+    issPositionInterpolator.sample(state, clock.elapsedTime, _currentISSPos)
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
     if ((mode === 'FOLLOW' || mode === 'INSPECT' || mode === 'APPROACH') && !isTransitioning) {

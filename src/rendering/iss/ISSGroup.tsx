@@ -49,7 +49,8 @@ import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
  */
 export function ISSGroup(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
-  const interpolatorRef = useRef(new OrbitalRenderInterpolator())
+  const interpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
+  const interpolator = interpolatorRef.current ??= new OrbitalRenderInterpolator()
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return
@@ -62,7 +63,7 @@ export function ISSGroup(): JSX.Element {
 
     // Smooth render motion between the application runtime's 10 Hz snapshots.
     // The interpolator also owns the canonical TEME → Three.js axis mapping.
-    interpolatorRef.current.sample(
+    interpolator.sample(
       state,
       clock.elapsedTime,
       groupRef.current.position,
