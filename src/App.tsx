@@ -51,21 +51,24 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
       <TopBar />
 
       {/* Structured Left Dashboard Grid */}
-      <div className="hud-panel-stack z-10 flex flex-col gap-3 select-none">
+      <main
+        aria-label="Mission telemetry and camera controls"
+        className="hud-panel-stack z-10 flex flex-col gap-3 select-none"
+      >
         <TelemetryPanel />
         <CameraPanel />
         <DataSourceIndicator />
-      </div>
+      </main>
 
       {/* Dynamic watermarked status indicator in the bottom right corner */}
-      <div className="absolute bottom-6 right-6 z-10 flex flex-col items-end opacity-25 select-none">
+      <footer className="hud-footer absolute bottom-6 right-6 z-10 flex flex-col items-end select-none">
         <span className="text-[9px] font-sans tracking-widest text-[var(--color-text-secondary)] uppercase">
           Aerospace Visualization Platform
         </span>
         <span className="text-[9px] font-mono text-[var(--color-text-primary)] mt-0.5">
           Phase 2.1 Stable
         </span>
-      </div>
+      </footer>
     </>
   )
 })

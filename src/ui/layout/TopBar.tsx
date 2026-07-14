@@ -30,7 +30,7 @@ export function TopBar(): JSX.Element {
         <span className="text-sm font-sans font-bold tracking-wider text-[var(--color-accent)] uppercase">
           Orbital
         </span>
-        <div className="w-px h-3 bg-white/10" />
+        <div aria-hidden="true" className="w-px h-3 bg-white/10" />
         <span className="text-[10px] font-mono tracking-widest text-[var(--color-text-secondary)] opacity-75 uppercase">
           Sys_St: {telemetryMode}
         </span>
@@ -49,7 +49,7 @@ export function TopBar(): JSX.Element {
           <span>JD:</span>
           <span className="text-[var(--color-text-primary)]">{formatJulianDate(simTime.julianDate)}</span>
         </div>
-        <div className="orbital-topbar__separator w-px h-2.5 bg-white/10" />
+        <div aria-hidden="true" className="orbital-topbar__separator w-px h-2.5 bg-white/10" />
         <div className="flex items-center gap-1.5">
           <span>GMST:</span>
           <span className="text-[var(--color-text-primary)]">{formatGmst(simTime.gmst)}</span>

@@ -57,7 +57,7 @@ export function DataSourceIndicator(): JSX.Element {
             Data Link Status
           </span>
           <div className="flex items-center gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${dotColorClass} animate-pulse`} />
+            <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${dotColorClass} animate-pulse`} />
             <span className={`font-mono font-bold uppercase tracking-wider ${modeColorClass}`}>
               {telemetry.mode}
             </span>

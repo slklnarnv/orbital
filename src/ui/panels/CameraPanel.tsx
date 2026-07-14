@@ -40,7 +40,7 @@ export function CameraPanel(): JSX.Element {
           <span
             className={`
               font-mono font-bold tracking-wide text-xs
-              ${isTracking ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]/50'}
+              ${isTracking ? 'text-[var(--color-success)]' : 'text-[var(--color-text-secondary)]'}
             `}
           >
             {isTracking ? 'LOCKED' : 'FREE'}
@@ -53,7 +53,14 @@ export function CameraPanel(): JSX.Element {
             <span>ZOOM PROGRESS</span>
             <span>{(zoomProgress * 100).toFixed(0)}%</span>
           </div>
-          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+          <div
+            aria-label="Zoom progress"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={Math.round(zoomProgress * 100)}
+            className="w-full h-1 bg-white/5 rounded-full overflow-hidden"
+            role="progressbar"
+          >
             <div
               className="h-full bg-[var(--color-accent)] transition-all duration-100 ease-out"
               style={{ width: `${zoomProgress * 100}%` }}
@@ -70,6 +77,7 @@ export function CameraPanel(): JSX.Element {
         onClick={handleLocateISS}
         className="
           w-full py-2 px-3
+          mobile-touch-target
           text-[10px] font-mono tracking-widest uppercase
           rounded-sm border border-[var(--color-accent)]/20
           text-[var(--color-accent)] bg-[var(--color-accent)]/5
@@ -81,7 +89,7 @@ export function CameraPanel(): JSX.Element {
           select-none
         "
       >
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg aria-hidden="true" focusable="false" width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="6" cy="6" r="2" fill="currentColor" />
           <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1" />
           <line x1="6" y1="0" x2="6" y2="3" stroke="currentColor" strokeWidth="1" />
