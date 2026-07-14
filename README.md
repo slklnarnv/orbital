@@ -5,7 +5,7 @@ A real-time ISS orbital visualization platform. ORBITAL combines live SGP4 telem
 
 ---
 
-ORBITAL renders the International Space Station in accurate real-time orbit using live Two-Line Element data propagated through SGP4. The ISS position is computed in the ECI inertial frame and rendered independently of the ECEF-rotating Earth — the station naturally tracks its real geographic ground path without manual correction. Custom GLSL shaders handle Earth surface day/night blending, atmospheric limb scattering, and orbit line alpha fade. An application-owned 10 Hz runtime advances simulation and telemetry independently of WebGL; the renderer reads the latest state and never drives it.
+ORBITAL renders the International Space Station in accurate real-time orbit using live Two-Line Element data propagated through SGP4. The ISS position is computed in the ECI inertial frame and rendered independently of the ECEF-rotating Earth — the station naturally tracks its real geographic ground path without manual correction. Custom GLSL shaders handle Earth surface day/night blending, atmospheric limb scattering, and orbit line alpha fade. An application-owned 10 Hz runtime advances simulation and telemetry independently of WebGL; the renderer interpolates those snapshots at display cadence and never drives simulation truth.
 
 ---
 

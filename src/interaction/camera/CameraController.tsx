@@ -8,6 +8,7 @@ import { CameraStateMachine } from './CameraStateMachine'
 import { applyRotationSensitivity } from './CameraSensitivity'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
+import { OrbitalRenderInterpolator } from '@/rendering/iss/OrbitalRenderInterpolator'
 
 // ─── Hoisted Static Vectors to Achieve Complete Zero-GC Frame Loops ──────────
 const _earthCenterTarget = new THREE.Vector3()
@@ -43,6 +44,7 @@ function handleFloatingOriginShift(_distanceToISSKm: number): void {
 
 export const CameraController = React.memo(function CameraController(): null {
   const { camera } = useThree()
+  const issPositionInterpolatorRef = useRef(new OrbitalRenderInterpolator())
 
   // Batch all camera store subscriptions into a single shallow selector to minimise
   // subscription count and prevent unnecessary re-renders when unrelated store
@@ -190,7 +192,7 @@ export const CameraController = React.memo(function CameraController(): null {
   }, [transition, completeTransition])
 
   // Run our frame-rate independent camera tracking loop
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const controls = cameraControlsRef.current
     if (!controls) return
 
@@ -229,11 +231,9 @@ export const CameraController = React.memo(function CameraController(): null {
     const state = telemetryManager.lastState
     if (!state) return
 
-    // Get current ISS position in Three.js world space coordinates
-    const ix = state.positionECI.x
-    const iy = state.positionECI.z
-    const iz = -state.positionECI.y
-    _currentISSPos.set(ix, iy, iz)
+    // Use the same render-time interpolation as ISSGroup so tracking modes move the
+    // camera and spacecraft in lockstep instead of following the 10 Hz truth steps.
+    issPositionInterpolatorRef.current.sample(state, clock.elapsedTime, _currentISSPos)
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
     if ((mode === 'FOLLOW' || mode === 'INSPECT' || mode === 'APPROACH') && !isTransitioning) {
