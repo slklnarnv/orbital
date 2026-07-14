@@ -43,6 +43,19 @@ describe('/api/tle', () => {
     await expect(response.json()).resolves.toMatchObject({ source: 'celestrak' })
   })
 
+  it('validates propagation at the element epoch instead of the wall clock', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2050-01-01T00:00:00Z'))
+
+    try {
+      const upstream = vi.fn(async () => new Response(VALID_TLE, { status: 200 }))
+      const response = await createTLEHandler(upstream as typeof fetch)(request())
+      expect(response.status).toBe(200)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('returns 502 and no-store when every upstream payload is invalid', async () => {
     const upstream = vi.fn(async () => new Response('not a TLE', { status: 200 }))
     const response = await createTLEHandler(upstream as typeof fetch)(request())

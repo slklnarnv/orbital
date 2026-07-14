@@ -71,4 +71,22 @@ describe('CelesTrakClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(warning).toHaveBeenCalledTimes(2)
   })
+
+  it('classifies malformed proxy JSON before using the browser fallback', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => (
+      input === '/api/tle'
+        ? new Response('{not-json', { headers: { 'Content-Type': 'application/json' } })
+        : new Response(VALID_TLE_TEXT)
+    ))
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchTLEFromCelesTrak()).resolves.toMatchObject({
+      line1: VALID_TLE.line1,
+      line2: VALID_TLE.line2,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('invalid JSON'))
+  })
 })

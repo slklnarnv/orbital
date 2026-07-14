@@ -44,6 +44,25 @@ function hasFiniteVector(vector: unknown): boolean {
   )
 }
 
+function extractTLEEpoch(line1: string): Date | null {
+  const epochField = line1.slice(18, 32)
+  if (!/^\d{2}\d{3}\.\d{8}$/.test(epochField)) return null
+
+  const shortYear = Number(epochField.slice(0, 2))
+  const dayOfYear = Number(epochField.slice(2))
+  const fullYear = shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear
+  const leapYear = fullYear % 4 === 0 && (fullYear % 100 !== 0 || fullYear % 400 === 0)
+  const maximumDay = leapYear ? 366 : 365
+  if (!Number.isFinite(dayOfYear) || dayOfYear < 1 || dayOfYear >= maximumDay + 1) {
+    return null
+  }
+
+  const epoch = new Date(Date.UTC(fullYear, 0, 1))
+  epoch.setUTCDate(epoch.getUTCDate() + Math.floor(dayOfYear) - 1)
+  epoch.setUTCMilliseconds((dayOfYear - Math.floor(dayOfYear)) * 86_400_000)
+  return Number.isFinite(epoch.getTime()) ? epoch : null
+}
+
 /**
  * Keep the serverless boundary self-contained. Importing browser application
  * modules here couples the Vercel function to path aliases and project references
@@ -65,13 +84,13 @@ function parseTLEString(raw: string): TLEData | null {
   const catalog2 = Number(line2.slice(2, 7).trim())
   if (catalog1 !== ISS_NORAD_ID || catalog2 !== ISS_NORAD_ID) return null
 
-  const epochField = line1.slice(18, 32)
-  if (!/^\d{2}\d{3}\.\d{8}$/.test(epochField)) return null
+  const epoch = extractTLEEpoch(line1)
+  if (!epoch) return null
 
   try {
     const satrec = satellite.twoline2satrec(line1, line2)
     if (satrec.error !== 0) return null
-    const propagated = satellite.propagate(satrec, new Date())
+    const propagated = satellite.propagate(satrec, epoch)
     if (!hasFiniteVector(propagated.position) || !hasFiniteVector(propagated.velocity)) {
       return null
     }

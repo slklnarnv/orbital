@@ -16,9 +16,9 @@ async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
       headers: { Accept: 'text/plain' },
       signal: AbortSignal.timeout(BROWSER_FALLBACK_TIMEOUT_MS),
     })
-    const elapsed = performance.now() - startTime
 
     if (!response.ok) {
+      const elapsed = performance.now() - startTime
       console.warn(`[TLE] Browser fallback failed with status ${response.status} in ${elapsed.toFixed(0)}ms`)
       return null
     }
@@ -35,6 +35,7 @@ async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
       source: 'celestrak',
     }
     const validated = validateTLEData(candidate, noradId)
+    const elapsed = performance.now() - startTime
     if (!validated.ok) {
       console.warn(`[TLE] Browser fallback returned invalid data in ${elapsed.toFixed(0)}ms`)
       return null
@@ -70,15 +71,24 @@ export async function fetchTLEFromCelesTrak(
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
     })
-    const elapsed = performance.now() - startTime
 
     if (!response.ok) {
+      const elapsed = performance.now() - startTime
       console.warn(`[TLE] Proxy request failed with status ${response.status} in ${elapsed.toFixed(0)}ms`)
       return fetchBrowserFallback(noradId)
     }
 
-    const candidate: unknown = await response.json()
+    let candidate: unknown
+    try {
+      candidate = await response.json()
+    } catch {
+      const elapsed = performance.now() - startTime
+      console.warn(`[TLE] Proxy returned invalid JSON in ${elapsed.toFixed(0)}ms`)
+      return fetchBrowserFallback(noradId)
+    }
+
     const validated = validateTLEData(candidate, noradId)
+    const elapsed = performance.now() - startTime
     if (!validated.ok) {
       console.warn(`[TLE] Proxy returned invalid data in ${elapsed.toFixed(0)}ms`)
       return fetchBrowserFallback(noradId)
