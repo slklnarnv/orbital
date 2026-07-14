@@ -21,7 +21,8 @@
 //   - ZERO useState() or Zustand updates inside useFrame.
 //   - Position mutated directly on groupRef.current — Three.js ref only.
 //   - telemetryManager.lastState is the latest application-runtime snapshot.
-//     No redundant SGP4 calls occur here.
+//   - Render-only interpolation bridges 10 Hz snapshots to the display frame rate.
+//     No redundant SGP4 calls occur here and simulation truth remains untouched.
 //
 // IMPORTANT — OrbitLine is NOT a child of this group.
 //   OrbitLine generates points in Earth-centered absolute world space.
@@ -36,6 +37,7 @@ import * as THREE from 'three'
 
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { ISSModel } from './ISSModel'
+import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -47,8 +49,10 @@ import { ISSModel } from './ISSModel'
  */
 export function ISSGroup(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
+  const interpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
+  const interpolator = interpolatorRef.current ??= new OrbitalRenderInterpolator()
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     if (!groupRef.current) return
 
     // Read the last propagated orbital state from TelemetryManager.
@@ -57,15 +61,12 @@ export function ISSGroup(): JSX.Element {
     const state = telemetryManager.lastState
     if (!state) return
 
-    // ── TEME → Three.js world space axis swap ──────────────────────────────
-    // positionECI is in TEME frame (km). Apply the canonical mapping:
-    //   TEME X →  Three.js X  (no change)
-    //   TEME Z →  Three.js Y  (north pole = up)
-    //   TEME Y → -Three.js Z  (right-hand flip)
-    groupRef.current.position.set(
-      state.positionECI.x,
-       state.positionECI.z,  // TEME Z → Three.js Y
-      -state.positionECI.y,  // TEME Y → Three.js -Z
+    // Smooth render motion between the application runtime's 10 Hz snapshots.
+    // The interpolator also owns the canonical TEME → Three.js axis mapping.
+    interpolator.sample(
+      state,
+      clock.elapsedTime,
+      groupRef.current.position,
     )
   })
 
