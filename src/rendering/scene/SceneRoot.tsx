@@ -70,6 +70,10 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setCameraRef = useCallback((c: any) => {
     cameraControlsRef.current = c
+    // DEV DEBUG HOOK: expose the controls instance for runtime camera diagnostics
+    if (import.meta.env.DEV) {
+      ;(window as unknown as Record<string, unknown>).__orbitalControls = c
+    }
   }, [])
 
   return (

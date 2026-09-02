@@ -285,6 +285,15 @@ export const CameraController = React.memo(function CameraController({
         _currentISSPos.z,
         false // Direct mutation, no slow transition interpolation
       )
+
+      // JITTER FIX: drei's CameraControls update loop runs at useFrame priority −1,
+      // BEFORE ISSGroup advances the spacecraft this frame. Left to its own schedule,
+      // the rendered camera would aim one frame behind the rendered ISS, and the
+      // interpolation's frame-to-frame step variance (0–160 m) shows up as visible
+      // micro-jitter at close range. update(0) re-derives the eye from this frame's
+      // target with zero damping, so the rendered camera and the rendered spacecraft
+      // move as one rigid body regardless of zoom distance.
+      controls.update(0)
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────

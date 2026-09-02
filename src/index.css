@@ -1,38 +1,59 @@
 @import "tailwindcss";
 
-/* ─── Design Tokens ─────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ORBITAL — Observatory console design system
+
+   The Earth render is the content; the HUD is bare instrument typography
+   anchored to the frame edges. Warm paper-white light at four intensities —
+   as if the text were lit by the same sun drawing the terminator — with
+   color reserved for data-link status alone.
+
+   Voice: documentation, not broadcast. Sentence case, hierarchy through
+   weight and tone. Geometry rule: circles are reserved for things that are
+   physically round (the planet); instruments frame themselves with reticle
+   corner ticks and protractor tick-arcs instead.
+
+   Type: Space Grotesk for numerals and labels, Chivo Mono for fine
+   ephemeris readouts.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* Color palette — aerospace dark */
-  --color-bg: #0B1020;
-  --color-panel: #111827;
-  --color-panel-hover: #1a2235;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-text-primary: #E5E7EB;
-  --color-text-secondary: #9CA3AF;
-  --color-text-muted: #6B7280;
-  --color-accent: #60A5FA;
-  --color-accent-dim: rgba(96, 165, 250, 0.15);
-  --color-orbit: #93C5FD;
-  --color-success: #34D399;
-  --color-warning: #FBBF24;
-  --color-error: #F87171;
+  /* Warm instrument white, four intensities */
+  --hud-hi: #f1ede4;
+  --hud-mid: rgba(241, 237, 228, 0.64);
+  --hud-lo: rgba(241, 237, 228, 0.38);
+  --hud-line: rgba(241, 237, 228, 0.22);
+  --hud-line-strong: rgba(241, 237, 228, 0.45);
 
-  /* Typography */
-  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
-  --font-heading: 'Inter', system-ui, sans-serif;
+  /* Space */
+  --space: #020409;
 
-  /* Spacing */
-  --spacing-panel-pad: 1rem;
+  /* Signal — semantic link status only, never decoration */
+  --signal-live: #3fe08f;
+  --signal-hybrid: #f5b94e;
+  --signal-recovery: #6fb9ff;
+  --signal-offline: #8a93a6;
+  --signal-fault: #ff5c5c;
 
-  /* Transitions */
+  /* Legacy aliases (WebGL diagnostics read these) */
+  --color-bg: var(--space);
+  --color-text-primary: var(--hud-hi);
+  --color-text-secondary: var(--hud-mid);
+  --color-accent: var(--hud-hi);
+  --color-success: var(--signal-live);
+  --color-warning: var(--signal-hybrid);
+  --color-error: var(--signal-fault);
+
+  /* Type */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'Chivo Mono', 'Consolas', monospace;
+
+  /* Motion */
   --transition-ui: 150ms ease;
-  --transition-panel: 250ms ease;
-  --transition-scene: 800ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ─── Reset & Base ──────────────────────────────────────────── */
+/* ─── Base ─────────────────────────────────────────────────────────────── */
+
 *,
 *::before,
 *::after {
@@ -47,255 +68,324 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: var(--color-bg);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
+  background-color: var(--space);
+  color: var(--hud-hi);
+  font-family: var(--font-display);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Typography Scale ─────────────────────────────────────── */
-.text-display {
-  font-family: var(--font-heading);
-  font-size: 1.125rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
+::selection {
+  background: rgba(241, 237, 228, 0.2);
 }
 
-.text-label {
-  font-family: var(--font-ui);
-  font-size: 0.6875rem;
+/* ─── Typography primitives ────────────────────────────────────────────── */
+
+/* Small instrument label — sentence case, hierarchy through tone */
+.hud-label {
+  font-family: var(--font-display);
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+  color: var(--hud-mid);
 }
 
-.text-value {
+/* Fine engineering readout — Chivo Mono, tabular */
+.hud-fine {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: 10px;
   font-weight: 400;
-  color: var(--color-text-primary);
+  letter-spacing: 0.06em;
   font-feature-settings: "tnum";
+  color: var(--hud-mid);
 }
 
-.text-value-lg {
-  font-family: var(--font-mono);
-  font-size: 1.25rem;
-  font-weight: 300;
-  color: var(--color-text-primary);
+/* Numerals — Space Grotesk, tabular where they tick */
+.hud-num {
+  font-family: var(--font-display);
   font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-hi);
 }
 
-.text-accent {
-  color: var(--color-accent);
+/* Bare text floats over a bright planet — every HUD string carries a shadow */
+.hud-text {
+  text-shadow: 0 1px 6px rgba(2, 4, 9, 0.65), 0 0 2px rgba(2, 4, 9, 0.5);
 }
 
-/* ─── Glass Panel Base ──────────────────────────────────────── */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  border: 1px solid var(--color-border);
-  /* Matches Tailwind's `rounded-sm` (2px) used on active HUD instrument panels.
-     Maintains the sharp, technical aerospace instrument aesthetic. */
-  border-radius: 2px;
+/* ─── Frame scrims ─────────────────────────────────────────────────────── */
+
+.hud-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 5;
 }
 
-/* ─── Status Badge ──────────────────────────────────────────── */
-.status-dot {
-  width: 6px;
-  height: 6px;
+.hud-scrim--top {
+  top: 0;
+  height: 130px;
+  background: linear-gradient(to bottom, rgba(2, 4, 9, 0.55), transparent);
+}
+
+.hud-scrim--bottom {
+  bottom: 0;
+  height: 220px;
+  background: linear-gradient(to top, rgba(2, 4, 9, 0.68) 0%, rgba(2, 4, 9, 0.28) 55%, transparent);
+}
+
+/* ─── Globe bezel (the one circle — it is a planet) ────────────────────── */
+
+.hud-bezel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--hud-hi);
+}
+
+.hud-bezel__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--hud-line);
+  background: radial-gradient(circle, rgba(2, 4, 9, 0.42) 0%, rgba(2, 4, 9, 0.28) 100%);
+  box-shadow: 0 0 18px rgba(2, 4, 9, 0.35);
+}
+
+/* ─── Reticle framing (instruments that are not round) ─────────────────── */
+
+.hud-reticle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hud-hi);
+}
+
+.hud-reticle > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-reticle path {
+  stroke: rgba(241, 237, 228, 0.4);
+  transition: stroke var(--transition-ui);
+}
+
+/* ─── Locate ISS reticle button ────────────────────────────────────────── */
+
+.hud-btn-locate {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--transition-ui);
+}
+
+.hud-btn-locate:hover .hud-reticle path {
+  stroke: rgba(241, 237, 228, 0.85);
+}
+
+.hud-btn-locate:active {
+  transform: scale(0.96);
+}
+
+.hud-btn-locate:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 4px;
+}
+
+/* ─── Camera control (top-right, with the systems) ─────────────────────── */
+/* Fixed, not absolute: it belongs to the viewport frame, and must stay put
+   even inside .hud-frame when that container becomes a positioned grid on
+   mobile. */
+
+.hud-camera {
+  position: fixed;
+  top: 46px;
+  right: 22px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-camera__state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+/* ─── Gauge cluster (bare numerals over a tick-arc) ────────────────────── */
+
+.hud-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.hud-gauge__unit {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--hud-lo);
+}
+
+/* ─── Zoom meter (hairline under the camera reticle) ───────────────────── */
+
+.hud-zoommeter {
+  width: 76px;
+  height: 2px;
+  background: rgba(241, 237, 228, 0.12);
+  overflow: hidden;
+}
+
+.hud-zoommeter__fill {
+  height: 100%;
+  background: var(--hud-hi);
+  transition: width 120ms ease-out;
+}
+
+/* ─── Passing-over place name (ground-track cluster) ───────────────────── */
+
+.hud-place {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--hud-hi);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-bottom-right .hud-fine {
+  font-size: 9px;
+}
+
+/* ─── Status dot ───────────────────────────────────────────────────────── */
+
+.hud-dot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.status-dot--live {
-  background: var(--color-success);
-  box-shadow: 0 0 6px var(--color-success);
+.hud-dot--live {
+  background: var(--signal-live);
+  box-shadow: 0 0 6px var(--signal-live);
 }
 
-.status-dot--hybrid {
-  background: var(--color-warning);
+.hud-dot--hybrid {
+  background: var(--signal-hybrid);
 }
 
-.status-dot--offline {
-  background: var(--color-text-muted);
+.hud-dot--recovery {
+  background: var(--signal-recovery);
 }
 
-.status-dot--error {
-  background: var(--color-error);
+.hud-dot--offline {
+  background: var(--signal-offline);
 }
 
-/* ─── Scrollbars (minimal) ──────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 4px;
-}
+/* ─── Orbit tape (one revolution as a bottom-edge ruler) ───────────────── */
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 2px;
-}
-
-/* ─── Responsive HUD Layout ─────────────────────────────────── */
-.orbital-topbar {
-  height: 48px;
-}
-
-.hud-panel-stack {
+.hud-tape {
   position: absolute;
-  top: 64px;
-  bottom: 0;
   left: 24px;
-  width: 320px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-bottom: 24px;
-  scrollbar-gutter: stable;
+  right: 24px;
+  bottom: 0;
+  height: 36px;
+  z-index: 9;
+  pointer-events: none;
 }
 
-.mobile-touch-target {
-  min-height: 44px;
-  padding: 8px 12px;
-}
-
-.mobile-touch-target:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-@media (max-width: 639px) {
-  .orbital-topbar {
-    display: grid;
-    grid-template-areas:
-      "brand"
-      "clock"
-      "metrics";
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-    height: 84px;
-    padding: 6px 12px;
-    row-gap: 1px;
-  }
-
-  .orbital-topbar__brand {
-    grid-area: brand;
-    min-width: 0;
-  }
-
-  .orbital-topbar__clock {
-    grid-area: clock;
-    justify-content: center;
-    min-width: 0;
-  }
-
-  .orbital-topbar__metrics {
-    grid-area: metrics;
-    justify-content: space-between;
-    width: 100%;
-    min-width: 0;
-    gap: 12px;
-  }
-
-  .orbital-topbar__separator {
-    display: none;
-  }
-
-  .hud-panel-stack {
-    top: 96px;
-    left: 12px;
-    width: min(320px, calc(100vw - 24px));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* ─── Loading Screen Animations & Utilities ─────────────────── */
-@keyframes spin-slow-cw {
-  0% {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-
-  100% {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-@keyframes spin-slow-ccw {
-  0% {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-
-  100% {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-}
-
-@keyframes pulse-subtle {
-
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-
-  50% {
-    opacity: 0.85;
-  }
-}
-
-.animate-spin-cw {
-  animation: spin-slow-cw 25s linear infinite;
-}
-
-.animate-spin-ccw {
-  animation: spin-slow-ccw 16s linear infinite;
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 2.5s ease-in-out infinite;
-}
-
-.loading-grid {
-  background-image: radial-gradient(rgba(96, 165, 250, 0.05) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.scanline-effect::after {
-  content: " ";
-  display: block;
+.hud-tape__line {
   position: absolute;
-  top: 0;
+  top: 12px;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
-  background-size: 100% 4px;
-  pointer-events: none;
-  opacity: 0.35;
+  height: 1px;
+  background: var(--hud-line);
 }
 
-.loading-gradient-bar {
-  background: linear-gradient(90deg, #3b82f6 0%, var(--color-accent) 50%, var(--color-success) 100%);
-  box-shadow: 0 0 10px rgba(96, 165, 250, 0.4);
-  transition: width 0.3s cubic-bezier(0.1, 0.8, 0.2, 1);
+.hud-tape__tick {
+  position: absolute;
+  top: 12px;
+  width: 1px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: rgba(241, 237, 228, 0.32);
 }
+
+.hud-tape__tick--node {
+  height: 10px;
+  background: rgba(241, 237, 228, 0.55);
+}
+
+.hud-tape__label {
+  position: absolute;
+  top: 19px;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--hud-lo);
+  white-space: nowrap;
+}
+
+.hud-tape__label--start {
+  transform: none;
+}
+
+.hud-tape__period {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--hud-lo);
+  white-space: nowrap;
+}
+
+.hud-tape__trail {
+  position: absolute;
+  top: 12px;
+  height: 1px;
+  width: 28px;
+  transform: translateY(-50%);
+  background: linear-gradient(to right, transparent, rgba(241, 237, 228, 0.55));
+}
+
+.hud-tape__dot {
+  position: absolute;
+  top: 12px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--hud-hi);
+  box-shadow: 0 0 6px rgba(241, 237, 228, 0.6);
+}
+
+/* ─── Loading screen ───────────────────────────────────────────────────── */
 
 @keyframes spin-earth-axis {
   0% {
@@ -310,7 +400,20 @@ body,
   animation: spin-earth-axis 20s linear infinite;
 }
 
-/* ─── WebGL Context Loss Recovery Custom Animations ─────────────────── */
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s ease-in-out infinite;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -322,4 +425,217 @@ body,
 
 .animate-fade-in {
   animation: fadeIn 300ms ease-out forwards;
+}
+
+@keyframes ping-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  80%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.animate-ping-ring {
+  animation: ping-ring 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ─── Scrollbars (diagnostic screens) ──────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--hud-line);
+}
+
+/* ─── Focus visibility (keyboard) ──────────────────────────────────────── */
+
+:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 3px;
+}
+
+/* ─── Responsive frame ─────────────────────────────────────────────────── */
+
+.hud-corner {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-shadow: 0 1px 6px rgba(2, 4, 9, 0.65);
+}
+
+.hud-corner--tl {
+  top: 18px;
+  left: 22px;
+}
+
+.hud-corner--tr {
+  top: 18px;
+  right: 22px;
+}
+
+.hud-bottom-left {
+  position: absolute;
+  left: 26px;
+  bottom: 48px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.hud-bottom-center {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hud-bottom-right {
+  position: absolute;
+  right: 26px;
+  bottom: 48px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .hud-corner--tr .hud-fine {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .hud-corner--tl {
+    top: 14px;
+    left: 14px;
+  }
+
+  .hud-corner--tr {
+    top: 14px;
+    right: 14px;
+  }
+
+  /* Compact identity corner: wordmark + link state only */
+  .hud-corner__meta {
+    display: none;
+  }
+
+  /* The frame becomes one bottom-anchored composition: the clock as the hero
+     row, instruments in a single row beneath it — no absolute overlap. */
+  .hud-frame {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-areas:
+      'clock clock'
+      'left right';
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    row-gap: 12px;
+    padding: 0 14px 16px;
+  }
+
+  .hud-frame .hud-bottom-center {
+    grid-area: clock;
+    position: static;
+    transform: none;
+    width: 100%;
+    bottom: auto;
+  }
+
+  .hud-frame .hud-bottom-left {
+    grid-area: left;
+    position: static;
+    gap: 10px;
+  }
+
+  .hud-frame .hud-bottom-right {
+    grid-area: right;
+    position: static;
+    gap: 8px;
+  }
+
+  .hud-frame .hud-bottom-right .hud-fine {
+    font-size: 7px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .hud-frame .hud-place {
+    font-size: 8.5px;
+    letter-spacing: 0;
+    max-width: 112px;
+  }
+
+  /* Camera control parks alone in the top-right on small screens */
+  .hud-camera {
+    top: 14px;
+    right: 14px;
+    gap: 8px;
+  }
+
+  .hud-camera .hud-zoommeter {
+    width: 56px;
+  }
+
+  /* Real (not transform) downscale so layout boxes shrink with them */
+  .hud-frame .hud-gauge {
+    width: 76px !important;
+    gap: 1px;
+  }
+
+  .hud-frame .hud-gauge__value {
+    font-size: 19px !important;
+  }
+
+  .hud-frame .hud-gauge__unit {
+    font-size: 8.5px;
+  }
+
+  .hud-frame .hud-bezel {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  .hud-frame .hud-bezel svg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .hud-tape {
+    display: none;
+  }
+}
+
+/* ─── Reduced motion ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

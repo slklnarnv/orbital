@@ -85,6 +85,38 @@ export function formatUtcClock(epochMs: number): string {
   const diff = epochMs - start
   const oneDay = 1000 * 60 * 60 * 24
   const doy = Math.floor(diff / oneDay).toString().padStart(3, '0')
-  
+
   return `${year}.${doy} | ${hours}:${minutes}:${seconds} UTC`
+}
+
+/**
+ * Splits the UTC mission clock into display parts for the broadcast-style
+ * bottom-center cluster: a large time-of-day numeral and a small
+ * year.day-of-year ephemeris line.
+ * Example: 1779788713076 -> { time: "11:05:13", date: "2026.244" }
+ */
+export interface UtcClockParts {
+  /** "HH:MM:SS" */
+  time: string
+  /** "YYYY.DDD" (DDD = zero-padded day of year) */
+  date: string
+}
+
+export function formatUtcClockParts(epochMs: number): UtcClockParts {
+  const date = new Date(epochMs)
+
+  const year = date.getUTCFullYear()
+  const hours = date.getUTCHours().toString().padStart(2, '0')
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0')
+  const seconds = date.getUTCSeconds().toString().padStart(2, '0')
+
+  const start = Date.UTC(year, 0, 0)
+  const diff = epochMs - start
+  const oneDay = 1000 * 60 * 60 * 24
+  const doy = Math.floor(diff / oneDay).toString().padStart(3, '0')
+
+  return {
+    time: `${hours}:${minutes}:${seconds}`,
+    date: `${year}.${doy}`,
+  }
 }

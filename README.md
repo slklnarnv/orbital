@@ -83,6 +83,10 @@ The telemetry layer runs in three modes with automatic fallback:
 
 TLE data is persisted in IndexedDB via `idb-keyval`. The application runs fully offline after first load.
 
+### Ground-Point Enrichment
+
+A `GeoLookupService` (Layer 2-adjacent, UI-support) answers "what is the station passing over": the place name — country + continent over land (`BigDataCloud reverse-geocode-client`), ocean/sea region over water — plus the local wall-clock time (IANA timezone from the weather provider) and current weather (`Open-Meteo`). Both services are free, keyless, and queried at most once per ~10 s with exponential backoff; results are cached per 2° ground cell in memory and IndexedDB (places for 30 days, weather for 15 minutes), so well-flown ground never costs a second request. All failures degrade silently to the last good snapshot.
+
 ---
 
 ## Camera System

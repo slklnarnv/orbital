@@ -4,10 +4,13 @@ import { initTelemetryStoreListeners } from '@/stores/telemetryStore'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
+import { geoLookupService } from '@/core/geo/GeoLookupService'
 import { TopBar } from '@/ui/layout/TopBar'
-import { TelemetryPanel } from '@/ui/panels/TelemetryPanel'
-import { CameraPanel } from '@/ui/panels/CameraPanel'
-import { DataSourceIndicator } from '@/ui/panels/DataSourceIndicator'
+import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
+import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
+import { CameraCluster } from '@/ui/clusters/CameraCluster'
+import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
+import { OrbitTape } from '@/ui/clusters/OrbitTape'
 import { useLoadingStore } from '@/stores/loadingStore'
 
 /**
@@ -39,27 +42,30 @@ function checkWebGLSupport(): boolean {
 }
 
 /**
- * HudOverlay composes our clean, modular, NASA/JPL/ESA-inspired aerospace panels.
- * By keeping this container static, we ensure that high-frequency clock ticks and coordinate 
- * updates are confined strictly to their dedicated sub-panels, delivering absolute
- * render isolation and stable 60 FPS performance.
+ * HudOverlay composes the broadcast-style frame: bare instrument typography
+ * anchored to the edges of the viewport, nothing floating mid-frame. Each
+ * cluster subscribes to its own slice of the 1 Hz throttled stores, so
+ * high-frequency updates stay confined to their dedicated components and the
+ * container never re-renders.
  */
 const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
   return (
     <>
-      {/* Unified Aerospace Brand & High-Precision UTC Clock */}
+      {/* Edge scrims: legibility gradients, never interactive */}
+      <div aria-hidden="true" className="hud-scrim hud-scrim--top" />
+      <div aria-hidden="true" className="hud-scrim hud-scrim--bottom" />
+
       <TopBar />
 
-      {/* Structured Left Dashboard Grid */}
-      <main
-        aria-label="Mission telemetry and camera controls"
-        className="hud-panel-stack z-10 flex flex-col gap-3 select-none"
-      >
-        <TelemetryPanel />
-        <CameraPanel />
-        <DataSourceIndicator />
+      <main aria-label="Mission telemetry and camera controls" className="hud-frame select-none">
+        <OrbitTape />
+        <GaugesCluster />
+        <MissionClockCluster />
+        <div className="hud-bottom-right">
+          <GroundTrackGlobe />
+        </div>
+        <CameraCluster />
       </main>
-
     </>
   )
 })
@@ -70,31 +76,54 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
  */
 function WebGLDiagnosticScreen(): JSX.Element {
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[var(--color-bg)] text-[var(--color-text-primary)] flex items-center justify-center p-6 select-none">
-      <div className="glass-panel p-8 max-w-xl flex flex-col gap-6 shadow-2xl">
+    <div className="w-full h-full relative overflow-hidden bg-[var(--space)] text-[var(--hud-hi)] flex items-center justify-center p-6 select-none">
+      <div
+        className="p-8 max-w-xl flex flex-col gap-6"
+        style={{
+          background: 'rgba(2, 4, 9, 0.72)',
+          border: '1px solid var(--hud-line)',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
         <div>
-          <h1 className="text-display text-red-400 tracking-wide font-semibold uppercase">
+          <h1
+            className="uppercase"
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: '0.14em',
+              color: 'var(--signal-fault)',
+            }}
+          >
             System Hardware Limitation Detected
           </h1>
-          <p className="text-label text-[10px] opacity-75 mt-1">
+          <p className="hud-label" style={{ marginTop: 4 }}>
             WebGL 3D Context Allocation Failed
           </p>
         </div>
 
-        <div className="h-px bg-white/10" />
+        <div style={{ height: 1, background: 'var(--hud-line)' }} />
 
-        <div className="flex flex-col gap-3 text-sm text-[var(--color-text-secondary)]">
+        <div className="flex flex-col gap-3 text-sm text-[var(--hud-mid)]">
           <p>
-            The <strong>Orbital ISS Visualization Platform</strong> requires a high-performance WebGL 3D context to render planetary-scale environments, dynamic orbit prediction layers, and architectural ISS modules.
+            The <strong className="text-[var(--hud-hi)]">Orbital ISS Visualization Platform</strong> requires a high-performance WebGL 3D context to render planetary-scale environments, dynamic orbit prediction layers, and architectural ISS modules.
           </p>
           <p>
             Your browser was unable to allocate a WebGL rendering instance. This is typically caused by disabled graphics hardware acceleration or outdated display drivers in your environment.
           </p>
         </div>
 
-        <div className="bg-red-950/40 border border-red-500/20 rounded-md p-4 flex flex-col gap-2">
-          <span className="text-label text-red-400 text-xs">To Resolve This Issue:</span>
-          <ul className="list-decimal pl-5 text-xs text-[var(--color-text-primary)] flex flex-col gap-1.5 leading-relaxed">
+        <div
+          className="p-4 flex flex-col gap-2"
+          style={{
+            background: 'rgba(255, 92, 92, 0.06)',
+            border: '1px solid rgba(255, 92, 92, 0.22)',
+          }}
+        >
+          <span className="hud-label" style={{ color: 'var(--signal-fault)' }}>
+            To Resolve This Issue:
+          </span>
+          <ul className="list-decimal pl-5 text-xs text-[var(--hud-hi)] flex flex-col gap-1.5 leading-relaxed">
             <li>
               <strong>Enable Hardware Acceleration:</strong> In your browser settings, locate the <strong>System</strong> or <strong>Advanced</strong> section and ensure <strong>"Use hardware acceleration when available"</strong> (or equivalent) is toggled <strong>ON</strong>.
             </li>
@@ -110,11 +139,11 @@ function WebGLDiagnosticScreen(): JSX.Element {
           </ul>
         </div>
 
-        <div className="h-px bg-white/10" />
+        <div style={{ height: 1, background: 'var(--hud-line)' }} />
 
-        <div className="flex justify-between items-center text-xs opacity-50">
+        <div className="hud-fine flex justify-between items-center" style={{ opacity: 0.7 }}>
           <span>Client Environment: {navigator.platform || navigator.userAgent.split(' ')[0]} — WebGL Unavailable</span>
-          <span className="font-mono">Error Code: E_CONTEXT_ALLOCATION_FAIL</span>
+          <span>Error Code: E_CONTEXT_ALLOCATION_FAIL</span>
         </div>
       </div>
     </div>
@@ -152,8 +181,8 @@ function LoadingScreen(): JSX.Element | null {
 
       // We purposefully DO NOT return a cleanup function (clearTimeout) here.
       // If we did, the re-render caused by setHasLoaded(true) would execute the
-      // cleanup function, cancelling the timers and permanently freezing the 
-      // loading screen at 100%. 
+      // cleanup function, cancelling the timers and permanently freezing the
+      // loading screen at 100%.
       setTimeout(() => {
         setFadeOut(true)
 
@@ -168,7 +197,7 @@ function LoadingScreen(): JSX.Element | null {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050814] select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[var(--space)] select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
     >
       <div className="flex flex-col items-center justify-center">
@@ -178,11 +207,10 @@ function LoadingScreen(): JSX.Element | null {
           style={{ transform: 'rotate(23.5deg)' }}
         >
           <svg
-            className="w-full h-full text-blue-400 animate-spin-earth"
+            className="w-full h-full text-[var(--hud-hi)] animate-spin-earth"
             viewBox="0 0 100 100"
             fill="none"
           >
-            {/* Earth outer outline with light drop glow */}
             <circle
               cx="50"
               cy="50"
@@ -190,7 +218,7 @@ function LoadingScreen(): JSX.Element | null {
               stroke="currentColor"
               strokeWidth="1.5"
               className="opacity-90"
-              style={{ filter: 'drop-shadow(0 0 6px rgba(96, 165, 250, 0.5))' }}
+              style={{ filter: 'drop-shadow(0 0 6px rgba(244, 247, 251, 0.35))' }}
             />
 
             {/* Latitude Grid lines */}
@@ -206,15 +234,27 @@ function LoadingScreen(): JSX.Element | null {
         </div>
 
         {/* Minimal loading text with percentage/status indicator */}
-        <span className="text-xs font-mono tracking-[0.25em] text-[var(--color-text-secondary)] mt-6 uppercase">
+        <span
+          className="uppercase"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            letterSpacing: '0.25em',
+            color: 'var(--hud-mid)',
+            marginTop: 24,
+          }}
+        >
           {statusMessage}
         </span>
 
         {/* Clean, minimalist progress line */}
-        <div className="w-48 h-0.5 bg-white/5 rounded-full overflow-hidden mt-3 border border-white/5">
+        <div
+          className="w-48 overflow-hidden"
+          style={{ height: 2, background: 'rgba(244, 247, 251, 0.12)', marginTop: 12 }}
+        >
           <div
-            className="h-full bg-blue-500 transition-all duration-300 ease-out shadow-[0_0_8px_rgba(96,165,250,0.6)]"
-            style={{ width: `${displayProgress}%` }}
+            className="h-full transition-all duration-300 ease-out"
+            style={{ width: `${displayProgress}%`, background: 'var(--hud-hi)' }}
           />
         </div>
       </div>
@@ -224,24 +264,42 @@ function LoadingScreen(): JSX.Element | null {
 
 /**
  * WebglLostOverlay shows when the browser temporarily reclaims the WebGL context.
- * It is styled as a premium glassmorphic HUD component.
  */
 function WebglLostOverlay(): JSX.Element {
   return (
     <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 select-none animate-fade-in">
-      <div className="glass-panel p-8 max-w-md w-full flex flex-col items-center gap-6 shadow-2xl border border-sky-500/20 text-center">
+      <div
+        className="p-8 max-w-md w-full flex flex-col items-center gap-6 text-center"
+        style={{ background: 'rgba(2, 4, 9, 0.72)', border: '1px solid var(--hud-line)' }}
+      >
         <div className="relative w-16 h-16 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border border-sky-400 opacity-20 animate-ping" />
-          <div className="absolute inset-1 rounded-full border border-sky-500 opacity-40 animate-pulse" />
-          <svg className="w-8 h-8 text-sky-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div
+            className="absolute inset-0 rounded-full animate-ping-ring"
+            style={{ border: '1px solid var(--hud-hi)' }}
+          />
+          <div
+            className="absolute inset-1 rounded-full animate-pulse-subtle"
+            style={{ border: '1px solid var(--hud-hi)' }}
+          />
+          <svg
+            className="w-8 h-8"
+            style={{ color: 'var(--hud-hi)' }}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.656 48.656 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3M1.5 12a11.963 11.963 0 00.138 3.662 4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M1.5 12l-3 3m3-3l3 3" />
           </svg>
         </div>
         <div className="flex flex-col gap-2">
-          <h2 className="text-display text-sky-400 tracking-wide font-semibold uppercase text-lg">
+          <h2
+            className="uppercase"
+            style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--hud-hi)' }}
+          >
             Graphics Context Disconnected
           </h2>
-          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+          <p className="hud-fine" style={{ lineHeight: 1.7, textTransform: 'none', letterSpacing: '0.03em' }}>
             The browser reclaimed the WebGL rendering context. Attempting to restore graphics hardware session...
           </p>
         </div>
@@ -257,18 +315,42 @@ function WebglLostOverlay(): JSX.Element {
 function WebglFailedOverlay(): JSX.Element {
   return (
     <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 select-none animate-fade-in">
-      <div className="glass-panel p-8 max-w-md w-full flex flex-col items-center gap-6 shadow-2xl border border-red-500/25 text-center">
+      <div
+        className="p-8 max-w-md w-full flex flex-col items-center gap-6 text-center"
+        style={{
+          background: 'rgba(2, 4, 9, 0.8)',
+          border: '1px solid rgba(255, 92, 92, 0.3)',
+        }}
+      >
         <div className="relative w-16 h-16 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border border-red-500 opacity-20 animate-pulse" />
-          <svg className="w-8 h-8 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div
+            className="absolute inset-0 rounded-full animate-pulse-subtle"
+            style={{ border: '1px solid rgba(255, 92, 92, 0.5)' }}
+          />
+          <svg
+            className="w-8 h-8"
+            style={{ color: 'var(--signal-fault)' }}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
         </div>
         <div className="flex flex-col gap-2">
-          <h2 className="text-display text-red-400 tracking-wide font-semibold uppercase text-lg">
+          <h2
+            className="uppercase"
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              letterSpacing: '0.14em',
+              color: 'var(--signal-fault)',
+            }}
+          >
             Graphics Recovery Failed
           </h2>
-          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+          <p className="hud-fine" style={{ lineHeight: 1.7, textTransform: 'none', letterSpacing: '0.03em' }}>
             The WebGL context could not be restored automatically. This can occur under heavy memory pressure or GPU driver instability.
           </p>
         </div>
@@ -277,7 +359,18 @@ function WebglFailedOverlay(): JSX.Element {
             sessionStorage.setItem('orbital_last_webgl_reload', Date.now().toString())
             window.location.reload()
           }}
-          className="px-5 py-2.5 bg-red-950/60 hover:bg-red-900/60 border border-red-500/30 text-red-200 text-xs font-mono tracking-wider uppercase rounded-sm transition-all active:scale-[0.98] cursor-pointer animate-pulse-subtle"
+          className="uppercase"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            padding: '10px 20px',
+            cursor: 'pointer',
+            color: 'var(--signal-fault)',
+            background: 'rgba(255, 92, 92, 0.08)',
+            border: '1px solid rgba(255, 92, 92, 0.35)',
+            transition: 'background 150ms ease',
+          }}
         >
           Force Reload Session
         </button>
@@ -310,9 +403,14 @@ export default function App(): JSX.Element {
     void telemetryManager.start()
     simulationRuntime.start()
 
+    // 3. Ground-point enrichment (place, local time, weather) on its own
+    // rate-limited cadence — independent of telemetry mode.
+    geoLookupService.start()
+
     return () => {
       // Stop producers before removing their consumers. Both lifecycle owners are
       // idempotent so React StrictMode's development remount cannot duplicate work.
+      geoLookupService.stop()
       simulationRuntime.stop()
       telemetryManager.stop()
       unsubscribeListeners()
@@ -375,16 +473,16 @@ export default function App(): JSX.Element {
   }
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[var(--color-bg)] text-[var(--color-text-primary)] select-none">
+    <div className="w-full h-full relative overflow-hidden bg-[var(--space)] text-[var(--hud-hi)] select-none">
       {/* Layer 3: High-Performance 3D R3F Viewport - Stable (Never Re-renders!) */}
       <div className="absolute inset-0 z-0 w-full h-full">
         <SceneRoot />
       </div>
 
-      {/* Layer 5: Time and Telemetry HUD - Reactive Overlay */}
+      {/* Layer 5: Broadcast HUD — Reactive Overlay */}
       <HudOverlay />
 
-      {/* Layer 6: High-Fidelity Cinematic Loading Screen */}
+      {/* Layer 6: Cinematic Loading Screen */}
       <LoadingScreen />
 
       {/* WebGL Recovery Overlays */}

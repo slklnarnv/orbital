@@ -1,60 +1,70 @@
 import { useSimulationClock } from '@/hooks/useSimulationClock'
-import { formatUtcClock, formatJulianDate, formatGmst } from '@/utils/formatters'
 import { useTelemetryStore } from '@/stores/telemetryStore'
+import { useShallow } from 'zustand/react/shallow'
+import { formatJulianDate, formatGmst } from '@/utils/formatters'
+import { telemetryModeVisual } from '../common/telemetryModeVisual'
 
 /**
- * TopBar represents the clean, unified aerospace header bar.
- * Mounts at the top of the viewport, delivering mission branding and high-accuracy flight clocks.
+ * TopBar — two floating corner clusters, no bar between them.
+ * Left: identity and the data-link state. Right: the orbital-elements line
+ * (inclination, Julian date, GMST) in fine mono.
  */
 export function TopBar(): JSX.Element {
-  // Subscribe to clock ticks at 1000ms (1Hz) to throttle re-renders of UTC, JD, and GMST clock text
+  // 1 Hz subscription — the clocks in this component never read faster
   const simTime = useSimulationClock(1000)
-  const telemetryMode = useTelemetryStore(state => state.mode)
+
+  const { mode, confidence, tleAgeHours, inclination } = useTelemetryStore(
+    useShallow((state) => ({
+      mode: state.mode,
+      confidence: state.confidence,
+      tleAgeHours: state.tleAgeHours,
+      inclination: state.inclination,
+    }))
+  )
+
+  const modeVisual = telemetryModeVisual(mode)
+  const modeName = mode.charAt(0) + mode.slice(1).toLowerCase()
 
   return (
-    <header
-      className="
-        orbital-topbar
-        absolute top-0 left-0 right-0 z-10
-        h-12 w-full
-        bg-slate-950/85
-        backdrop-blur-md
-        border-b border-white/5
-        px-6
-        flex items-center justify-between
-        select-none
-      "
-    >
-      {/* Left: Aerospace Brand & Logo */}
-      <div className="orbital-topbar__brand flex items-center gap-3">
-        <span className="text-sm font-sans font-bold tracking-wider text-[var(--color-accent)] uppercase">
-          Orbital
+    <>
+      <div className="hud-corner hud-corner--tl hud-text">
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: '0.24em',
+            color: 'var(--hud-hi)',
+          }}
+        >
+          ORBITAL
         </span>
-        <div aria-hidden="true" className="w-px h-3 bg-white/10" />
-        <span className="text-[10px] font-mono tracking-widest text-[var(--color-text-secondary)] opacity-75 uppercase">
-          Sys_St: {telemetryMode}
+
+        <span aria-hidden="true" style={{ width: 1, height: 12, background: 'var(--hud-line)' }} />
+
+        <span
+          className="hud-label"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: modeVisual.color }}
+        >
+          <span aria-hidden="true" className={`hud-dot ${modeVisual.dotClass}`} />
+          {modeName}
+        </span>
+
+        <span className="hud-fine hud-corner__meta" style={{ color: 'var(--hud-lo)' }}>
+          {tleAgeHours < Infinity ? `TLE age ${tleAgeHours.toFixed(1)}h` : 'TLE age —'}
+          {' · '}
+          confidence {(confidence * 100).toFixed(0)}%
         </span>
       </div>
 
-      {/* Center: Monospace Mission Clock */}
-      <div className="orbital-topbar__clock flex items-center gap-6">
-        <span className="whitespace-nowrap font-mono text-xs font-semibold tracking-wider text-[var(--color-text-primary)]">
-          {formatUtcClock(simTime.epochMs)}
+      <div className="hud-corner hud-corner--tr hud-text">
+        <span className="hud-fine" style={{ fontSize: 9.5 }}>
+          INC {inclination.toFixed(2)}°
+          <span style={{ color: 'var(--hud-lo)' }}>{'  ·  '}</span>
+          JD {formatJulianDate(simTime.julianDate)}
+          <span style={{ color: 'var(--hud-lo)' }}>{'  ·  '}</span>
+          GMST {formatGmst(simTime.gmst)}
         </span>
       </div>
-
-      {/* Right: Greenwich Sidereal Rotation & Julian Date */}
-      <div className="orbital-topbar__metrics flex items-center gap-6 whitespace-nowrap text-[10px] font-mono text-[var(--color-text-secondary)]">
-        <div className="flex items-center gap-1.5">
-          <span>JD:</span>
-          <span className="text-[var(--color-text-primary)]">{formatJulianDate(simTime.julianDate)}</span>
-        </div>
-        <div aria-hidden="true" className="orbital-topbar__separator w-px h-2.5 bg-white/10" />
-        <div className="flex items-center gap-1.5">
-          <span>GMST:</span>
-          <span className="text-[var(--color-text-primary)]">{formatGmst(simTime.gmst)}</span>
-        </div>
-      </div>
-    </header>
+    </>
   )
 }
