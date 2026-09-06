@@ -110,9 +110,12 @@ body,
   color: var(--hud-hi);
 }
 
-/* Bare text floats over a bright planet — every HUD string carries a shadow */
+/* Bare text over the planet. Text shadows were removed per feedback —
+   they read as a "frosted glass" halo. If legibility over the daylight
+   limb ever needs help, the previous values were:
+   text-shadow: 0 1px 6px rgba(2,4,9,0.65), 0 0 2px rgba(2,4,9,0.5); */
 .hud-text {
-  text-shadow: 0 1px 6px rgba(2, 4, 9, 0.65), 0 0 2px rgba(2, 4, 9, 0.5);
+  text-shadow: none;
 }
 
 /* ─── Frame scrims ─────────────────────────────────────────────────────── */
@@ -472,7 +475,6 @@ body,
   display: flex;
   align-items: center;
   gap: 14px;
-  text-shadow: 0 1px 6px rgba(2, 4, 9, 0.65);
 }
 
 .hud-corner--tl {
