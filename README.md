@@ -1,179 +1,112 @@
-# ORBITAL
+# Orbital
 
-A real-time ISS orbital visualization platform. ORBITAL combines live SGP4 telemetry, physically calibrated Earth rendering, and a simulation-first architecture into a browser-based mission visualization system.
+Real time visualization of the International Space Station
 
+[Live demo](https://orbitaliss.vercel.app) · [Source](https://github.com/slklnarnv/orbital)
 
----
+Orbital propagates public Two-Line Element sets with SGP4 and renders the result in a kilometer-scale Three.js scene. A fixed-rate runtime advances simulation independently of WebGL; the renderer interpolates those snapshots while Earth rotates by Greenwich Mean Sidereal Time beneath the ISS's TEME-derived inertial trajectory.
 
-ORBITAL renders the International Space Station in accurate real-time orbit using live Two-Line Element data propagated through SGP4. The ISS position is computed in the ECI inertial frame and rendered independently of the ECEF-rotating Earth — the station naturally tracks its real geographic ground path without manual correction. Custom GLSL shaders handle Earth surface day/night blending, atmospheric limb scattering, and orbit line alpha fade. An application-owned 10 Hz runtime advances simulation and telemetry independently of WebGL; the renderer interpolates those snapshots at display cadence and never drives simulation truth.
+## Highlights
 
----
+- SGP4 propagation at 10 Hz, decoupled from React and the WebGL frame loop
+- Display rate interpolation without altering simulation truth
+- Validated TLE acquisition through a CDN-cached Vercel function, IndexedDB cache, and packaged fallback
+- Custom GLSL for the day/night terminator, ocean response, clouds, atmosphere, Sun, and orbit trail
+- Multi modal camera system with distance aware sensitivity and ISS tracking
+- Ground context with place, local time, and weather
+- LOD ISS rendering to improve load time performance
+- WebGL capability checks and context loss recovery
 
 ## Architecture
 
-Five strict layers. Data flows downward; no layer bypasses the one below it.
-
-```
-Layer 5 — UI / Presentation    HUD panels, telemetry overlays, navigation controls
-Layer 4 — Interaction          Camera FSM, zoom level manager, raycasting
-Layer 3 — Rendering            Scene graph, Earth/ISS/orbit renderers, GLSL shaders
-Layer 2 — Telemetry            TLE ingestion, SGP4 propagation, coordinate transforms
-Layer 1 — Simulation           SimulationClock, TLE cache, offline fallback
-```
-
----
-
-## Rendering Pipeline
-
-### Earth
-
-Layered geometry stack rendered back-to-front:
-
-| Pass | Radius | Description |
-|:---|:---|:---|
-| Star field | Background | NASA starmap + procedural point stars |
-| Surface | 1.000× | NASA Blue Marble day albedo blended with Black Marble city lights via GLSL terminator |
-| Cloud layer | 1.003× | Grayscale alphaMap with slow wind-drift rotation |
-| Atmosphere | 1.025× | Fresnel rim halo on `BackSide` with `AdditiveBlending`. Horizon-compressed density falloff. |
-
-The surface shader blends day and night textures using a `smoothstep` terminator driven by the dot product of the world-space vertex normal and sun direction. Both vectors must be in world space — a camera/world space mismatch was the root cause of the initial dark-globe bug:
-
-```glsl
-// earthSurface.vert
-vNormal = normalize(mat3(modelMatrix) * normal);
-
-// earthSurface.frag
-float sunDot    = dot(vNormal, sunDirection);
-float dayMask   = smoothstep(-0.08, 0.14, sunDot);
-float nightMask = 1.0 - smoothstep(-0.12, 0.04, sunDot);
-vec3  color     = dayColor * dayMask + nightColor * nightMask + specular;
+```text
+SimulationRuntime (10 Hz)
+├──> SimulationClock ──> SimulationTime
+└──> TelemetryManager <── /api/tle <── TLE providers
+         └──> OrbitalEngine ──> OrbitalState snapshots
+                  ├──> render interpolator ──> Three.js
+                  └──> Zustand (1 Hz) ──> HUD
 ```
 
-`EarthGroup` rotates on its Y-axis by the current GMST each frame, keeping surface geography correctly oriented relative to the sun.
+The core orbital layer has no rendering dependencies. A recursive scheduler advances the clock and telemetry without overlapping callbacks, even when the browser throttles a background tab. Rendering interpolates immutable 10 Hz snapshots and mutates Three.js objects directly; UI-facing state is published at 1 Hz.
 
-### ISS
+A few invariants define the scene:
 
-`ISSGroup` lives in the ECI frame — it does not inherit the Earth's GMST rotation. ISS position is applied via direct ref mutation inside `useFrame`, with no React state involved:
+- `1` world unit equals `1 km`.
+- Earth is an Earth-fixed group rotated by GMST.
+- ISS and orbit geometry remain at the scene root in inertial coordinates.
+- TEME axes map to Three.js as `(x, z, -y)`.
+- The orbit line spans half an orbit behind and ahead, sampled every 30 simulation seconds and regenerated every 60 simulation seconds.
 
-```typescript
-useFrame(() => {
-  const state = issEntity.propagate(simulationClock.now());
-  const pos   = temeToThreeJS(state.positionECI);   // { x, y: z, z: -y }
-  issGroupRef.current.position.set(pos.x, pos.y, pos.z);
-});
-```
+## Data resilience
 
-The model uses a multi-level LOD system. At planetary scale, a lightweight placeholder is used (truss cylinder + solar array boxes at real-world scale: ~0.109 km wide). A distance-scaled adaptive fill light increases readability at close-range inspection without affecting global scene lighting.
+The `/api/tle` function races CelesTrak's two domains and `wheretheiss.at`, validates the first successful response, and serves it with CDN caching. If the function is unreachable, the browser makes one direct request to `wheretheiss.at` before falling back to local data. Successful responses are validated again and cached in IndexedDB.
 
-### Orbit Prediction Line
+| State | Meaning |
+| --- | --- |
+| `LIVE` | An element set less than 24 hours old is available while online |
+| `HYBRID` | An element set between one and seven days old is available while online |
+| `OFFLINE` | Local data is being propagated while the browser is offline |
+| `RECOVERY` | Data is missing or stale and bounded retries are in progress |
 
-Propagated forward one full orbital period (~92 min) via SGP4, regenerated every 60 seconds. Each vertex carries a custom `alpha` attribute — fading from 0 at the trailing edge to 1 at the leading arc — rendered through a dedicated GLSL line shader.
+The packaged TLE seeds propagation synchronously. Cached entries expire after seven days; the packaged fallback remains available when no valid cache or network response exists. TLE replacement is transactional and blended over two seconds to avoid a visible position discontinuity.
 
----
+## Ground context
 
-## Telemetry
+The HUD pairs orbital telemetry with a station-centered ground-track globe and a one-revolution phase tape. BigDataCloud supplies land or marine-region names; Open-Meteo supplies timezone data and current weather for the local ground clock. Results are grouped into 2° cells, cached in memory and IndexedDB, and refreshed under independent rate limits with bounded backoff.
 
-The telemetry layer runs in three modes with automatic fallback:
+These enrichment requests run directly from the browser, so the current ground coordinates and client network address are visible to those providers.
 
-| Mode | Condition |
-|:---|:---|
-| `LIVE` | Fresh TLE from CelesTrak |
-| `HYBRID` | Cached TLE propagated forward; confidence degrades with TLE age |
-| `OFFLINE` | Hardcoded fallback TLE; no network dependency |
+## Technical notes
 
-TLE data is persisted in IndexedDB via `idb-keyval`. The application runs fully offline after first load.
+Orbital is a visualization, not a navigation or conjunction-analysis tool. Positions are SGP4 estimates derived from public TLEs rather than spacecraft telemetry, and accuracy degrades as an element set ages.
 
-### Ground-Point Enrichment
-
-A `GeoLookupService` (Layer 2-adjacent, UI-support) answers "what is the station passing over": the place name — country + continent over land (`BigDataCloud reverse-geocode-client`), ocean/sea region over water — plus the local wall-clock time (IANA timezone from the weather provider) and current weather (`Open-Meteo`). Both services are free, keyless, and queried at most once per ~10 s with exponential backoff; results are cached per 2° ground cell in memory and IndexedDB (places for 30 days, weather for 15 minutes), so well-flown ground never costs a second request. All failures degrade silently to the last good snapshot.
-
----
-
-## Camera System
-
-Three modes implemented as a finite state machine:
-
-| Mode | Behavior |
-|:---|:---|
-| `ORBITAL` | Free-orbit around Earth via damped `CameraControls` |
-| `FOLLOW` | Locks to ISS with telemetry tracking across all zoom scales |
-| `INSPECT` | Close-range ISS inspection; LOD switches to full-detail model |
-
----
+The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Its detailed model is loaded only at close range; the visualization propagates position, not spacecraft attitude.
 
 ## Stack
 
-| Category | Technology |
-|:---|:---|
-| Framework | React 18, TypeScript (strict), Vite |
-| 3D Engine | Three.js r160+, React Three Fiber, Drei |
-| Shaders | Custom GLSL via `vite-plugin-glsl` |
-| Orbital Propagation | `satellite.js` (SGP4/SDP4) |
-| State | Zustand 4 with transient subscriptions |
-| Styling | TailwindCSS v4 |
-| Persistence | `idb-keyval` (IndexedDB TLE cache) |
+- React 18, TypeScript, Vite
+- Three.js, React Three Fiber, Drei
+- `satellite.js` for SGP4 propagation
+- Zustand for application state
+- Tailwind CSS and custom GLSL
+- `idb-keyval` for local persistence
+- Vitest and repository-specific asset/shader checks
 
----
+## Project layout
 
-## Project Structure
-
-```
+```text
+api/                    Vercel TLE function
+public/                 Runtime textures, ISS models, Draco decoder
+docs/                   Handoff and browser verification notes
+scripts/                Asset-budget and shader-contract checks
 src/
-├── core/
-│   ├── clock/        SimulationClock — single authoritative time source
-│   ├── runtime/      SimulationRuntime — application-owned scheduler
-│   └── orbital/      OrbitalEngine (SGP4 wrapper), CoordinateConversions
-├── rendering/
-│   ├── scene/        SceneRoot, EnvironmentLayer
-│   ├── earth/        EarthGroup, EarthSurface, AtmosphereShell, CloudLayer
-│   ├── iss/          ISSGroup, ISSModel, OrbitLine
-│   └── shaders/      GLSL vertex and fragment shaders
-├── stores/           Zustand stores (simulation, telemetry)
-├── hooks/            useSimulationClock, useOrbitalState
-├── ui/               HudOverlay, telemetry panels
-└── types/            OrbitalState, SimulationTime, coordinate types
+├── core/               Runtime, clock, propagation, telemetry, geo lookup
+├── interaction/        Camera state machine, tracking, sensitivity
+├── rendering/          Scene graph, Earth, ISS, interpolation, shaders
+├── stores/             UI-facing Zustand stores
+├── ui/                 Mission clock, gauges, ground track, orbit tape
+└── types/               Shared domain types
+tests/unit/              Core, API, camera, rendering, and shader tests
 ```
 
----
+## Development
 
-## Getting Started
-
-**Prerequisites:** Node.js 20+
+Requires Node.js 20 or later.
 
 ```bash
-git clone https://github.com/yourusername/orbital.git
+git clone https://github.com/slklnarnv/orbital.git
 cd orbital
-npm install
+npm ci
 npm run dev
 ```
 
 ```bash
-npm run build      # production build
-npm run typecheck  # tsc --noEmit
+npm run verify      # Assets, shaders, types, tests, and production build
+npm run test        # Vitest in watch mode
+npm run preview     # Serve the production bundle locally
 ```
 
----
+`npm run verify` is the release gate. It enforces a 5 MiB initial visual-asset budget, validates shader ramps, runs TypeScript and unit tests, and builds the production bundle.
 
-## Roadmap
-
-**Phase 3A — ISS Detail**
-- NASA glTF model with separated module meshes
-- Per-module raycasting, hover highlight, and selection
-- Spatial annotation system (3D billboard labels)
-- Full 4-level LOD pipeline with alpha crossfade transitions
-
-**Phase 3B — Cinematic Polish**
-- Precomputed atmospheric scattering (Bruneton model) for physically-based terminator coloring
-- Solar array sun-tracking rotation
-- Earth shadow interaction with ISS geometry
-
-**Phase 3C — Educational Systems**
-- Ground track display and passover prediction
-- ISS module metadata registry
-- Time controls: pause, accelerate, historical replay
-
----
-
-## License
-
-MIT — Developed by Arnav S.
+Vercel deploys `api/tle.ts` as the `/api/tle` function and applies immutable caching to fingerprinted build assets. On other static hosts, the browser can use its direct `wheretheiss.at` fallback plus cached or packaged TLE data.
