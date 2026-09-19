@@ -423,3 +423,26 @@ was 187°+199° with an 11°/frame spike), max view step 3.1°/frame, smooth lev
 arrival, locked handoff. 110 tests pass (CameraFlightPath tests rewritten
 around the simple invariants: captured-view start, station-exact end, clearance
 and standoff bounds, continuity, one-rotation travel).
+
+---
+
+## 13. Addendum — No Forced Arrival Horizon (2026-09-20)
+
+User: the sweep works, but there's still an unnecessary roll right at the end —
+"maybe because you have set some particular orientation it needs to achieve
+instead of keeping it as it is." Exactly right: FlightHorizon still blended the
+horizon onto world-up by arrival, so the camera rolled through the whole tail
+of a big sweep (112° of roll on the far-side test, concentrated after the
+pole pass).
+
+Fix: `FlightHorizon.update` gained a `worldUpBlend` weight. Locate passes 0 —
+pure transport, the horizon is kept exactly as the user had it, no forced
+orientation, no end roll, and the pole-pass flip event disappears entirely
+(world-up is never referenced). Reset View passes 1 — a north-up globe overview
+is meaningful there and its sweep is view-direction-only. Locate flights also
+drop the roll-settle duration extension (there is no roll debt to settle).
+
+Live far-side measurement after: total roll travel 9° (was 112°), max roll
+step 0.13°/frame (was 4.9°), view travel 165° ≈ one sweep, locked handoff.
+111 tests pass (added: pure-transport full-revolution through both poles —
+no flip, perpendicular up, exact rigid transport).

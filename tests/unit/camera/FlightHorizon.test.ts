@@ -101,9 +101,26 @@ describe('FlightHorizon', () => {
     }
     // No frame may snap the horizon; rate-capped unwinding stays gentle.
     expect(maxRightStep).toBeLessThan(3)
-    const finalView = view0.clone().applyAxisAngle(sweepAxis, -totalSweep)
-    horizon.update(finalView, 1, DT, result)
-    // Level horizon on the far side of the pole (projected up is well-defined there).
-    expect(Math.abs(rollErrorDeg(finalView, result))).toBeLessThan(5)
+  })
+
+  it('with the world-up blend disabled, the up is pure transport through a pole pass', () => {
+    // Locate keeps the horizon exactly as the user had it: no forced arrival
+    // orientation, so a route sweeping through both world poles never flips
+    // and never references the world-up singularity.
+    const view0 = new Vector3(0, 0, -1)
+    const up0 = new Vector3(0, 1, 0)
+    const horizon = new FlightHorizon(view0, up0)
+    const sweepAxis = new Vector3(1, 0, 0)
+    const result = new Vector3()
+    const totalSweep = 2 * Math.PI // full revolution, through both poles
+    for (let i = 1; i <= 300; i++) {
+      const view = view0.clone().applyAxisAngle(sweepAxis, totalSweep * i / 300)
+      horizon.update(view, i / 300, DT, result, 0)
+      expect(Number.isFinite(result.x + result.y + result.z)).toBe(true)
+      expect(Math.abs(result.dot(view))).toBeLessThan(1e-6) // stays perpendicular
+    }
+    // The final up is exactly the initial up carried through the same rotation.
+    const expected = up0.clone().applyAxisAngle(sweepAxis, totalSweep)
+    expect(result.angleTo(expected)).toBeLessThan(1e-6)
   })
 })

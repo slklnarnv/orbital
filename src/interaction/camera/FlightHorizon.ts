@@ -32,23 +32,39 @@ export class FlightHorizon {
   /**
    * Advance to the flight's current view direction and progress.
    * Returns the up vector to render with (unit, perpendicular to the view).
+   *
+   * `worldUpBlend` scales the world-up settle: 1 keeps the previous behavior
+   * (horizon blended onto world-up, used by Reset View), 0 disables it entirely
+   * (pure transport — Locate keeps the horizon exactly as the user had it, with
+   * no forced arrival orientation and therefore no end-of-flight roll; through
+   * a world-pole pass there is no flip event at all because world-up is never
+   * referenced).
    */
-  update(viewNow: THREE.Vector3, progress: number, deltaSeconds: number, result: THREE.Vector3): THREE.Vector3 {
+  update(
+    viewNow: THREE.Vector3,
+    progress: number,
+    deltaSeconds: number,
+    result: THREE.Vector3,
+    worldUpBlend = 1,
+  ): THREE.Vector3 {
     this.turn.setFromUnitVectors(this.view, viewNow)
     this.up.applyQuaternion(this.turn)
-    this.worldUpProjected.set(0, 1, 0).addScaledVector(viewNow, -viewNow.y)
-    const projectedLength = Math.sqrt(this.worldUpProjected.lengthSq())
-    if (projectedLength > 0.01) {
-      this.worldUpProjected.multiplyScalar(1 / projectedLength)
-      const roll = Math.atan2(
-        viewNow.dot(this.cross.crossVectors(this.up, this.worldUpProjected)),
-        this.up.dot(this.worldUpProjected),
-      )
-      const gain = smoothstep(0, 0.6, progress)
-        * smoothstep(0.05, 0.3, projectedLength)
-        * Math.min(1, deltaSeconds * 10)
-      const maxStep = 2.5 * deltaSeconds
-      this.up.applyAxisAngle(viewNow, THREE.MathUtils.clamp(roll * gain, -maxStep, maxStep))
+    if (worldUpBlend > 0) {
+      this.worldUpProjected.set(0, 1, 0).addScaledVector(viewNow, -viewNow.y)
+      const projectedLength = Math.sqrt(this.worldUpProjected.lengthSq())
+      if (projectedLength > 0.01) {
+        this.worldUpProjected.multiplyScalar(1 / projectedLength)
+        const roll = Math.atan2(
+          viewNow.dot(this.cross.crossVectors(this.up, this.worldUpProjected)),
+          this.up.dot(this.worldUpProjected),
+        )
+        const gain = smoothstep(0, 0.6, progress)
+          * smoothstep(0.05, 0.3, projectedLength)
+          * Math.min(1, deltaSeconds * 10)
+          * worldUpBlend
+        const maxStep = 2.5 * deltaSeconds
+        this.up.applyAxisAngle(viewNow, THREE.MathUtils.clamp(roll * gain, -maxStep, maxStep))
+      }
     }
     this.view.copy(viewNow)
     return result.copy(this.up)

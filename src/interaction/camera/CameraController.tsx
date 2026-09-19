@@ -321,13 +321,13 @@ export const CameraController = React.memo(function CameraController({
         )
         flightRef.current = {
           transition, path, elapsedMs: 0, horizon,
-          // Time scales with the visible work: the route's own estimate plus
-          // the horizon roll the flight must settle, so large turns and rolled
-          // departures never whip through their angular motion.
+          // Time scales with the visible work: the route's own estimate, plus
+          // the horizon roll to settle — only Reset settles onto world-up;
+          // Locate keeps the horizon as transported, so it has no roll debt.
           durationMs: (transition.toMode === 'FOLLOW'
             ? path.planLocate(_transCamPos, _currentISSPos)
             : transition.durationMs)
-            + initialRollErrorRad(view, up) * 250,
+            + (transition.toMode === 'ORBITAL' ? initialRollErrorRad(view, up) * 250 : 0),
         }
       } else {
         flightRef.current.elapsedMs += Math.min(delta, 0.05) * 1000
@@ -349,10 +349,14 @@ export const CameraController = React.memo(function CameraController({
         )
       }
       controls.update(0)
-      // Horizon: transport with the view, blending onto world-up as the flight
-      // progresses (see FlightHorizon — the old rate-limited chase spun the
-      // image 194° on an 86° flight).
-      flight.horizon.update(_flightView.subVectors(_flightTarget, _flightEye).normalize(), progress, delta, _flightUp)
+      // Horizon: transport with the view. Locate keeps the user's horizon as-is
+      // (no forced arrival orientation — forcing it was the end-of-flight roll);
+      // Reset still settles onto world-up for a north-up globe overview.
+      flight.horizon.update(
+        _flightView.subVectors(_flightTarget, _flightEye).normalize(),
+        progress, delta, _flightUp,
+        transition.toMode === 'ORBITAL' ? 1 : 0,
+      )
       _flightLook.lookAt(_flightEye, _flightTarget, _flightUp)
       camera.quaternion.setFromRotationMatrix(_flightLook)
       if (progress === 1) {

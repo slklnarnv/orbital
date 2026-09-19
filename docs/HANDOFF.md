@@ -118,15 +118,13 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   with the sweep angle (350 ms/rad) plus a distance term
   (min(2000, max(0, startRadius − 20,000) × 0.025) ms).
 - Flight horizon (`FlightHorizon`): the captured up is transported with the view
-  each frame and blended onto the world-up horizon by progress
-  (`error × smoothstep(0, 0.6, progress)`). Do NOT restore a rate-limited roll
-  chase: correcting the full roll error every frame while a big sweep kept
-  regenerating it spun the image 194° on an 86° flight (the "round and round,
-  dizzy" report). The blend starts exactly at the captured orientation (no snap,
-  rolled free-orbit departures included), stays near level mid-flight, and lands
-  exactly level at arrival. Corrections freeze near the world-up singularity
-  (projected-length weight) and are rate-capped (2.5 rad/s), because routes
-  passing over the scene's poles swing the projected horizon wildly.
+  each frame. Locate passes `worldUpBlend = 0` — the horizon is kept exactly as
+  the user had it, with NO forced arrival orientation (forcing world-up rolled
+  the camera through the whole tail of big sweeps, up to a half-flip on
+  pole-passing routes — the "unnecessary rotation right at the end" report; a
+  sphere's limb is rotationally symmetric, so the transported roll only rotates
+  continents, never breaks the horizon). Reset View still passes
+  `worldUpBlend = 1` for a north-up globe overview.
 - Long planetary dives get extra time: `planLocate` adds
   `min(2000, max(0, startRadius − 20,000) × 0.025)` ms, so a 100,000 km
   approach takes ~4.5 s instead of compressing into a blink.
