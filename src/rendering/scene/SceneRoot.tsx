@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useRef, Component, type ReactNode } from 'react'
+import React, { Suspense, useCallback, useMemo, useRef, Component, type ReactNode } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -9,6 +9,8 @@ import { OrbitLine } from '../iss/OrbitLine'
 import { CameraController } from '@/interaction/camera/CameraController'
 import { cameraControlsRef } from './cameraControlsRef'
 import { useCameraStore } from '@/stores/cameraStore'
+import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
+import CameraControlsImpl from 'camera-controls'
 
 /**
  * F-02 FIX: Error boundary that catches asset-load failures inside the 3D scene.
@@ -44,25 +46,29 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const mode = useCameraStore((state) => state.mode)
   const transition = useCameraStore((state) => state.transition)
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
+  const mouseButtons = useMemo(() => ({
+    left: isTransitioning ? CameraControlsImpl.ACTION.ROTATE : CameraControlsImpl.ACTION.NONE,
+    middle: CameraControlsImpl.ACTION.DOLLY,
+    right: CameraControlsImpl.ACTION.TRUCK,
+    wheel: CameraControlsImpl.ACTION.DOLLY,
+  }), [isTransitioning])
+  const touches = useMemo(() => ({
+    one: isTransitioning ? CameraControlsImpl.ACTION.TOUCH_ROTATE : CameraControlsImpl.ACTION.NONE,
+    two: CameraControlsImpl.ACTION.TOUCH_DOLLY_TRUCK,
+    three: CameraControlsImpl.ACTION.TOUCH_TRUCK,
+  }), [isTransitioning])
 
-  // Use the transition's destination mode if currently flying, otherwise use active mode.
-  // This drops the minDistance constraint to 5 km immediately at transition start,
-  // preventing CameraControls from clutching/bouncing camera coordinates during flight.
+  // Keep Locate's existing flight limits. Earth clearance during manual
+  // navigation is owned by CameraNavigationConstraint (the eye's clearance
+  // sphere), not by a pivot-distance clamp: clamping the pivot distance to
+  // 6,500 km would teleport the eye during the Free→Earth handoff, where the
+  // pivot legitimately sits far from Earth's center while the eye grazes the
+  // clearance sphere. Manual ISS navigation shares one model-clearance limit.
   const activeTargetMode = (isTransitioning && transition) ? transition.toMode : mode
-
-  // Dynamic minDistance:
-  // - PLANETARY/ORBITAL (Earth-focused): 6,500 km prevents camera clipping inside Earth sphere.
-  // - FREE: 5 km — CAM-1 FIX: FREE was previously grouped with Earth modes (6,500 km), which
-  //   ejected the camera to 6,500 km the instant the user panned away from the ISS in close-up.
-  //   FREE must allow close proximity so panning from INSPECT/FOLLOW stays at the same distance.
-  // - INSPECT: 60 km — N-3 FIX: The ISS is rendered ~109 km wide (1000× real size for visibility).
-  //   The model's half-span is ~55 km, so 5 km places the camera inside the solar arrays.
-  //   60 km keeps the camera just outside the full model extent.
-  // - FOLLOW/APPROACH: 5 km (well outside model at those ranges).
-  const minDistance =
-    (activeTargetMode === 'PLANETARY' || activeTargetMode === 'ORBITAL') ? 6500
-      : activeTargetMode === 'INSPECT' ? 60
-        : 5
+  const minDistance = isTransitioning ? 5
+    : activeTargetMode === 'FOLLOW' || activeTargetMode === 'INSPECT' || activeTargetMode === 'APPROACH'
+      ? CAMERA_ZOOM_RANGES.INSPECT.minDistance
+      : CAMERA_ZOOM_RANGES.FREE.minDistance
 
   // Store-2 FIX: Hoist ref callback with useCallback so it is not recreated every render.
   // An inline arrow function causes React to call ref(null) then ref(instance) on every
@@ -82,6 +88,9 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
       makeDefault={true}
       minDistance={minDistance} // Bound to reactive dynamic distance constraints
       maxDistance={100000}       // Cap maximum zoom-out distance (matches CAMERA_ZOOM_RANGES)
+      truckSpeed={1}
+      mouseButtons={mouseButtons}
+      touches={touches}
     />
   )
 })

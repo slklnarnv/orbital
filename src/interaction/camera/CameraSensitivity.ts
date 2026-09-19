@@ -1,4 +1,3 @@
-import type { CameraMode } from '@/types/camera'
 import { EARTH_RADIUS_KM } from '@/utils/constants'
 
 export const EARTH_ROTATION_SENSITIVITY = {
@@ -11,9 +10,10 @@ export const EARTH_ROTATION_SENSITIVITY = {
   updateEpsilon: 0.001,
 } as const
 
-export interface RotationSpeedControls {
+export interface NavigationSpeedControls {
   azimuthRotateSpeed: number
   polarRotateSpeed: number
+  dollySpeed: number
 }
 
 function smoothstep01(value: number): number {
@@ -88,31 +88,31 @@ export function getEarthRotationSensitivity(distanceToEarthCenterKm: number): nu
   return EARTH_ROTATION_SENSITIVITY.farMultiplier
 }
 
-export function isEarthFocusedMode(mode: CameraMode): boolean {
-  return mode === 'PLANETARY' || mode === 'ORBITAL'
-}
-
-/**
- * Applies transient input configuration directly to camera-controls.
- * Returns true only when a property write was required.
- */
-export function applyRotationSensitivity(
-  controls: RotationSpeedControls,
-  mode: CameraMode,
+/** Input response follows the pivot geometry, not a discontinuous mode label. */
+export function applyNavigationSensitivity(
+  controls: NavigationSpeedControls,
   distanceToEarthCenterKm: number,
-): boolean {
-  const target = isEarthFocusedMode(mode)
-    ? getEarthRotationSensitivity(distanceToEarthCenterKm)
-    : EARTH_ROTATION_SENSITIVITY.farMultiplier
+  distanceToTargetKm: number,
+  targetDistanceToEarthKm: number,
+  deltaSeconds: number,
+): void {
+  const earthWeight = 1 - smoothstep01(targetDistanceToEarthKm / EARTH_RADIUS_KM)
+  const localScale = smoothstep01((distanceToTargetKm - 60) / (3000 - 60))
+  const localRotation = 0.35 + 0.65 * localScale
+  const rotation = localRotation + (getEarthRotationSensitivity(distanceToEarthCenterKm) - localRotation) * earthWeight
+  const earthDolly = 0.08 + 0.92 * smoothstep01((distanceToEarthCenterKm - 6500) / 4000)
+  const localDolly = 0.45 + 0.55 * localScale
+  const dolly = localDolly + (earthDolly - localDolly) * earthWeight
+  const blend = 1 - Math.exp(-12 * Math.max(0, deltaSeconds))
+  const epsilon = EARTH_ROTATION_SENSITIVITY.updateEpsilon
 
-  if (
-    Math.abs(controls.azimuthRotateSpeed - target) <= EARTH_ROTATION_SENSITIVITY.updateEpsilon
-    && Math.abs(controls.polarRotateSpeed - target) <= EARTH_ROTATION_SENSITIVITY.updateEpsilon
-  ) {
-    return false
+  if (Math.abs(controls.azimuthRotateSpeed - rotation) > epsilon) {
+    controls.azimuthRotateSpeed += (rotation - controls.azimuthRotateSpeed) * blend
   }
-
-  controls.azimuthRotateSpeed = target
-  controls.polarRotateSpeed = target
-  return true
+  if (Math.abs(controls.polarRotateSpeed - rotation) > epsilon) {
+    controls.polarRotateSpeed += (rotation - controls.polarRotateSpeed) * blend
+  }
+  if (Math.abs(controls.dollySpeed - dolly) > epsilon) {
+    controls.dollySpeed += (dolly - controls.dollySpeed) * blend
+  }
 }

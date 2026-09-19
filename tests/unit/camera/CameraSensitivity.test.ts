@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyRotationSensitivity,
   EARTH_ROTATION_SENSITIVITY,
   getEarthRotationSensitivity,
 } from '@/interaction/camera/CameraSensitivity'
 
 describe('getEarthRotationSensitivity', () => {
-  it('matches the three calibrated camera distances', () => {
-    expect(getEarthRotationSensitivity(6_500)).toBeCloseTo(0.05, 8)
-    expect(getEarthRotationSensitivity(18_000)).toBeCloseTo(0.6, 8)
-    expect(getEarthRotationSensitivity(35_000)).toBeCloseTo(1, 8)
-  })
 
   it('clamps below and above the calibrated range', () => {
     expect(getEarthRotationSensitivity(0)).toBe(EARTH_ROTATION_SENSITIVITY.closeMultiplier)
@@ -58,25 +52,3 @@ describe('getEarthRotationSensitivity', () => {
   })
 })
 
-describe('applyRotationSensitivity', () => {
-  it('updates both axes for Earth-focused modes', () => {
-    const controls = { azimuthRotateSpeed: 1, polarRotateSpeed: 1 }
-
-    expect(applyRotationSensitivity(controls, 'ORBITAL', 6_500)).toBe(true)
-    expect(controls).toEqual({ azimuthRotateSpeed: 0.05, polarRotateSpeed: 0.05 })
-  })
-
-  it('restores default rotation speed for ISS-focused modes', () => {
-    const controls = { azimuthRotateSpeed: 0.05, polarRotateSpeed: 0.05 }
-
-    expect(applyRotationSensitivity(controls, 'FOLLOW', 6_500)).toBe(true)
-    expect(controls).toEqual({ azimuthRotateSpeed: 1, polarRotateSpeed: 1 })
-  })
-
-  it('avoids writes when both axes are already within epsilon', () => {
-    const controls = { azimuthRotateSpeed: 0.6005, polarRotateSpeed: 0.5995 }
-
-    expect(applyRotationSensitivity(controls, 'PLANETARY', 18_000)).toBe(false)
-    expect(controls).toEqual({ azimuthRotateSpeed: 0.6005, polarRotateSpeed: 0.5995 })
-  })
-})

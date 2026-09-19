@@ -95,8 +95,116 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   `controls.update(0)` after moving the target (see the tracking branch of
   `CameraController` — this was the close-range jitter fix, verified 0 px over
   240 frames at 60 km).
-- `controls.moveTo(x, y, z, false)` moves ONLY the target, never the eye
-  (the old code comment claiming lockstep is wrong).
+- `controls.moveTo(x, y, z, false)` snaps the target immediately. It is appropriate
+  for tracking, but must not run during a cinematic flight. Overview/local Locate
+  retains the two-second `lerpLookAt` path; Reset View and close-Earth departures use
+  `CameraFlightPath`, sampled by the same frame-owned transition lifecycle.
+- Locate requests detail before departure. `loadingStore.issDetailStatus` covers
+  downloading, GPU preparation, ready, and failure; `ISSModel` uploads textures over
+  separate frames, compiles against scene lights, and primes buffers with a zero-area
+  scissor. Keep preparation out of the flight and restore shared renderer state.
+- Locate is ONE simple sweep (`CameraFlightPath`): the eye's direction rotates
+  about a single fixed axis (uniform angular rate — a normalized lerp runs ~5×
+  faster mid-path on wide sweeps, measured as an 11°/frame view spike) from the
+  departure radial to the station standoff while the altitude eases down,
+  clamped above the clearance sphere; the look target slides from the captured
+  pivot to the station, completing its pan by ~70% progress. The view starts
+  exactly where the user was looking, pans once across the globe, and ends
+  centered on the station — one rotation, dynamic arrival framing (the standoff
+  sits on the sweep's own approach side), no per-frame shortest-arc decisions.
+  Everything else (stateful aims, fixed arrival bearings, chord tests, bulges,
+  rate-capped tracking) was tried and removed — the simple sweep replaced it
+  after each variant produced its own jank. Keep it simple. Flight time scales
+  with the sweep angle (350 ms/rad) plus a distance term
+  (min(2000, max(0, startRadius − 20,000) × 0.025) ms).
+- Flight horizon (`FlightHorizon`): the captured up is transported with the view
+  each frame and blended onto the world-up horizon by progress
+  (`error × smoothstep(0, 0.6, progress)`). Do NOT restore a rate-limited roll
+  chase: correcting the full roll error every frame while a big sweep kept
+  regenerating it spun the image 194° on an 86° flight (the "round and round,
+  dizzy" report). The blend starts exactly at the captured orientation (no snap,
+  rolled free-orbit departures included), stays near level mid-flight, and lands
+  exactly level at arrival. Corrections freeze near the world-up singularity
+  (projected-length weight) and are rate-capped (2.5 rad/s), because routes
+  passing over the scene's poles swing the projected horizon wildly.
+- Long planetary dives get extra time: `planLocate` adds
+  `min(2000, max(0, startRadius − 20,000) × 0.025)` ms, so a 100,000 km
+  approach takes ~4.5 s instead of compressing into a blink.
+- Every takeover of the camera runs `syncRenderedPoseToControls`
+  (CameraController): flight completion AND flight cancellation (drag, wheel,
+  touch). Flights drive camera-controls' internal state with a world-up frame;
+  without the sync, the first internal update after takeover snaps residual roll
+  (measured 73° on cancellation before the fix). **The sync's order is load-bearing:
+  read the pose FIRST, then adopt the rendered up.** `updateCameraUp()` re-interprets
+  the stored spherical offset through the new up-space, so reading the eye after it
+  re-projects the pose ~35° away — a huge kick at every completion (this shipped
+  once; do not reorder). Wheel gestures never emit `controlstart`, so a separate
+  canvas `wheel` listener cancels flights too.
+- Locate and Reset View are always clickable, including mid-flight and while
+  tracking: the store triggers overwrite the active transition, and the flight
+  branch re-captures from the rendered pose (a new transition object is the
+  re-capture signal). Locate while tracking re-flies to the standoff — a no-op
+  only when the camera already sits at the canonical framing.
+- Reset View visibility is deviation-based, not mode-based: the controller keeps a
+  home pose (initial camera, replaced by each completed Reset) and writes
+  `cameraStore.isHomeView` when the pose deviates (1 km position tolerance; level
+  horizon judged on the camera's right vector, since world-up itself tilts with
+  latitude when looking at Earth's center; plus an Earth-fits-the-viewport
+  condition via `CameraStateMachine.earthFitDistanceForViewport`, so a desktop
+  home pose resized to portrait re-offers Reset). Any orbit, zoom, or pan —
+  including in Orbital/Planetary — shows the button; a completed Reset hides it
+  again.
+- Dragging cancels a pending or active camera flight. A detail-load failure allows a
+  low-poly flight, with retries only on new Locate intent or a later manual approach.
+- Manual navigation is constrained by `CameraNavigationConstraint` after camera
+  tracking and before rendering. It protects a 6,500 km Earth-center radius, sweeps
+  fast noncentral movements, and slides at contact. Free pans shift the corrected
+  eye and pivot together; ISS orbit collisions preserve the tracking pivot.
+  Orbit-like motion (fixed pivot, preserved offset length) is judged by sampling
+  the actual arc instead of the straight chord — safe grazing orbits are not
+  corrected. Earth clearance is owned entirely by this constraint: SceneRoot
+  keeps `minDistance` at 5 km outside ISS-tracking modes, because clamping the
+  pivot distance to 6,500 km teleported the eye during the Free→Earth handoff.
+  The handoff's pivot recenter is a fixed-duration (1.2 s) easeInOutCubic glide,
+  not an exponential decay — the decay moved fastest on its first frame.
+- `FreeOrbitControls.rotateOrbit` snapshots and restores camera-controls'
+  `_isUserControlling{Rotate,Dolly,Truck}` flags around its `setLookAt` calls:
+  `setLookAt` clears them, which silently switched an outstanding wheel dolly or
+  right-drag truck to programmatic damping mid-gesture.
+- Timed flights bypass the manual constraint, including the final frame. Reset
+  stays on the current radial bearing; close-Earth Locate follows a safe spherical
+  route. Do not apply a second camera correction after a flight's sampled pose.
+- Modes classify rendered distances, not queued endpoints. Planetary has a
+  35,000/33,000 km entry/exit band; all manual ISS modes share 60 km model clearance.
+- Rotation and dolly response follow pivot geometry continuously, so entering Free
+  does not reset sensitivity. Right-drag/touch pan releases tracking on actual motion;
+  orbit and centered pinch retain lock. The zoom meter uses the actual pivot distance.
+- Reset View requests a 2.2-second Earth transition through the camera store. It
+  eases to the 25,000 km overview (farther for portrait framing), without model/TLE
+  readiness gates. Automatic zoom-out handoffs still preserve pending user motion.
+- Timed flights bypass the manual constraint, including the final frame. Reset
+  stays on the current radial bearing; close-Earth Locate follows a safe spherical
+  route. Do not apply a second camera correction after a flight's sampled pose.
+- Curved Locate is one continuous gesture: the eye sweeps a great-circle route
+  at monotonic radius (departure radius → the chase standoff, never a cruise
+  climb), and the view makes a single eased turn onto the station's live
+  bearing (`CameraFlightPath.sampleLocate`). The view aims through the surface
+  at where the station will crest, so the ground fills the frame the whole way
+  and the station rises into an already centered view. Do not reintroduce
+  horizon-level "cruise" looking or two-stage view turns — they read as a
+  zoom-out followed by a zoom-in. The arrival standoff is captured at planning
+  time and applied rigidly to the live station.
+- Modes classify rendered distances, not queued endpoints. Planetary has a
+  35,000/33,000 km entry/exit band; all manual ISS modes share 60 km model clearance.
+- Leaving a FREE pan on zoom-out is decided by
+  `CameraStateMachine.isFreeZoomOut`: release at `max(220 km, 1.25 × the pivot
+  distance when the pan began)`. The floor matches INSPECT's own exit band, so
+  escaping a close inspect pan takes about the same gesture as leaving INSPECT
+  (~1.5× at a 150 km orbit) instead of demanding a 3,300 km pivot distance.
+  Zooming in never releases FREE.
+- Reset and flight orientation transports the horizon through polar views and
+  settles toward world-up before handoff. This avoids the 180° roll flip of a
+  fixed-up lookAt.
 - `controls.smoothTime` (0.25) and `minDistance` clamps were ruled out as
   jitter sources by experiment — don't chase them again.
 - DEV-only hook: `window.__orbitalControls` (set in `AppCameraControls`).

@@ -1,11 +1,11 @@
 // ─── Camera Modes ─────────────────────────────────────────────────────────────
 export type CameraMode =
-  | 'PLANETARY'  // Earth fills ~40% of screen, ISS is a dot on orbit path
-  | 'ORBITAL'    // Camera 10,000-20,000 km from Earth center, ISS visible with T-shape
-  | 'APPROACH'   // Camera 2,000-5,000 km, alt readout prominent, transitioning to follow
-  | 'FOLLOW'     // Camera locked at ISS, tracking its moving position smoothly
-  | 'INSPECT'    // Camera 5-50 km, full model detail visible, free orbit around ISS
-  | 'FREE'       // Manual control, no automated lock or constraints
+  | 'PLANETARY'  // Earth-focused overview; enters at 35,000 km, exits below 33,000 km
+  | 'ORBITAL'    // Earth-focused navigation down to the 6,500 km clearance limit
+  | 'APPROACH'   // ISS-focused navigation outside the follow range
+  | 'FOLLOW'     // ISS tracking, approximately 200–3,000 km from the station
+  | 'INSPECT'    // ISS tracking close-up, with 60 km model clearance
+  | 'FREE'       // User-panned pivot; no auto-lock, but Earth collision protection
 
 // ─── Zoom Level & Categorization ──────────────────────────────────────────────
 /** Normalized zoom depth: 0 = furthest (planetary), 1 = closest (inspect) */
@@ -26,14 +26,16 @@ export interface CameraZoomRanges {
 }
 
 // ─── Camera Transition State ──────────────────────────────────────────────────
-export interface CameraTransitionState {
+export type CameraTransitionState = {
   fromMode: CameraMode;
-  toMode: CameraMode;
   /** Diagnostic wall-clock timestamp when the transition was initiated (Date.now()) */
   startTime: number;
   durationMs: number;
   isCompleted: boolean;
-}
+} & (
+  | { toMode: 'FOLLOW' }
+  | { toMode: 'ORBITAL'; overviewDistanceKm: number }
+)
 
 // ─── Floating-Origin Interface Scaffolding ────────────────────────────────────
 /**

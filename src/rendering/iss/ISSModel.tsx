@@ -28,8 +28,8 @@
 //
 // Memory & Performance Guarantees:
 //   - The 40 KB far-range model is preloaded for first paint.
-//   - The 6.5 MB detailed model is requested only after the camera enters near range.
-//   - React state changes only at LOD boundaries; per-frame effects still mutate refs.
+//   - Detail is requested on Locate intent or near-range entry, never at startup.
+//   - GPU preparation finishes before Locate moves the camera.
 
 import React, {
   Component,
@@ -41,11 +41,13 @@ import React, {
   useState,
   type ReactNode,
 } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { useLoadingStore } from '@/stores/loadingStore'
+import { useCameraStore } from '@/stores/cameraStore'
 
 // ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
 // Instead of the gstatic.com CDN (blocked in offline/private-network environments),
@@ -57,7 +59,7 @@ const DETAILED_MODEL_URL = '/models/international_space_station.glb'
 const FALLBACK_MODEL_URL = '/models/International Space Station (ISS) (A).glb'
 
 // Only the tiny far-range model is part of startup. The detailed model is loaded
-// on the first transition into near range and remains cached by useGLTF thereafter.
+// on Locate intent or the first transition into near range and remains cached thereafter.
 useGLTF.preload(FALLBACK_MODEL_URL)
 
 // ─── Normalization & Pivot Offsets Constants ─────────────────────────────────
@@ -93,7 +95,6 @@ const BEACON_ACTIVATE_KM = 12000
 const _sunDirVec = new THREE.Vector3()
 const _inspectionLightPos = new THREE.Vector3()
 
-type DetailStatus = 'idle' | 'loading' | 'ready' | 'failed'
 
 interface DetailModelErrorBoundaryProps {
   children: ReactNode
@@ -127,22 +128,81 @@ class DetailModelErrorBoundary extends Component<
 interface DetailedISSModelProps {
   visible: boolean
   onReady: () => void
+  onError: () => void
 }
 
-function DetailedISSModel({ visible, onReady }: DetailedISSModelProps): JSX.Element {
+function DetailedISSModel({ visible, onReady, onError }: DetailedISSModelProps): JSX.Element {
+  const { gl, camera, scene } = useThree()
+  const groupRef = useRef<THREE.Group>(null)
   const detailedGltf = useGLTF(DETAILED_MODEL_URL)
   const detailedScene = useMemo(() => detailedGltf.scene.clone(), [detailedGltf.scene])
 
   useEffect(() => {
-    onReady()
-  }, [onReady])
+    let cancelled = false
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    async function prepare(): Promise<void> {
+      useLoadingStore.setState({ issDetailStatus: 'preparing' })
+      const textures = new Set<THREE.Texture>()
+      const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
+      detailedScene.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return
+        meshes.push({ mesh: object, frustumCulled: object.frustumCulled })
+        const materials = Array.isArray(object.material) ? object.material : [object.material]
+        for (const material of materials) {
+          for (const value of Object.values(material)) {
+            if (value instanceof THREE.Texture) textures.add(value)
+          }
+        }
+      })
+
+      // Spread uploads across frames while the camera stays put. A resolved GLTF
+      // alone is not ready: lazy texture uploads and shader linking otherwise hitch
+      // the first close-up frame. Compile against the actual scene's lighting.
+      for (const texture of textures) {
+        await nextFrame()
+        if (cancelled) return
+        gl.initTexture(texture)
+      }
+      await nextFrame()
+      if (cancelled) return
+      await gl.compileAsync(detailedScene, camera, scene)
+      await nextFrame()
+      if (cancelled || !groupRef.current) return
+
+      // A zero-area scissor uploads vertex buffers without writing any pixels.
+      // Unlike an offscreen target, it uses the exact on-screen shader variant.
+      const group = groupRef.current
+      const wasVisible = group.visible
+      const previousScissor = gl.getScissor(new THREE.Vector4())
+      const previousScissorTest = gl.getScissorTest()
+      try {
+        group.visible = true
+        for (const { mesh } of meshes) mesh.frustumCulled = false
+        gl.setScissor(0, 0, 0, 0)
+        gl.setScissorTest(true)
+        gl.render(scene, camera)
+      } finally {
+        gl.setScissor(previousScissor)
+        gl.setScissorTest(previousScissorTest)
+        group.visible = wasVisible
+        for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
+      }
+      await nextFrame()
+      if (!cancelled) onReady()
+    }
+
+    void prepare().catch((error: unknown) => {
+      if (cancelled) return
+      console.warn('[ISSModel] Detailed model preparation failed.', error)
+      onError()
+    })
+    return () => { cancelled = true }
+  }, [detailedScene, gl, camera, scene, onReady, onError])
 
   return (
-    <group scale={NORMALIZATION_SCALE_DRACO} visible={visible}>
-      <primitive
-        object={detailedScene}
-        position={[0, PIVOT_OFFSET_DRACO_Y, 0]}
-      />
+    <group ref={groupRef} scale={NORMALIZATION_SCALE_DRACO} visible={visible}>
+      <primitive object={detailedScene} position={[0, PIVOT_OFFSET_DRACO_Y, 0]} />
     </group>
   )
 }
@@ -162,10 +222,13 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
 
   // Tracking refs to maintain stable hysteresis states across frames
   const isNearRef = useRef(false)
-  const detailStatusRef = useRef<DetailStatus>('idle')
   const worldPos = useRef(new THREE.Vector3())
   const [isNear, setIsNear] = useState(false)
-  const [detailStatus, setDetailStatus] = useState<DetailStatus>('idle')
+  const detailStatus = useLoadingStore((state) => state.issDetailStatus)
+
+  useEffect(() => () => {
+    useLoadingStore.setState({ issDetailStatus: 'idle' })
+  }, [])
 
   // The tiny schematic model is always available while detail is deferred/loading/failed.
   const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
@@ -180,16 +243,14 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // Drei's useGLTF manages GLTF asset lifecycle; external disposal is incorrect.
 
   const handleDetailReady = useCallback(() => {
-    detailStatusRef.current = 'ready'
-    setDetailStatus('ready')
+    useLoadingStore.setState({ issDetailStatus: 'ready' })
   }, [])
 
   const handleDetailError = useCallback(() => {
     // Drei caches rejected loader promises as well as successful assets. Clear the
     // failed entry so leaving and re-entering near range can retry a transient error.
     useGLTF.clear(DETAILED_MODEL_URL)
-    detailStatusRef.current = 'failed'
-    setDetailStatus('failed')
+    useLoadingStore.setState({ issDetailStatus: 'failed' })
   }, [])
 
   useFrame((state) => {
@@ -215,17 +276,10 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       isNearRef.current = nextIsNear
       setIsNear(nextIsNear)
 
-      if (
-        nextIsNear
-        && (detailStatusRef.current === 'idle' || detailStatusRef.current === 'failed')
-      ) {
-        detailStatusRef.current = 'loading'
-        setDetailStatus('loading')
-      } else if (!nextIsNear && detailStatusRef.current === 'failed') {
-        // Require a real far→near transition before retrying; this prevents a failed
-        // request from becoming a per-frame retry loop while preserving recovery.
-        detailStatusRef.current = 'idle'
-        setDetailStatus('idle')
+      // A failed Locate intentionally flies to the fallback; don't start another
+      // load halfway through that flight when it crosses the near-range boundary.
+      if (nextIsNear && !useCameraStore.getState().isTransitioning) {
+        useLoadingStore.getState().requestISSDetail()
       }
     }
 
@@ -324,12 +378,13 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   return (
     <group ref={groupRef}>
       {/* ─── Level of Detail 0: Near-Range Premium Draco Model ─── */}
-      {(detailStatus === 'loading' || detailStatus === 'ready') && (
+      {(detailStatus === 'loading' || detailStatus === 'preparing' || detailStatus === 'ready') && (
         <DetailModelErrorBoundary onError={handleDetailError}>
           <Suspense fallback={null}>
             <DetailedISSModel
               visible={isNear && detailStatus === 'ready'}
               onReady={handleDetailReady}
+              onError={handleDetailError}
             />
           </Suspense>
         </DetailModelErrorBoundary>

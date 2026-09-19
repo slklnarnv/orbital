@@ -61,7 +61,16 @@ These enrichment requests run directly from the browser, so the current ground c
 
 Orbital is a visualization, not a navigation or conjunction-analysis tool. Positions are SGP4 estimates derived from public TLEs rather than spacecraft telemetry, and accuracy degrades as an element set ages.
 
-The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Its detailed model is loaded only at close range; the visualization propagates position, not spacecraft attitude.
+The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Its detailed model loads on Locate hover/focus, a Locate request, or close-range entry; it is not part of the initial download. Locate waits for model decoding, GPU uploads, and shader preparation before departure. Overview and local ISS flights take two seconds; close Earth views farther from the station use a longer pullback and flyover before approaching the moving ISS. Failed detail loads retain the low-poly model and can be retried with Locate. The visualization propagates position, not spacecraft attitude.
+
+## Camera controls
+
+- Drag to orbit; scroll or pinch to zoom. Response becomes finer near Earth and in ISS close-ups.
+- Right-drag or two-finger pan moves the pivot and releases tracking into Free mode. Ordinary orbiting and centered pinches keep the ISS locked. Zooming well out of a Free pan hands navigation back to Earth view — after about the same gesture that would leave Inspect (~1.5× at close range), never a huge zoom demand.
+- **Reset View** appears as soon as the view leaves its home framing — any orbit, zoom, or pan, in any mode — and uses a 2.2-second eased transition to a 25,000 km Earth overview, moving farther out on narrow screens so the globe and orbit fit. It keeps the current viewing side, turns smoothly even from an outward-facing Free view, does not wait for ISS detail loading, and hides again once it arrives.
+- **Locate ISS** flies to the station only from untracked views; while tracking already keeps the station centered, pressing it does nothing. Both routes turn the view onto the station and approach at the same time — once the station is centered it stays pinned — and flights hand their orientation back to manual navigation without a roll snap.
+- Zoom labels describe the current view, with hysteresis at their boundaries. All manual ISS modes share a 60 km model-clearance limit.
+- Manual navigation stays outside a 6,500 km Earth-center radius. Collisions slide along that boundary; blocked pans keep the camera and pivot together. Rotation orbits over both poles Google-Earth style, without gimbal stops. Close-Earth Locate arcs around the globe at low altitude while the view sweeps across the surface onto the station, so the ground fills the frame until the station crests into view — no pullback detour.
 
 ## Stack
 

@@ -228,6 +228,24 @@ body,
   gap: 5px;
 }
 
+.hud-btn-earth {
+  appearance: none;
+  border: 0;
+  border-bottom: 1px solid var(--hud-line);
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.hud-btn-earth:hover:not(:disabled) {
+  color: var(--hud-hi);
+}
+
+.hud-btn-earth:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ─── Gauge cluster (bare numerals over a tick-arc) ────────────────────── */
 
 .hud-gauge {

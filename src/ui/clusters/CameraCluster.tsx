@@ -1,4 +1,8 @@
 import { useCameraStore } from '@/stores/cameraStore'
+import { useLoadingStore } from '@/stores/loadingStore'
+import { CameraStateMachine } from '@/interaction/camera/CameraStateMachine'
+import type { PerspectiveCamera } from 'three'
+import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 
 /** "PLANETARY" -> "Planetary" — enum values spoken in the console's voice. */
 function sentenceCase(value: string): string {
@@ -6,7 +10,7 @@ function sentenceCase(value: string): string {
 }
 
 /**
- * CameraCluster — the frame's single control, parked in the top-right with
+ * CameraCluster — navigation controls, parked in the top-right with
  * the systems (controls top, data bottom). The reticle flies the camera to
  * the station; mode, tracking state, and the zoom hairline read beside it.
  */
@@ -15,6 +19,27 @@ export function CameraCluster(): JSX.Element {
   const isTracking = useCameraStore((state) => state.isTracking)
   const zoomProgress = useCameraStore((state) => state.zoomProgress)
   const triggerLocateISS = useCameraStore((state) => state.triggerLocateISS)
+  const isTransitioning = useCameraStore((state) => state.isTransitioning)
+  const triggerResetView = useCameraStore((state) => state.triggerResetView)
+  const isResetting = useCameraStore((state) => state.isTransitioning && state.transition?.toMode === 'ORBITAL')
+  // Reset View measures the live camera against its home framing (initial or
+  // post-Reset overview): any orbit, zoom, or pan away makes it appear, and a
+  // completed Reset hides it again. Mode labels alone would hide it in
+  // Orbital/Planetary even after the user has moved.
+  const isHomeView = useCameraStore((state) => state.isHomeView)
+  const detailStatus = useLoadingStore((state) => state.issDetailStatus)
+  const requestISSDetail = useLoadingStore((state) => state.requestISSDetail)
+  const isPreparing = isTransitioning && !isResetting && detailStatus !== 'ready' && detailStatus !== 'failed'
+  const status = isPreparing
+    ? (detailStatus === 'preparing' ? 'Preparing ISS' : 'Loading ISS')
+    : isResetting ? 'Resetting view' : isTransitioning ? 'Locating ISS' : sentenceCase(cameraMode)
+
+  const resetView = () => {
+    const controls = cameraControlsRef.current
+    if (!controls) return
+    const camera = controls.camera as PerspectiveCamera
+    triggerResetView(CameraStateMachine.overviewDistanceForViewport(camera, controls.maxDistance))
+  }
 
   return (
     <div className="hud-camera hud-text">
@@ -22,6 +47,9 @@ export function CameraCluster(): JSX.Element {
         id="btn-locate-iss"
         type="button"
         onClick={() => triggerLocateISS()}
+        onPointerEnter={requestISSDetail}
+        onFocus={requestISSDetail}
+        aria-busy={isTransitioning}
         aria-label="Locate ISS — fly the camera to the station"
         className="hud-btn-locate"
       >
@@ -53,9 +81,9 @@ export function CameraCluster(): JSX.Element {
       </button>
 
       <div className="hud-camera__state">
-        <span className="hud-label">
-          <span style={{ color: 'var(--hud-hi)' }}>{sentenceCase(cameraMode)}</span>
-          <span style={{ color: 'var(--hud-lo)' }}>{`  ·  ${isTracking ? 'Locked' : 'Free'}`}</span>
+        <span className="hud-label" role="status">
+          <span style={{ color: 'var(--hud-hi)' }}>{status}</span>
+          <span style={{ color: 'var(--hud-lo)' }}>{`  ·  ${detailStatus === 'failed' ? 'Low detail' : isTracking ? 'Locked' : 'Free'}`}</span>
         </span>
         <div
           className="hud-zoommeter"
@@ -67,6 +95,17 @@ export function CameraCluster(): JSX.Element {
         >
           <div className="hud-zoommeter__fill" style={{ width: `${zoomProgress * 100}%` }} />
         </div>
+        {!isHomeView && (
+          <button
+            id="btn-earth-view"
+            type="button"
+            className="hud-label hud-btn-earth"
+            aria-label="Reset View"
+            onClick={resetView}
+          >
+            Reset View
+          </button>
+        )}
       </div>
     </div>
   )
