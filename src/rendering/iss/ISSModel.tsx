@@ -225,6 +225,10 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const worldPos = useRef(new THREE.Vector3())
   const [isNear, setIsNear] = useState(false)
   const detailStatus = useLoadingStore((state) => state.issDetailStatus)
+  // During a Locate flight the detail model is shown from departure, not at
+  // the 2,800 km LOD boundary — the load/GPU preparation already finished
+  // before departure, so the swap would otherwise be visible mid-flight.
+  const isTransitioning = useCameraStore((state) => state.isTransitioning)
 
   useEffect(() => () => {
     useLoadingStore.setState({ issDetailStatus: 'idle' })
@@ -382,7 +386,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         <DetailModelErrorBoundary onError={handleDetailError}>
           <Suspense fallback={null}>
             <DetailedISSModel
-              visible={isNear && detailStatus === 'ready'}
+              visible={detailStatus === 'ready' && (isNear || isTransitioning)}
               onReady={handleDetailReady}
               onError={handleDetailError}
             />
@@ -393,7 +397,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       {/* ─── Level of Detail 1: Far-Range Schematic Model A ─── */}
       <group
         scale={NORMALIZATION_SCALE_A}
-        visible={!isNear || detailStatus !== 'ready'}
+        visible={detailStatus !== 'ready' || (!isNear && !isTransitioning)}
       >
         <primitive
           object={fallbackScene}
