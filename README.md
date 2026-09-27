@@ -13,8 +13,7 @@ Orbital propagates public Two-Line Element sets with SGP4 and renders the result
 - Validated TLE acquisition through a CDN-cached Vercel function, IndexedDB cache, and packaged fallback
 - Custom GLSL for the day/night terminator, ocean response, clouds, atmosphere, Sun, and orbit trail
 - Multi modal camera system with distance aware sensitivity and ISS tracking
-- Authored ISS part hierarchy: sun-tracking solar wings, bounded thermal
-  radiators, idle survey cameras — driven through a validated rig contract
+- Animated ISS parts (sun-tracking arrays, radiators, cameras) on the authored joint hierarchy
 - Ground context with place, local time, and weather
 - LOD ISS rendering to improve load time performance
 - WebGL capability checks and context loss recovery
@@ -67,18 +66,14 @@ The Earth renderer uses a spherical `6,371 km` radius while the project computes
 
 ## ISS model
 
-The near-range model is the IGOAL-derived asset (`public/models/iss_igoal.glb`): 703 named nodes with the real part hierarchy, built by `scripts/build-iss-model.mjs` from the source FBX through a validate-then-publish pipeline (Draco, WebP, a white EATCS radiator-coating split, and a rig-contract check that must pass before the shipped asset is replaced). The **Render settings** menu switches between it and the static Legacy fallback.
+The model is the IGOAL-derived asset (`public/models/iss_igoal.glb`) with the station's real part hierarchy. The **Render Settings** switches between animated high fidelity and the static legacy fallback models.
 
-Part animation drives the authored joints only — no synthetic re-parenting:
+Solar arrays track the Sun and the thermal radiators run a bounded demo motion, all driven through the asset's authored joint hierarchy. The animation details live in `src/rendering/iss/ISSJointKinematics.ts`.
 
-- **SARJs** rotate each outboard truss one revolution per orbit, tracking the Sun.
-- **Thermal radiators** roll about their own beam axes under a bounded illustrative law (±105°, 0.75°/sim-second; edge-to-Sun in daylight, face-to-Earth in eclipse).
-- **Beta gimbal assemblies** remain parked (real operations often do); camera pan/tilt nodes idle-sweep.
-
-Joint axes and references come from a rig contract (`scripts/iss-rig-manifest.mjs`) embedded in the asset as `extras.orbitalRig` and validated at load; the mechanism math lives in `src/rendering/iss/ISSJointKinematics.ts`. The full repair record, acceptance matrix, and verification limits are in [`plans/`](plans/) and [`docs/ISS_MODEL_CONTEXT.md`](docs/ISS_MODEL_CONTEXT.md) (with `docs/MODEL_AUDIT.md` as the audit trail). Rebuilding the asset requires the source FBX (not in the repository):
+Rebuilding the asset requires the source FBX (not in the repo, obtained from NASA):
 
 ```bash
-node scripts/build-iss-model.mjs "C:\path\to\International Space Station (ISS) (D) (IGOAL).fbx"
+node scripts/build-iss-model.mjs "path/to/ISS.fbx"
 ```
 
 ## Camera controls
@@ -87,7 +82,7 @@ node scripts/build-iss-model.mjs "C:\path\to\International Space Station (ISS) (
 - Right-drag or two-finger pan moves the pivot and releases tracking into Free mode. Ordinary orbiting and centered pinches keep the ISS locked. Zooming well out of a Free pan hands navigation back to Earth view — after about the same gesture that would leave Inspect (~1.5× at close range), never a huge zoom demand.
 - **Reset View** appears as soon as the view leaves its home framing — any orbit, zoom, or pan, in any mode — and uses a 2.2-second eased transition to a 25,000 km Earth overview, moving farther out on narrow screens so the globe and orbit fit. It keeps the current viewing side, turns smoothly even from an outward-facing Free view, does not wait for ISS detail loading, and hides again once it arrives.
 - **Locate ISS** always re-flies to the station, including while already tracking it or mid-flight — a new press re-captures the flight from the current pose (from the canonical tracking framing it is visually a no-op). Flights turn the view onto the station and approach at the same time — once the station is centered it stays pinned — and hand their orientation back to manual navigation without a roll snap.
-- Zoom labels describe the current view, with hysteresis at their boundaries. All manual ISS modes share a 70 km model-clearance envelope measured on the animated station.
+- Zoom labels describe the current view, with hysteresis at their boundaries. All manual ISS modes share a 70 km model-clearance limit.
 - Manual navigation stays outside a 6,500 km Earth-center radius. Collisions slide along that boundary; blocked pans keep the camera and pivot together. Rotation orbits over both poles Google-Earth style, without gimbal stops. Close-Earth Locate arcs around the globe at low altitude while the view sweeps across the surface onto the station, so the ground fills the frame until the station crests into view — no pullback detour.
 
 ## Stack
@@ -105,8 +100,8 @@ node scripts/build-iss-model.mjs "C:\path\to\International Space Station (ISS) (
 ```text
 api/                    Vercel TLE function
 public/                 Runtime textures, ISS models, Draco decoder
-docs/                   Model context/audit, handoff and verification notes
-plans/                  Execution ledger and repair records
+docs/                   Model context/audit, handoff notes
+plans/                  Repair plan and status records
 scripts/                Model build pipeline, asset-budget and shader checks
 src/
 ├── core/               Runtime, clock, propagation, telemetry, geo lookup
@@ -115,7 +110,7 @@ src/
 ├── stores/             UI-facing Zustand stores
 ├── ui/                 Mission clock, gauges, ground track, orbit tape
 └── types/               Shared domain types
-tests/unit/              Core, API, camera, rendering, and asset tests
+tests/unit/              Core, API, camera, rendering, and shader tests
 ```
 
 ## Development

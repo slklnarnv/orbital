@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
-import { useLoadingStore } from '@/stores/loadingStore'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
   { value: 'high', label: 'High fidelity', hint: 'IGOAL · animated' },
@@ -18,11 +17,6 @@ export function SettingsGear(): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const issModelQuality = useSettingsStore((state) => state.issModelQuality)
   const setIssModelQuality = useSettingsStore((state) => state.setIssModelQuality)
-  // Effective-model disclosure (plan 001 R3): when a demotion fallback is
-  // committed, the popover says so even though the preference still reads the
-  // preferred quality.
-  const activeQuality = useLoadingStore((state) => state.issDetail.activeQuality)
-  const showingFallback = activeQuality !== null && activeQuality !== issModelQuality
 
   useEffect(() => {
     if (!isOpen) return
@@ -121,15 +115,6 @@ export function SettingsGear(): JSX.Element {
             })}
           </div>
 
-          {showingFallback && (
-            <span
-              className="hud-fine"
-              style={{ marginTop: 8, color: 'var(--hud-lo)', fontSize: 9 }}
-              role="note"
-            >
-              {`Effective: ${activeQuality === 'high' ? 'High fidelity' : 'Legacy'} (fallback active)`}
-            </span>
-          )}
         </div>
       )}
     </div>
