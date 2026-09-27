@@ -4,7 +4,7 @@ export type CameraMode =
   | 'ORBITAL'    // Earth-focused navigation down to the 6,500 km clearance limit
   | 'APPROACH'   // ISS-focused navigation outside the follow range
   | 'FOLLOW'     // ISS tracking, approximately 200–3,000 km from the station
-  | 'INSPECT'    // ISS tracking close-up, with 60 km model clearance
+  | 'INSPECT'    // ISS tracking close-up, with 70 km model-clearance envelope
   | 'FREE'       // User-panned pivot; no auto-lock, but Earth collision protection
 
 // ─── Zoom Level & Categorization ──────────────────────────────────────────────

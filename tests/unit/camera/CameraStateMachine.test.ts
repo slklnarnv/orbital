@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CameraStateMachine } from '@/interaction/camera/CameraStateMachine'
+import { CAMERA_ZOOM_RANGES, CameraStateMachine } from '@/interaction/camera/CameraStateMachine'
 import type { CameraMode } from '@/types/camera'
 
 describe('camera mode transitions', () => {
@@ -53,10 +53,21 @@ describe('free zoom-out release', () => {
     // A 150 km inspect pan must not demand a 3,300 km pivot distance.
     expect(CameraStateMachine.isFreeZoomOut(220, 150)).toBe(true)
     expect(CameraStateMachine.isFreeZoomOut(219, 150)).toBe(false)
-    // A max-zoom inspect pan (60 km) needs a large relative zoom-out, matching
-    // how far the same user would have to scroll out of INSPECT itself.
-    expect(CameraStateMachine.isFreeZoomOut(220, 60)).toBe(true)
-    expect(CameraStateMachine.isFreeZoomOut(219, 60)).toBe(false)
+    // A max-zoom inspect pan (at the clearance floor) needs a large relative
+    // zoom-out, matching how far the same user would have to scroll out of
+    // INSPECT itself.
+    const clearance = CAMERA_ZOOM_RANGES.INSPECT.minDistance
+    expect(CameraStateMachine.isFreeZoomOut(220, clearance)).toBe(true)
+    expect(CameraStateMachine.isFreeZoomOut(219, clearance)).toBe(false)
+  })
+
+  it('keeps the INSPECT floor outside the measured swept envelope of the animated ISS', () => {
+    // Plan 001 phase F: the animated station (SARJ/TRRJ poses) was measured
+    // reaching 67.91 km from its center, and a permitted 60 km eye position
+    // sat exactly on a P6 2B array edge. The floor must stay above that
+    // envelope with margin — and it must not balloon into FOLLOW territory.
+    expect(CAMERA_ZOOM_RANGES.INSPECT.minDistance).toBeGreaterThanOrEqual(67.91)
+    expect(CAMERA_ZOOM_RANGES.INSPECT.minDistance).toBeLessThanOrEqual(80)
   })
 
   it('keeps wide pans attached until the zoom clearly exceeds the entry distance', () => {

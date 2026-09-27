@@ -1,4 +1,9 @@
 # Session Handoff — ORBITAL UI
+> ## ⚠ Errata (2026-09-28, plan 001 landed): parts of these notes predate the
+> ISS model repair. The radiator silver material and the old TRRJ hinge/
+> sun-pointing descriptions are superseded — see docs/ISS_MODEL_CONTEXT.md
+> (errata block) and plans/PROGRESS.md for the current architecture
+> (ISSJointKinematics.ts, build-time radiator coating, bounded TRRJ law).
 
 Handoff notes for the next session working on this repo. Read this before
 touching the HUD, the geo service, or the camera system.
@@ -7,22 +12,36 @@ touching the HUD, the geo service, or the camera system.
 
 **Project**: ORBITAL — real-time ISS orbital visualization (React 18,
 TypeScript strict, Vite 6, React Three Fiber + three r170, Tailwind v4,
-zustand 5, satellite.js). Cloned from `github.com/slklnarnv/orbital`; `.git`
-was stripped during copy, so this working tree is **not** a git repo — the
-original remote is the source of truth for history.
+zustand 5, satellite.js). Git repo: `github.com/slklnarnv/orbital`; the
+remote is the source of truth for history.
 
 **Run / verify**:
 
 ```bash
-npm install        # already done
-npx vite --port 5199 --strictPort   # dev server (was running at time of handoff)
-npm run verify     # asset budget (3.81 MiB) + shader ramps + tsc + 76 tests + build
+npm ci
+npm run dev
+npm run verify     # asset budget + shader ramps + tsc + unit tests + build
 ```
 
 All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
 
 ## What this session changed (chronological)
 
+0. **IGOAL model forensic audit + corrections** — read
+   `docs/ISS_MODEL_CONTEXT.md` FIRST (complete briefing: verified
+   measurements, animation math, tooling traps, verification protocol),
+   then `docs/MODEL_AUDIT.md`. An external audit's headline
+   findings (undersized solar arrays, stale bounds, mis-centered pivot) were
+   all artifacts of a `getScalar(index, component)` API misuse in
+   `scripts/iss-model-manifest.mjs`; the fixed tool now reproduces the build
+   report exactly. Real fixes that DID come out of the audit:
+   `ISSAnimations` now drives the authored SARJ/TRRJ joint nodes
+   (`PORT_ALPHA_ROT`, `STBD_TRRJ_GAMMA_ROT`, …) instead of re-parenting
+   arrays onto synthetic pivots (the "bent inner arrays" cause), and the
+   P1/S1 radiator subtrees get a dedicated light-silver material at mount
+   (source MLI assignment read near-black). `[ISS AUDIT]` logs the mounted
+   asset; `scripts/iss-model-inspector.html` is the browser harness for
+   model forensics (serve with the dev server and open directly).
 1. **HUD redesign, pass 1** — replaced the original glass-panel dashboard with
    a broadcast-style edge-anchored HUD (Starship stream was the reference).
 2. **HUD redesign, pass 2 — "observatory console"** — deliberate divergence
@@ -180,9 +199,6 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
 - Reset View requests a 2.2-second Earth transition through the camera store. It
   eases to the 25,000 km overview (farther for portrait framing), without model/TLE
   readiness gates. Automatic zoom-out handoffs still preserve pending user motion.
-- Timed flights bypass the manual constraint, including the final frame. Reset
-  stays on the current radial bearing; close-Earth Locate follows a safe spherical
-  route. Do not apply a second camera correction after a flight's sampled pose.
 - Curved Locate is one continuous gesture: the eye sweeps a great-circle route
   at monotonic radius (departure radius → the chase standoff, never a cruise
   climb), and the view makes a single eased turn onto the station's live
@@ -192,17 +208,12 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   horizon-level "cruise" looking or two-stage view turns — they read as a
   zoom-out followed by a zoom-in. The arrival standoff is captured at planning
   time and applied rigidly to the live station.
-- Modes classify rendered distances, not queued endpoints. Planetary has a
-  35,000/33,000 km entry/exit band; all manual ISS modes share 60 km model clearance.
 - Leaving a FREE pan on zoom-out is decided by
   `CameraStateMachine.isFreeZoomOut`: release at `max(220 km, 1.25 × the pivot
   distance when the pan began)`. The floor matches INSPECT's own exit band, so
   escaping a close inspect pan takes about the same gesture as leaving INSPECT
   (~1.5× at a 150 km orbit) instead of demanding a 3,300 km pivot distance.
   Zooming in never releases FREE.
-- Reset and flight orientation transports the horizon through polar views and
-  settles toward world-up before handoff. This avoids the 180° roll flip of a
-  fixed-up lookAt.
 - `controls.smoothTime` (0.25) and `minDistance` clamps were ruled out as
   jitter sources by experiment — don't chase them again.
 - DEV-only hook: `window.__orbitalControls` (set in `AppCameraControls`).
@@ -251,8 +262,5 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 
 ## Next steps
 
-`docs/NEXT_STEPS.md` holds the ranked menu: ① time controls (recommended
-first — `SimulationClock.setMode('ACCELERATED')` / `setTimeScale()` already
-exist and are tested; work is mostly HUD wiring), ② ground track + passover
-prediction, ③ solar array sun-tracking, ④ NASA glTF model (beware the asset
-budget gate). Deliberate non-goal: more HUD polish.
+`docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
+it next.

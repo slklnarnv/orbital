@@ -287,10 +287,19 @@ export const CameraController = React.memo(function CameraController({
     if (renderedISS) _currentISSPos.copy(renderedISS.position)
 
     if (isTransitioning && transition && !transition.isCompleted) {
-      if (transition.toMode === 'FOLLOW') {
-        const detailStatus = useLoadingStore.getState().issDetailStatus
-        if (!state || !renderedISS || (detailStatus !== 'ready' && detailStatus !== 'failed')) return
+      if (!state || !renderedISS) return
 
+      // Departure gate (plan 001 R2/E.5): a Locate waits ONCE, here at flight
+      // acquisition, for the deferred detail candidate to finish preparing.
+      // After departure the gate is never re-checked — a selection change
+      // mid-flight swaps the model in the background while the captured path
+      // and horizon continue, so the flight can no longer stall.
+      if (transition.toMode === 'FOLLOW' && flightRef.current?.transition !== transition) {
+        const { status } = useLoadingStore.getState().issDetail
+        if (status !== 'ready' && status !== 'failed' && status !== 'unavailable') return
+      }
+
+      if (transition.toMode === 'FOLLOW') {
         // Retain the existing radial/in-track ISS arrival framing.
         _transU.copy(_currentISSPos).normalize()
         _transVelocityWorld.set(state.velocityECI.x, state.velocityECI.z, -state.velocityECI.y).normalize()

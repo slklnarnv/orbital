@@ -33,3 +33,9 @@ pnpm-debug.log*
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# ISS asset build workspace (raw GLB intermediates, backups, audit dumps)
+.tmp-iss-build/
+
+# ZCode assistant session state
+.zcode/

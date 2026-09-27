@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { useSimulationStore } from './stores/simulationStore'
 
 interface Props {
   children?: ReactNode
@@ -72,6 +73,36 @@ class ErrorBoundary extends Component<Props, State> {
 window.addEventListener('error', (event) => {
   console.error('[Global Runtime Error]', event.error || event.message)
 })
+
+// DEV TEST HOOK (plan 001 §7 fault-injection matrix): `?failAssets=igoal,legacy`
+// answers matching asset requests with HTTP 503 so model-load failures can be
+// exercised from a fresh page load. Dev builds only.
+if (import.meta.env.DEV) {
+  const failList = new URLSearchParams(window.location.search).get('failAssets')
+  if (failList) {
+    const needles = failList.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+    const originalFetch = window.fetch.bind(window)
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (needles.some((needle) => url.toLowerCase().includes(needle))) {
+        return Promise.resolve(new Response('injected failure', { status: 503 }))
+      }
+      return originalFetch(input, init)
+    }
+  }
+}
+
+// DEV DEBUG HOOK: expose the simulation store for runtime diagnostics
+// (time acceleration during visual verification), matching __orbitalControls.
+if (import.meta.env.DEV) {
+  ;(window as unknown as Record<string, unknown>).__orbitalSimulation = useSimulationStore
+  import('./core/telemetry/TelemetryManager').then((m) => {
+    ;(window as unknown as Record<string, unknown>).__orbitalTelemetry = m.telemetryManager
+  })
+  import('./core/clock/SimulationClock').then((m) => {
+    ;(window as unknown as Record<string, unknown>).__orbitalClock = m.simulationClock
+  })
+}
 
 // NOTE: React.StrictMode is intentionally NOT used here.
 //

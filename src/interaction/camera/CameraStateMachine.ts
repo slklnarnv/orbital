@@ -2,6 +2,17 @@ import type { PerspectiveCamera } from 'three'
 import { CameraMode, ModeRange } from '@/types/camera'
 import { EARTH_RADIUS_KM } from '@/utils/constants'
 
+// ─── ISS Model Clearance Envelope ─────────────────────────────────────────────
+// Conservative swept radius (km) of the rendered ISS around its center, from
+// the rebuilt IGOAL asset (plan 001 F / finding C1). Conservative 8-corner
+// bounds 73.43 × 30.63 × 108.29 m at the intentional 109 km render scale give
+// a 67.6 km half-diagonal, and the audit sampled the animated station
+// (SARJ/TRRJ poses) reaching 67.91 km. The old 60 km floor was a half-span
+// guess and allowed a permitted eye position to sit exactly on a P6 2B array
+// edge (measured intersection at radius 60.0). 70 km keeps a ~3% margin over
+// the measured maximum plus the 1 km near plane.
+export const ISS_MODEL_CLEARANCE_KM = 70
+
 // ─── Canonical Mode Boundaries ────────────────────────────────────────────────
 // Distances are expressed in kilometers (Three.js units)
 export const CAMERA_ZOOM_RANGES: Record<CameraMode, ModeRange> = {
@@ -9,7 +20,7 @@ export const CAMERA_ZOOM_RANGES: Record<CameraMode, ModeRange> = {
   ORBITAL:   { minDistance: 6500,  maxDistance: 35000 },
   APPROACH:  { minDistance: 3000,  maxDistance: 12000 },
   FOLLOW:    { minDistance: 200,   maxDistance: 3000 },
-  INSPECT:   { minDistance: 60,    maxDistance: 200 },
+  INSPECT:   { minDistance: ISS_MODEL_CLEARANCE_KM, maxDistance: 200 },
   FREE:      { minDistance: 5,     maxDistance: 100000 }
 };
 
@@ -99,10 +110,10 @@ export class CameraStateMachine {
    * Decides whether an outward zoom in FREE has become a deliberate escape from
    * the detached pivot, based on the pivot distance when the pan began.
    *
-   * The floor releases close inspect pans (entry ≈ 60–220 km) after a short
-   * zoom-out instead of demanding a 3,300 km pivot distance; the ratio keeps
-   * pans that began at orbital or overview scale from releasing on damped
-   * scroll noise.
+   * The floor releases close inspect pans (entry ≈ clearance–220 km) after a
+   * short zoom-out instead of demanding a 3,300 km pivot distance; the ratio
+   * keeps pans that began at orbital or overview scale from releasing on
+   * damped scroll noise.
    */
   public static isFreeZoomOut(pivotDistanceKm: number, entryPivotDistanceKm: number): boolean {
     return pivotDistanceKm >= Math.max(FREE_ZOOM_OUT_FLOOR_KM, entryPivotDistanceKm * FREE_ZOOM_OUT_RATIO)

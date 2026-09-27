@@ -15,12 +15,17 @@ const initialAssets = [
 ]
 
 const runtimeImages = initialAssets.filter((asset) => asset.endsWith('.webp'))
+// Deferred detailed ISS models. iss_igoal.glb (IGOAL-derived, ~2.7M tris,
+// WebP textures, Draco) carries a larger allowance than the legacy model:
+// the deferred load keeps it off the startup critical path, and GPU vertex
+// memory — not download size — is the binding constraint (35 MiB gate set
+// from the GPU-RAM analysis, not network speed).
 const deferredAssets = [
-  'public/models/international_space_station.glb',
+  { path: 'public/models/international_space_station.glb', maxBytes: 7 * MiB },
+  { path: 'public/models/iss_igoal.glb', maxBytes: 35 * MiB },
 ]
 const INITIAL_ASSET_BUDGET = 5 * MiB
 const MAX_IMAGE_BYTES = 2.5 * MiB
-const MAX_DEFERRED_ASSET_BYTES = 7 * MiB
 const MAX_IMAGE_WIDTH = 4096
 const MAX_IMAGE_HEIGHT = 2048
 
@@ -93,11 +98,12 @@ for (const asset of initialAssets) {
   }
 }
 
-for (const asset of deferredAssets) {
+for (const { path: asset, maxBytes } of deferredAssets) {
   try {
     const assetStat = await stat(path.join(root, asset))
-    if (assetStat.size > MAX_DEFERRED_ASSET_BYTES) {
-      errors.push(`${asset} is ${(assetStat.size / MiB).toFixed(2)} MiB; deferred limit is 7.00 MiB`)
+    if (assetStat.size > maxBytes) {
+      const limitMiB = (maxBytes / MiB).toFixed(2)
+      errors.push(`${asset} is ${(assetStat.size / MiB).toFixed(2)} MiB; deferred limit is ${limitMiB} MiB`)
     }
   } catch {
     errors.push(`${asset} is missing`)

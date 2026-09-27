@@ -3,6 +3,7 @@ import { useTelemetryStore } from '@/stores/telemetryStore'
 import { useShallow } from 'zustand/react/shallow'
 import { formatJulianDate, formatGmst } from '@/utils/formatters'
 import { telemetryModeVisual } from '../common/telemetryModeVisual'
+import { SettingsGear } from '../common/SettingsGear'
 
 /**
  * TopBar — two floating corner clusters, no bar between them.
@@ -23,7 +24,6 @@ export function TopBar(): JSX.Element {
   )
 
   const modeVisual = telemetryModeVisual(mode)
-  const modeName = mode.charAt(0) + mode.slice(1).toLowerCase()
 
   return (
     <>
@@ -46,7 +46,7 @@ export function TopBar(): JSX.Element {
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: modeVisual.color }}
         >
           <span aria-hidden="true" className={`hud-dot ${modeVisual.dotClass}`} />
-          {modeName}
+          {modeVisual.label}
         </span>
 
         <span className="hud-fine hud-corner__meta" style={{ color: 'var(--hud-lo)' }}>
@@ -57,13 +57,17 @@ export function TopBar(): JSX.Element {
       </div>
 
       <div className="hud-corner hud-corner--tr hud-text">
-        <span className="hud-fine" style={{ fontSize: 9.5 }}>
+        <span className="hud-fine hud-corner__meta" style={{ color: 'var(--hud-lo)' }}>
           INC {inclination.toFixed(2)}°
-          <span style={{ color: 'var(--hud-lo)' }}>{'  ·  '}</span>
-          JD {formatJulianDate(simTime.julianDate)}
-          <span style={{ color: 'var(--hud-lo)' }}>{'  ·  '}</span>
-          GMST {formatGmst(simTime.gmst)}
+          {' · '}
+          {`JD ${formatJulianDate(simTime.julianDate)}`}
+          {' · '}
+          {`GMST ${formatGmst(simTime.gmst)}`}
         </span>
+
+        <span aria-hidden="true" style={{ width: 1, height: 12, background: 'var(--hud-line)' }} />
+
+        <SettingsGear />
       </div>
     </>
   )

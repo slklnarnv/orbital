@@ -1,4 +1,5 @@
 import { EARTH_RADIUS_KM } from '@/utils/constants'
+import { ISS_MODEL_CLEARANCE_KM } from '@/interaction/camera/CameraStateMachine'
 
 export const EARTH_ROTATION_SENSITIVITY = {
   closeCenterDistanceKm: 6_500,
@@ -97,7 +98,11 @@ export function applyNavigationSensitivity(
   deltaSeconds: number,
 ): void {
   const earthWeight = 1 - smoothstep01(targetDistanceToEarthKm / EARTH_RADIUS_KM)
-  const localScale = smoothstep01((distanceToTargetKm - 60) / (3000 - 60))
+  // The close-range floor follows the ISS model-clearance envelope, so the
+  // rotation scale's domain starts exactly where the camera is allowed to be.
+  const localScale = smoothstep01(
+    (distanceToTargetKm - ISS_MODEL_CLEARANCE_KM) / (3000 - ISS_MODEL_CLEARANCE_KM),
+  )
   const localRotation = 0.35 + 0.65 * localScale
   const rotation = localRotation + (getEarthRotationSensitivity(distanceToEarthCenterKm) - localRotation) * earthWeight
   const earthDolly = 0.08 + 0.92 * smoothstep01((distanceToEarthCenterKm - 6500) / 4000)

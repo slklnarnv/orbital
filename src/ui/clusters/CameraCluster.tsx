@@ -27,12 +27,20 @@ export function CameraCluster(): JSX.Element {
   // completed Reset hides it again. Mode labels alone would hide it in
   // Orbital/Planetary even after the user has moved.
   const isHomeView = useCameraStore((state) => state.isHomeView)
-  const detailStatus = useLoadingStore((state) => state.issDetailStatus)
+  const issDetail = useLoadingStore((state) => state.issDetail)
   const requestISSDetail = useLoadingStore((state) => state.requestISSDetail)
-  const isPreparing = isTransitioning && !isResetting && detailStatus !== 'ready' && detailStatus !== 'failed'
+  // Disclose the EFFECTIVE model (plan 001 R3): 'Low detail' while the
+  // committed quality is the legacy fallback, independent of what a pending
+  // candidate is doing.
+  const showingFallback = issDetail.activeQuality === 'legacy'
+  const isPreparing = isTransitioning && !isResetting
+    && issDetail.status !== 'ready' && issDetail.status !== 'failed'
+    && issDetail.status !== 'unavailable'
   const status = isPreparing
-    ? (detailStatus === 'preparing' ? 'Preparing ISS' : 'Loading ISS')
-    : isResetting ? 'Resetting view' : isTransitioning ? 'Locating ISS' : sentenceCase(cameraMode)
+    ? (issDetail.status === 'preparing' ? 'Preparing ISS' : 'Loading ISS')
+    : issDetail.status === 'unavailable'
+      ? 'ISS unavailable'
+      : isResetting ? 'Resetting view' : isTransitioning ? 'Locating ISS' : sentenceCase(cameraMode)
 
   const resetView = () => {
     const controls = cameraControlsRef.current
@@ -51,7 +59,9 @@ export function CameraCluster(): JSX.Element {
         onFocus={requestISSDetail}
         aria-busy={isTransitioning}
         aria-label="Locate ISS — fly the camera to the station"
-        className="hud-btn-locate"
+        // Working state spans the WHOLE press — departure wait included —
+        // and ends only at arrival, so the motion never cuts mid-way.
+        className={`hud-btn-locate${isTransitioning ? ' is-working' : ''}`}
       >
         <span className="hud-reticle" style={{ width: 44, height: 44 }}>
           <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false">
@@ -83,7 +93,9 @@ export function CameraCluster(): JSX.Element {
       <div className="hud-camera__state">
         <span className="hud-label" role="status">
           <span style={{ color: 'var(--hud-hi)' }}>{status}</span>
-          <span style={{ color: 'var(--hud-lo)' }}>{`  ·  ${detailStatus === 'failed' ? 'Low detail' : isTracking ? 'Locked' : 'Free'}`}</span>
+          <span style={{ color: 'var(--hud-lo)' }}>
+            {`  ·  ${issDetail.status === 'unavailable' ? 'Unavailable' : showingFallback ? 'Low detail' : isTracking ? 'Locked' : 'Free'}`}
+          </span>
         </span>
         <div
           className="hud-zoommeter"

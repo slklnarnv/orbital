@@ -7,16 +7,27 @@
 //   The ISS is rendered ~1,000× larger than real-world dimensions (per DEVELOPER NOTE).
 //   This is intentional for orbital-scale readability: the real ISS (109 m wingspan)
 //   is sub-pixel at typical viewing distances (408 km altitude, 6,779 km from Earth center).
-//   Render wingspan: ~109 km (NOT 109 m). Camera minDistance is set to 60 km to keep
-//   the camera outside the model's ~55 km half-span even in INSPECT mode.
+//   Render wingspan: ~109 km (NOT 109 m). Camera minDistance (70 km) keeps the eye
+//   outside the model's measured swept envelope (~68 km half-diagonal incl. array
+//   animation) — see ISS_MODEL_CLEARANCE_KM in CameraStateMachine.ts.
+//   DO NOT "fix" this to real scale — the entire camera system (INSPECT minDistance,
+//   LOD hysteresis bands, beacon/aura scaling, fill-light distances) is calibrated
+//   to these units. Only the per-model normalization constants below change.
 //
 // Physical ISS dimensions (real-world, for reference only):
 //   Solar array wingspan: ~109 m (0.109 km)
 //   Truss / module length: ~73 m  (0.073 km)
 //   Height extents: ~30 m (0.030 km)
 //
+// Detailed model selection ('high' = IGOAL-derived, 'legacy' = original):
+//   Both ship as deferred Draco GLBs with the part hierarchy intact; the
+//   per-model normalization constants below map each onto the shared
+//   109 km render wingspan. Selection lives in settingsStore (gear icon,
+//   top right). Reliability ladder: high fails → legacy detailed;
+//   legacy fails → Model A schematic (always mounted).
+//
 // Level of Detail (LOD) Strategy:
-//   - Near Range (< 2,800–3,200 km): Model Draco (303k Verts, PBR textures, emissive windows).
+//   - Near Range (< 2,800–3,200 km): selected detailed model (PBR textures).
 //   - Far Range (3,000–12,000 km): Model A (7.5k Verts, flat schematic PBR colors).
 //   - Deep Planetary Scale (> 12,000 km): Model A + unlit Beacon sphere (8.0 km radius) to
 //     ensure spatial tracking visibility above Earth at global distances.
@@ -48,6 +59,9 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { useLoadingStore } from '@/stores/loadingStore'
 import { useCameraStore } from '@/stores/cameraStore'
+import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
+import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
+import { ISSAnimations } from './ISSAnimations'
 
 // ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
 // Instead of the gstatic.com CDN (blocked in offline/private-network environments),
@@ -55,32 +69,109 @@ import { useCameraStore } from '@/stores/cameraStore'
 // This guarantees Draco-compressed models decode regardless of CDN availability.
 useGLTF.setDecoderPath('/draco/')
 
-const DETAILED_MODEL_URL = '/models/international_space_station.glb'
+// ─── Detailed model registry (per-selection normalization) ──────────────────
+
+interface DetailedModelSpec {
+  url: string
+  /** Max model dimension (m) — normalized onto RENDER_ISS_WINGSPAN_UNITS. */
+  wingspanM: number
+  /** Model-local axis the wingspan lies on. */
+  wingspanAxis: 'x' | 'y' | 'z'
+  /** Center-of-geometry offset in model-local space (shift by −center). */
+  pivotOffset: [number, number, number]
+}
+
+const LEGACY_DETAILED: DetailedModelSpec = {
+  url: '/models/international_space_station.glb',
+  // Measured on the mounted model with full vertex transforms (plan 001 O1,
+  // superseding the old 31.070 × 24.200 × 75.109 comment, which was wrong):
+  // native full size 111.988429 × 68.784158 × 58.626683 m, tight-bounds
+  // center ≈ (+0.0000024, +5.3411984, −3.8544638). The truss/array span is
+  // the X extent (111.99 m) — NOT Z. pivotOffset is the negated center.
+  wingspanM: 111.988429,
+  wingspanAxis: 'x',
+  pivotOffset: [-0.0000024, -5.3411984, 3.8544638],
+}
+
+const IGOAL_DETAILED: DetailedModelSpec = {
+  url: '/models/iss_igoal.glb',
+  // Measured from the shipped GLB's decoded POSITION vertices (scripts/
+  // build-iss-model.mjs report; docs/MODEL_AUDIT.md): bounds
+  // 73.4275 × 30.6260 × 108.2926 m, center (−0.0025, −6.8026, 0.0006).
+  // Truss along local Z (wingspan); pivotOffset is the negated center, so
+  // the geometric center lands on ISSGroup.position. Declared accessor
+  // min/max match the decoded vertices exactly (no stale bounds).
+  wingspanM: 108.293,
+  wingspanAxis: 'z',
+  pivotOffset: [0.0025, 6.8026, -0.0006],
+}
+
+const MODEL_SPECS: Record<IssModelQuality, DetailedModelSpec> = {
+  high: IGOAL_DETAILED,
+  legacy: LEGACY_DETAILED,
+}
+
+// ─── Per-model pre-rotation (native axes → station body axes) ────────────────
+// ISSGroup applies the LVLH/TEA flight attitude in the STATION frame
+// (+X = V-bar forward, +Y = orbit normal, +Z = nadir). Each model was
+// authored in its own native convention, so each needs a fixed pre-rotation
+// onto that frame before the group attitude applies. Expressed as
+// quaternions so the basis mapping is unambiguous (no Euler-order guesswork).
+const HIGH_PRE_ROTATION = new THREE.Quaternion().setFromEuler(
+  // High (IGOAL): native +X forward, truss along native Z, nadir −Y.
+  // Rx(−90°): Z→+Y (orbit normal), Y→−Z (zenith).
+  new THREE.Euler(-Math.PI / 2, 0, 0),
+)
+const LEGACY_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
+  // Legacy (plan 001 O1, measured anatomically): forward = native +Z
+  // (Harmony − Destiny), nadir = native −Y (Pirs − Poisk), starboard =
+  // native −X (S truss progression). Basis: +X→−Y, +Y→−Z, +Z→+X
+  // (quaternion XYZW [−0.5, +0.5, −0.5, +0.5]). The previous Rx(−90°) left
+  // Legacy flying sideways (forward mapped to body +Y).
+  new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(0, -1, 0), // native +X → body −Y
+    new THREE.Vector3(0, 0, -1), // native +Y → body −Z
+    new THREE.Vector3(1, 0, 0), // native +Z → body +X (forward)
+  ),
+)
+const MODEL_PRE_ROTATION: Record<IssModelQuality, THREE.Quaternion> = {
+  high: HIGH_PRE_ROTATION,
+  legacy: LEGACY_PRE_ROTATION,
+}
+
 const FALLBACK_MODEL_URL = '/models/International Space Station (ISS) (A).glb'
-
-// Only the tiny far-range model is part of startup. The detailed model is loaded
-// on Locate intent or the first transition into near range and remains cached thereafter.
-useGLTF.preload(FALLBACK_MODEL_URL)
-
-// ─── Normalization & Pivot Offsets Constants ─────────────────────────────────
-// Computed from physical extents and binary glTF bounds analysis
 
 /** Render-scale ISS wingspan in Three.js world units (km).
  * The ISS is intentionally rendered ~1,000× oversize for orbital-scale readability.
  * Real ISS wingspan: ~109 m = 0.109 km. Render wingspan: 109 km. */
 const RENDER_ISS_WINGSPAN_UNITS = 109.0
 
-// Model Draco: Max dimensions [31.070, 24.200, 75.109]m. Wingspan is Z-extent (75.109m).
-const MODEL_DRACO_WINGSPAN_M = 75.109
-const NORMALIZATION_SCALE_DRACO = RENDER_ISS_WINGSPAN_UNITS / MODEL_DRACO_WINGSPAN_M // ≈ 1.451
-const PIVOT_OFFSET_DRACO_Y = 3.506 // Center of geometry is offset by -3.506m in local space
+// Model A normalization (plan 001 O1, measured in the GLB scene-root frame —
+// i.e. INCLUDING its authored +90°X node rotation and 0.6781210899 scale):
+// truss span = X extent 25.614240 m; tight-bounds center
+// (+0.0011162, +1.4887661, −3.8792463). The old span divisor 37.772 and the
+// old pivot offsets were measured in raw mesh coordinates but applied outside
+// the retained transforms.
+const NORMALIZATION_SCALE_A = RENDER_ISS_WINGSPAN_UNITS / 25.614240
+const PIVOT_OFFSET_A_X = -0.0011162
+const PIVOT_OFFSET_A_Y = -1.4887661
+const PIVOT_OFFSET_A_Z = 3.8792463
 
-// Model A: Max dimensions [37.772, 22.671, 23.539]m. Max extent is X truss span (37.772m).
-const MODEL_A_WINGSPAN_M = 37.772
-const NORMALIZATION_SCALE_A = RENDER_ISS_WINGSPAN_UNITS / MODEL_A_WINGSPAN_M // ≈ 2.885
-const PIVOT_OFFSET_A_X = -0.002
-const PIVOT_OFFSET_A_Y = 5.720
-const PIVOT_OFFSET_A_Z = 2.196
+// Model A schematic pre-rotation onto the station body frame: its truss runs
+// along native X (→ body +Y orbit normal) and its module stack along native
+// Z (→ body +X V-bar forward). Expressed as a quaternion so the basis
+// mapping is unambiguous (no Euler-order guesswork).
+const MODEL_A_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
+  new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(0, 1, 0), // native +X → body +Y (truss across the flight path)
+    new THREE.Vector3(0, 0, 1), // native +Y → body +Z (nadir)
+    new THREE.Vector3(1, 0, 0), // native +Z → body +X (module stack, V-bar forward)
+  ),
+)
+
+// Only the tiny far-range model is part of startup. The detailed model is loaded
+// on Locate intent or the first transition into near range and remains cached thereafter.
+useGLTF.preload(FALLBACK_MODEL_URL)
 
 /** Planetary tracking beacon radius (km) */
 const BEACON_RADIUS_KM = 8.0
@@ -93,7 +184,6 @@ const LOD_EXIT_NEAR_KM = 3200
 const BEACON_ACTIVATE_KM = 12000
 
 const _sunDirVec = new THREE.Vector3()
-const _inspectionLightPos = new THREE.Vector3()
 
 
 interface DetailModelErrorBoundaryProps {
@@ -125,24 +215,104 @@ class DetailModelErrorBoundary extends Component<
   }
 }
 
-interface DetailedISSModelProps {
-  visible: boolean
-  onReady: () => void
+// ─── Model A fallback (the always-mounted schematic) ─────────────────────────
+// Loaded in its own component so its suspension/failure is caught by a LOCAL
+// boundary: if Model A itself fails there is no ISS group at all, which is a
+// distinct terminal state ('unavailable') — not a detail-ladder demotion
+// (plan 001 R4).
+interface FallbackModelErrorBoundaryProps {
+  children: ReactNode
   onError: () => void
 }
 
-function DetailedISSModel({ visible, onReady, onError }: DetailedISSModelProps): JSX.Element {
+class FallbackModelErrorBoundary extends Component<
+  FallbackModelErrorBoundaryProps,
+  DetailModelErrorBoundaryState
+> {
+  state: DetailModelErrorBoundaryState = { failed: false }
+
+  static getDerivedStateFromError(): DetailModelErrorBoundaryState {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: unknown): void {
+    console.warn('[ISSModel] Model A fallback failed — ISS unavailable.', error)
+    this.props.onError()
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? null : this.props.children
+  }
+}
+
+function FallbackISSModel(): JSX.Element {
+  const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
+  const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
+  return (
+    <primitive
+      object={fallbackScene}
+      position={[PIVOT_OFFSET_A_X, PIVOT_OFFSET_A_Y, PIVOT_OFFSET_A_Z]} // Center pivot translation
+    />
+  )
+}
+
+// Model A load failures must surface even though drei's suspense does not
+// propagate loader errors (a failed preload would suspend the whole scene
+// tree forever with no error thrown — R4's black-canvas failure). The shared
+// LoadingManager's per-item onError always fires, so the terminal
+// 'unavailable' state is published from here and ISSModel stops rendering the
+// fallback subtree, letting the rest of the scene resolve.
+const FALLBACK_URL_PATTERN = /international space station \(iss\) \(a\)\.glb/i
+THREE.DefaultLoadingManager.onError = (url: string) => {
+  let decoded = url
+  try { decoded = decodeURIComponent(url) } catch { /* keep raw */ }
+  if (FALLBACK_URL_PATTERN.test(decoded)) {
+    console.warn('[ISSModel] Model A failed to load — ISS unavailable.', url)
+    useLoadingStore.getState().markISSUnavailable()
+  }
+}
+
+interface DetailedISSModelProps {
+  spec: DetailedModelSpec
+  quality: IssModelQuality
+  /** Attempt identity this instance loads for; carried on every callback so
+   *  an obsolete preparation can never publish another attempt's result. */
+  attempt: number
+  visible: boolean
+  onReady: (attempt: number) => void
+  onError: (attempt: number) => void
+}
+
+function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }: DetailedISSModelProps): JSX.Element {
   const { gl, camera, scene } = useThree()
   const groupRef = useRef<THREE.Group>(null)
-  const detailedGltf = useGLTF(DETAILED_MODEL_URL)
+  const pivotGroupRef = useRef<THREE.Group>(null)
+  const detailedGltf = useGLTF(spec.url)
   const detailedScene = useMemo(() => detailedGltf.scene.clone(), [detailedGltf.scene])
+  // Validated rig contract from the asset's scene extras (emitted by
+  // build-iss-model.mjs as extras.orbitalRig). Absent = pre-rebuild asset
+  // (built-in joint definitions apply); present-but-invalid = the asset does
+  // not meet the contract it declares, which must not be declared ready.
+  const rigMetadata = useMemo<RigMetadataParse>(
+    () => parseRigMetadata(detailedScene.userData),
+    [detailedScene],
+  )
+
+  useEffect(() => {
+    if (rigMetadata.status === 'invalid') {
+      console.error('[ISSModel] asset declares an invalid orbitalRig contract:', rigMetadata.errors)
+      onError(attempt)
+    }
+  }, [rigMetadata, onError, attempt])
 
   useEffect(() => {
     let cancelled = false
     const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
     async function prepare(): Promise<void> {
-      useLoadingStore.setState({ issDetailStatus: 'preparing' })
+      // Forensic breadcrumb: which detailed asset actually mounted.
+      console.log('[ISS AUDIT]', { quality, url: spec.url, attempt })
+      useLoadingStore.getState().setIssDetailPreparing(attempt)
       const textures = new Set<THREE.Texture>()
       const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
       detailedScene.traverse((object) => {
@@ -189,20 +359,28 @@ function DetailedISSModel({ visible, onReady, onError }: DetailedISSModelProps):
         for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
       }
       await nextFrame()
-      if (!cancelled) onReady()
+      if (!cancelled) onReady(attempt)
     }
 
     void prepare().catch((error: unknown) => {
       if (cancelled) return
       console.warn('[ISSModel] Detailed model preparation failed.', error)
-      onError()
+      onError(attempt)
     })
     return () => { cancelled = true }
-  }, [detailedScene, gl, camera, scene, onReady, onError])
+  }, [detailedScene, gl, camera, scene, onReady, onError, attempt])
+
+  const normalizationScale = RENDER_ISS_WINGSPAN_UNITS / spec.wingspanM
 
   return (
-    <group ref={groupRef} scale={NORMALIZATION_SCALE_DRACO} visible={visible}>
-      <primitive object={detailedScene} position={[0, PIVOT_OFFSET_DRACO_Y, 0]} />
+    <group ref={groupRef} scale={normalizationScale} quaternion={MODEL_PRE_ROTATION[quality]} visible={visible}>
+      {/* Pivot root lives in raw model units — ISSAnimations resolves its
+          gimbal pivots against this frame before the pre-rotation and render
+          scale apply. */}
+      <group ref={pivotGroupRef} position={spec.pivotOffset}>
+        <primitive object={detailedScene} />
+        <ISSAnimations rootRef={pivotGroupRef} quality={quality} rigMetadata={rigMetadata} onError={() => onError(attempt)} />
+      </group>
     </group>
   )
 }
@@ -211,6 +389,7 @@ function DetailedISSModel({ visible, onReady, onError }: DetailedISSModelProps):
 
 export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
+  const { scene } = useThree()
 
   // Element Refs for direct vis/light mutation (zero garbage collection)
   const beaconRef = useRef<THREE.Group>(null)
@@ -218,26 +397,54 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const lightPrimaryRef = useRef<THREE.PointLight>(null)
   const lightSecondaryRef = useRef<THREE.PointLight>(null)
   const lightAmbientRef = useRef<THREE.HemisphereLight>(null)
-  const lightInspectionRef = useRef<THREE.PointLight>(null)
+  const earthshineRef = useRef<THREE.DirectionalLight>(null)
 
   // Tracking refs to maintain stable hysteresis states across frames
   const isNearRef = useRef(false)
   const worldPos = useRef(new THREE.Vector3())
   const [isNear, setIsNear] = useState(false)
-  const detailStatus = useLoadingStore((state) => state.issDetailStatus)
+  // Single lifecycle authority for the detail candidate (plan 001 phase E):
+  // status + attempt identity + the committed (active) quality.
+  const issDetail = useLoadingStore((state) => state.issDetail)
   // During a Locate flight the detail model is shown from departure, not at
   // the 2,800 km LOD boundary — the load/GPU preparation already finished
   // before departure, so the swap would otherwise be visible mid-flight.
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
 
+  // ─── Detailed model selection with reliability ladder ───
+  // 'high' (IGOAL) is the default; if it fails to load, the ladder demotes to
+  // the proven legacy detailed model before falling all the way to Model A.
+  const settingQuality = useSettingsStore((state) => state.issModelQuality)
+  const selectionNonce = useSettingsStore((state) => state.selectionNonce)
+  const [demotedQuality, setDemotedQuality] = useState<IssModelQuality | null>(null)
+  const quality = demotedQuality ?? settingQuality
+  const spec = MODEL_SPECS[quality]
+  const showDetail = isNear || isTransitioning
+
+  // Selection orchestration: records the requested quality on mount (without
+  // loading — detail is requested on Locate intent or near-range entry, never
+  // at startup), then begins a fresh candidate attempt whenever the explicit
+  // selection changes or the demotion ladder moves the request. An explicit
+  // re-selection (nonce) clears an active demotion; an automatic demotion
+  // changes `quality` without the nonce and survives.
+  const seenSelection = useRef<{ quality: IssModelQuality | null; nonce: number } | null>(null)
+  useEffect(() => {
+    const store = useLoadingStore.getState()
+    if (seenSelection.current === null) {
+      seenSelection.current = { quality, nonce: selectionNonce }
+      store.identifyISSDetail(quality)
+      return
+    }
+    const nonceChanged = seenSelection.current.nonce !== selectionNonce
+    const qualityChanged = seenSelection.current.quality !== quality
+    seenSelection.current = { quality, nonce: selectionNonce }
+    if (nonceChanged) setDemotedQuality(null)
+    if (nonceChanged || qualityChanged) store.beginISSDetailAttempt(quality)
+  }, [quality, selectionNonce])
+
   useEffect(() => () => {
-    useLoadingStore.setState({ issDetailStatus: 'idle' })
+    useLoadingStore.getState().resetIssDetail()
   }, [])
-
-  // The tiny schematic model is always available while detail is deferred/loading/failed.
-  const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
-
-  const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
 
   // NOTE: No manual geometry/material disposal on unmount.
   // The scenes are produced by scene.clone(), which shallow-clones
@@ -246,16 +453,60 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // cause future loads (e.g. hot-reload, Suspense remount) to reference freed GPU memory.
   // Drei's useGLTF manages GLTF asset lifecycle; external disposal is incorrect.
 
-  const handleDetailReady = useCallback(() => {
-    useLoadingStore.setState({ issDetailStatus: 'ready' })
+  const handleDetailReady = useCallback((attempt: number) => {
+    useLoadingStore.getState().commitISSDetailReady(attempt)
   }, [])
 
-  const handleDetailError = useCallback(() => {
+  const handleDetailError = useCallback((attempt: number) => {
+    const store = useLoadingStore.getState()
+    store.failISSDetailAttempt(attempt)
+    console.warn('[ISSModel] detail attempt failed', {
+      attempt, status: store.issDetail.status, quality: store.issDetail.quality,
+    })
     // Drei caches rejected loader promises as well as successful assets. Clear the
     // failed entry so leaving and re-entering near range can retry a transient error.
-    useGLTF.clear(DETAILED_MODEL_URL)
-    useLoadingStore.setState({ issDetailStatus: 'failed' })
+    useGLTF.clear(MODEL_SPECS[store.issDetail.quality ?? quality].url)
+    // Reliability ladder: a failed 'high' attempt demotes to the proven legacy
+    // detailed model for the rest of the session (until explicitly re-selected);
+    // the quality change re-enters the selection effect and starts that load.
+    if (store.issDetail.quality === 'high') {
+      console.warn('[ISSModel] demoting high -> legacy')
+      setDemotedQuality('legacy')
+    }
+  }, [quality])
+
+  const handleFallbackError = useCallback(() => {
+    // Model A itself failed: terminal for the session. Earth/UI stay alive,
+    // Locate resolves visibly, and nothing auto-retries the ladder.
+    useLoadingStore.getState().markISSUnavailable()
   }, [])
+
+  // ─── Visibility ownership (E.4: swap-once-prepared) ───
+  // committed = the last quality that reached 'ready'. It stays mounted while
+  // a different candidate loads/prepares and remains the displayed model until
+  // that candidate commits, so a selection change never flashes Model A.
+  const committedQuality = issDetail.activeQuality
+  const committedMounted = committedQuality !== null
+    && !(issDetail.status === 'ready' && committedQuality === quality)
+    && issDetail.status !== 'unavailable'
+  const committedShown = committedMounted && showDetail && issDetail.status !== 'ready'
+  const modelAVisible = !showDetail || (issDetail.status !== 'ready' && !committedShown)
+
+  // ─── Earthshine key light ───
+  // Replaces the old camera-anchored omnidirectional inspection headlight:
+  // when the station is in Earth's shadow, it is lit from the nadir direction
+  // (sunlight reflected off Earth's dayside), which lights the whole model
+  // uniformly with no camera hotspot. The target object is moved to the ISS
+  // center each frame; the light itself sits out along the nadir.
+  const earthshineTarget = useMemo(() => new THREE.Object3D(), [])
+  useEffect(() => {
+    scene.add(earthshineTarget)
+    return () => { scene.remove(earthshineTarget) }
+  }, [scene, earthshineTarget])
+
+  const _nadirDir = useRef(new THREE.Vector3())
+  const _lightLocal = useRef(new THREE.Vector3())
+  const _parentQuat = useRef(new THREE.Quaternion())
 
   useFrame((state) => {
     if (!groupRef.current) return
@@ -336,19 +587,33 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       lightAmbientRef.current.intensity = baseAmbientIntensity * smoothMultiplier
     }
 
-    // 3d. Dynamic camera-linked inspection headlight
-    // Active close-up (scaled to remain active in tracking/follow/inspect modes up to 3000 km)
-    if (lightInspectionRef.current) {
-      // Position the light exactly at the camera in the local space of the ISS
-      _inspectionLightPos.subVectors(state.camera.position, worldPos.current)
-      lightInspectionRef.current.position.copy(_inspectionLightPos)
-
-      const headlightFactor = 1.0 - THREE.MathUtils.clamp((distanceKm - 5.0) / 2995.0, 0.0, 1.0)
-      const smoothHeadlight = Math.pow(headlightFactor, 2.0)
-
-      // Direct specular/diffuse fill: warm white tone, 0.35 in sunlit and 0.75 in shadowed scenes
-      const baseHeadlightIntensity = isShadowed ? 0.75 : 0.35
-      lightInspectionRef.current.intensity = baseHeadlightIntensity * smoothHeadlight
+    // 3d. Earthshine key light — physically motivated dark-side illumination.
+    // Real stations in Earth's shadow are lit by sunlight reflected off the
+    // planet below, so the light comes FROM the nadir and reaches the whole
+    // model uniformly. Distance-adaptive (smoothMultiplier) like the fills:
+    // irrelevant at planetary range where the detail model is hidden.
+    const earthshine = earthshineRef.current
+    if (earthshine) {
+      if (isShadowed) {
+        // Direction from Earth's center through the station, extended outward:
+        // the light hangs below the station on the planet-facing side.
+        _nadirDir.current.copy(worldPos.current).multiplyScalar(-1).normalize()
+        // The light is a child of the attitude-rotated ISS group, so its
+        // .position is LOCAL — convert the desired world offset by the
+        // parent's inverse world quaternion or the direction drifts as the
+        // station rotates.
+        _lightLocal.current.copy(_nadirDir.current).multiplyScalar(400)
+        if (earthshine.parent) {
+          earthshine.parent.getWorldQuaternion(_parentQuat.current)
+          _lightLocal.current.applyQuaternion(_parentQuat.current.invert())
+        }
+        earthshine.position.copy(_lightLocal.current)
+        // Target lives at scene level (added via effect) — world space.
+        earthshineTarget.position.copy(worldPos.current)
+        earthshine.intensity = 0.65 * smoothMultiplier
+      } else {
+        earthshine.intensity = 0.0
+      }
     }
 
     // 4. Mutate high-frequency Three.js effects directly (bypasses React virtual DOM rendering)
@@ -381,12 +646,19 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
 
   return (
     <group ref={groupRef}>
-      {/* ─── Level of Detail 0: Near-Range Premium Draco Model ─── */}
-      {(detailStatus === 'loading' || detailStatus === 'preparing' || detailStatus === 'ready') && (
-        <DetailModelErrorBoundary onError={handleDetailError}>
+      {/* ─── Level of Detail 0: Selected Near-Range Detailed Model ─── */}
+      {/* The requested candidate. It mounts with its own attempt identity and
+          shows only once ITS preparation commits; the committed model below
+          keeps rendering until that moment (swap-once-prepared, plan E.4). */}
+      {(issDetail.status === 'loading' || issDetail.status === 'preparing' || issDetail.status === 'ready') && (
+        <DetailModelErrorBoundary key={`${spec.url}:${issDetail.attempt}`} onError={() => handleDetailError(issDetail.attempt)}>
           <Suspense fallback={null}>
             <DetailedISSModel
-              visible={detailStatus === 'ready' && (isNear || isTransitioning)}
+              key={spec.url}
+              spec={spec}
+              quality={quality}
+              attempt={issDetail.attempt}
+              visible={issDetail.status === 'ready' && showDetail}
               onReady={handleDetailReady}
               onError={handleDetailError}
             />
@@ -394,16 +666,44 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         </DetailModelErrorBoundary>
       )}
 
+      {/* ─── Committed detailed model ─── */}
+      {/* The last committed quality stays mounted (and visible) while a
+          DIFFERENT candidate loads/prepares, so a selection change never
+          flashes the far-range schematic mid-session. */}
+      {committedMounted && (
+        <Suspense fallback={null}>
+          <DetailedISSModel
+            key={MODEL_SPECS[committedQuality].url}
+            spec={MODEL_SPECS[committedQuality]}
+            quality={committedQuality}
+            attempt={-1}
+            visible={committedShown}
+            onReady={() => { /* already committed */ }}
+            onError={() => { /* already committed; its failures are inert */ }}
+          />
+        </Suspense>
+      )}
+
       {/* ─── Level of Detail 1: Far-Range Schematic Model A ─── */}
-      <group
-        scale={NORMALIZATION_SCALE_A}
-        visible={detailStatus !== 'ready' || (!isNear && !isTransitioning)}
-      >
-        <primitive
-          object={fallbackScene}
-          position={[PIVOT_OFFSET_A_X, PIVOT_OFFSET_A_Y, PIVOT_OFFSET_A_Z]} // Center pivot translation
-        />
-      </group>
+      {/* Visible whenever no detailed model is on screen. Its failure is
+          terminal: the loading-manager hook publishes 'unavailable' (R4) and
+          the fallback subtree unmounts so Earth/UI keep rendering. */}
+      {issDetail.status !== 'unavailable' && (
+        <FallbackModelErrorBoundary onError={handleFallbackError}>
+          <group
+            scale={NORMALIZATION_SCALE_A}
+            quaternion={MODEL_A_PRE_ROTATION}
+            // Visible whenever no detailed model is on screen: far range, or a
+            // detail candidate that has not committed yet (including failures —
+            // the failed ladder falls back to this schematic).
+            visible={modelAVisible}
+          >
+            <Suspense fallback={null}>
+              <FallbackISSModel />
+            </Suspense>
+          </group>
+        </FallbackModelErrorBoundary>
+      )}
 
       {/* ─── Concentric Telemetry Tracking Beacon Ring ─── */}
       <group
@@ -470,13 +770,12 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         color="#e6f0ff"
       />
 
-      {/* ─── Dynamic Camera-Linked Warm Soft Inspection Headlight (Infinite range, zero decay) ─── */}
-      <pointLight
-        ref={lightInspectionRef}
-        intensity={0.0}
-        distance={0.0} // Infinite range to bypass arbitrary distance cutoffs
-        decay={0.0}    // Zero distance decay, intensity is explicitly driven by useFrame
-        color="#ffeedb" // Warm soft tone to capture module details beautifully
+      {/* ─── Earthshine key light (shadowed-pass illumination from nadir) ─── */}
+      <directionalLight
+        ref={earthshineRef}
+        intensity={0.0} // Mutated dynamically in useFrame loop
+        color="#b9d2ee" // Cool planetary-reflected sunlight
+        target={earthshineTarget}
       />
 
       {/* ─── High-fidelity ambient orbital fill, providing beautiful wrap-around readability close-up ─── */}

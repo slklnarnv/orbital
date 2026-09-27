@@ -1,7 +1,8 @@
-import React, { Suspense, useCallback, useMemo, useRef, Component, type ReactNode } from 'react'
-import { Canvas } from '@react-three/fiber'
+import React, { Suspense, useCallback, useMemo, useRef, useEffect, Component, type ReactNode } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { EnvironmentLayer } from './EnvironmentLayer'
 import { EarthGroup } from '../earth/EarthGroup'
 import { ISSGroup } from '../iss/ISSGroup'
@@ -98,6 +99,35 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
 
 
 /**
+ * RuntimeEnvironment — locally generated image-based lighting for PBR
+ * indirect specular. Without an environment term, metallic surfaces (solar
+ * panel backs, radiators) render flat: nothing mirrors the Earth or stars.
+ * RoomEnvironment is procedural (no CDN fetch) and PMREM-processed once;
+ * scene.environmentIntensity keeps it subordinate to the calibrated
+ * sun + earthshine + fill rig. Custom Earth/ISS shader materials ignore
+ * scene.environment, so only glTF PBR materials are affected.
+ */
+const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
+  const gl = useThree((state) => state.gl)
+  const scene = useThree((state) => state.scene)
+
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl)
+    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = envTexture
+    scene.environmentIntensity = 0.28
+    return () => {
+      scene.environment = null
+      scene.environmentIntensity = 1.0
+      envTexture.dispose()
+      pmrem.dispose()
+    }
+  }, [gl, scene])
+
+  return null
+})
+
+/**
  * SceneRoot bootstraps the React Three Fiber rendering pipeline.
  *
  * It integrates the layered production Earth visual pipeline alongside
@@ -118,6 +148,10 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           gl.toneMappingExposure = 1.0 // Calibrated highlight compression for deep blacks
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
+          // DEV DEBUG HOOK: scene access for runtime diagnostics (matching __orbitalControls)
+          if (import.meta.env.DEV) {
+            ;(window as unknown as Record<string, unknown>).__orbitalScene = scene
+          }
         }}
         camera={{
           fov: 45,
@@ -130,6 +164,9 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
         <Suspense fallback={null}>
           {/* Celestial environment (stars and solar light) */}
           <EnvironmentLayer />
+
+          {/* PBR indirect-specular environment (local RoomEnvironment, low intensity) */}
+          <RuntimeEnvironment />
 
           {/* ─── Layered Earth Rendering System ─── */}
           {/* EarthGroup rotates by GMST — represents the ECEF (Earth-fixed) frame */}
