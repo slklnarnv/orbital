@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
+import { useLoadingStore } from '@/stores/loadingStore'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
   { value: 'high', label: 'High fidelity', hint: 'IGOAL · animated' },
@@ -17,6 +18,9 @@ export function SettingsGear(): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const issModelQuality = useSettingsStore((state) => state.issModelQuality)
   const setIssModelQuality = useSettingsStore((state) => state.setIssModelQuality)
+  // Loading indicator for the pending model candidate.
+  const issDetail = useLoadingStore((state) => state.issDetail)
+  const isLoadingModel = issDetail.status === 'loading' || issDetail.status === 'preparing'
 
   useEffect(() => {
     if (!isOpen) return
@@ -84,6 +88,7 @@ export function SettingsGear(): JSX.Element {
           <div role="radiogroup" aria-label="ISS model" style={{ display: 'grid', gap: 6, marginTop: 6 }}>
             {MODEL_OPTIONS.map((option) => {
               const isSelected = issModelQuality === option.value
+              const isPending = isLoadingModel && issDetail.quality === option.value
               return (
                 <button
                   key={option.value}
@@ -94,6 +99,7 @@ export function SettingsGear(): JSX.Element {
                   className="hud-label"
                   style={{
                     appearance: 'none',
+                    position: 'relative',
                     textAlign: 'left',
                     background: 'transparent',
                     border: '1px solid',
@@ -110,6 +116,7 @@ export function SettingsGear(): JSX.Element {
                   >
                     {option.hint}
                   </span>
+                  {isPending && <span className="hud-settings-spinner" aria-hidden="true" />}
                 </button>
               )
             })}

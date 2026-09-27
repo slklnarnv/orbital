@@ -135,6 +135,23 @@ body,
   outline-offset: 3px;
 }
 
+/* Tiny ring on the model option currently loading. */
+.hud-settings-spinner {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--hud-line);
+  border-top-color: var(--hud-hi);
+  border-radius: 50%;
+  animation: hud-spin 0.8s linear infinite;
+}
+
+@keyframes hud-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ─── Frame scrims ─────────────────────────────────────────────────────── */
 
 .hud-settings-popover {
