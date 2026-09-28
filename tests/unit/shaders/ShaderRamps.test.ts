@@ -6,13 +6,19 @@ function smoothstep(low: number, high: number, value: number): number {
   return t * t * (3 - 2 * t)
 }
 
+// Ramp table — 2026-09-28/29 visual refresh: the three painted sunset bands
+// were replaced by one physical low-sun warmth window shared by terrain and
+// clouds (`lowSun`), and the sun was rebuilt as a single radial profile (real
+// 0.66° photosphere + tight glare + wide power-law haze) on a 0.185 rad
+// billboard, kept entirely below the bloom threshold. Sun edges are quoted in
+// billboard UV units: 0.00575 rad / 0.185 rad = 0.0311 for the disc radius.
 const fallingRamps = [
-  { name: 'Earth night mask', low: -0.12, high: 0.04 },
-  { name: 'Earth terrain sunset', low: 0.0, high: 0.12 },
-  { name: 'Cloud sunset', low: 0.0, high: 0.15 },
-  { name: 'Atmosphere twilight falloff', low: -0.04, high: 0.08 },
-  { name: 'Sun disc', low: 0.006, high: 0.015 },
-  { name: 'Sun lens-ring falloff', low: 0.20, high: 0.22 },
+  { name: 'Earth night mask', low: -0.14, high: 0.02 },
+  { name: 'Earth low-sun warmth', low: 0.02, high: 0.35 },
+  { name: 'Cloud low-sun warmth', low: 0.02, high: 0.35 },
+  { name: 'Atmosphere twilight falloff', low: 0.02, high: 0.35 },
+  { name: 'Sun limb shoulder', low: 0.0249, high: 0.0357 },
+  { name: 'Sun billboard edge fade', low: 0.32, high: 0.46 },
 ]
 
 describe('portable inverse shader ramps', () => {

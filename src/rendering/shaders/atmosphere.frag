@@ -105,21 +105,22 @@ void main() {
   // is on the lit or unlit side of Earth — outward normal is correct for this.
   float sunDot = dot(normal, normalize(sunDirection));
 
-  // Widen twilight transition zone to a ~6° physical band centered at the terminator (sunDot ≈ 0.0)
-  // Range: sunDot ∈ [-0.06, 0.08]
-  float twilightWeight = (1.0 - smoothstep(-0.04, 0.08, sunDot)) * smoothstep(-0.06, 0.04, sunDot);
+  // Twilight window aligned with the terrain/cloud low-sun warmth: fades as the
+  // sun climbs, gated just past the terminator. The white/blue limb arc itself
+  // is untouched — only this warm segment softens.
+  float twilightWeight = (1.0 - smoothstep(0.02, 0.35, sunDot)) * smoothstep(-0.12, 0.04, sunDot);
 
-  // Multi-tier Rayleigh sunset gradient:
-  // Crimson at dense lowest altitudes (altFactor near 1.0), gold at higher, thinner altitudes.
+  // Restrained two-tier sunset gradient: rose at dense lowest altitudes,
+  // gold at higher, thinner altitudes. Half the old weight — warmth, not neon.
   float altFactor = dotNV <= 0.22016 ? (dotNV / 0.22016) : clamp(1.0 - (dotNV - 0.22016) / 0.042, 0.0, 1.0);
 
-  vec3 twilightCrimson = vec3(0.92, 0.20, 0.04); // Luminous warm reddish-orange (deep atmospheric penetration)
-  vec3 twilightGold    = vec3(0.98, 0.62, 0.10); // Luminous warm gold (shorter scatter path)
-  vec3 twilightColor   = mix(twilightCrimson, twilightGold, pow(altFactor, 1.5));
+  vec3 twilightRose = vec3(0.95, 0.42, 0.18); // Dusty rose — deep atmospheric penetration
+  vec3 twilightGold = vec3(0.99, 0.74, 0.30); // Muted gold — shorter scatter path
+  vec3 twilightColor = mix(twilightRose, twilightGold, pow(altFactor, 1.5));
 
-  // Additive solar twilight glow:
-  // Blend twilight gradient into the base atmosphere color with enhanced weight for a breathtaking sunrise/sunset glow
-  atmoColor = mix(atmoColor, twilightColor, twilightWeight * 0.68);
+  // Blend the twilight gradient into the base atmosphere color, restrained so
+  // the arc reads as warm near the terminator without going neon.
+  atmoColor = mix(atmoColor, twilightColor, twilightWeight * 0.35);
 
   // ── Progressive Nightside Extinction ─────────────────────────────────────────
   // The atmosphere disappears completely on the nightside.

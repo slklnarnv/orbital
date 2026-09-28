@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { simulationClock } from '@/core/clock/SimulationClock'
+import { useTelemetryStore } from '@/stores/telemetryStore'
 import {
+  GeoLookupService,
   cellKeyFor,
   describeWeatherCode,
   formatLocalClock,
@@ -104,5 +107,77 @@ describe('formatLocalClock', () => {
   it('rolls across the date boundary without leaking it into the time', () => {
     const epochMs = Date.UTC(2026, 8, 2, 23, 59, 0)
     expect(formatLocalClock(epochMs, 3600)).toBe('00:59')
+  })
+})
+
+describe('GeoLookupService time-control gate', () => {
+  const TOKYO = { latitude: 35.68, longitude: 139.77 }
+  const BUENOS_AIRES = { latitude: -33.87, longitude: -58.04 }
+
+  let service: GeoLookupService
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.UTC(2026, 8, 28, 12, 0, 0))
+    useTelemetryStore.setState(useTelemetryStore.getInitialState(), true)
+    simulationClock.setMode('REALTIME')
+    simulationClock.setTimeScale(1)
+
+    // One mock answers both endpoints so a passed gate performs real
+    // fetches and the limiters record successes (no backoff skew).
+    fetchMock = vi.fn(async (url: unknown) => {
+      const payload = String(url).includes('open-meteo')
+        ? {
+            timezone: 'Asia/Tokyo',
+            timezone_abbreviation: 'JST',
+            utc_offset_seconds: 32400,
+            current: { temperature_2m: 21.4, weather_code: 2 },
+          }
+        : { countryName: 'Japan', continent: 'Asia', locality: '' }
+      return { ok: true, json: async () => payload }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    service = new GeoLookupService()
+  })
+
+  afterEach(() => {
+    service.stop()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('suppresses lookups while time is accelerated and resumes in Live', async () => {
+    simulationClock.setMode('ACCELERATED')
+    service.start()
+    useTelemetryStore.setState(TOKYO) // latches the real-fix flag via subscribe
+
+    await vi.advanceTimersByTimeAsync(3_000 + 21_000)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    simulationClock.setMode('REALTIME')
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(fetchMock.mock.calls.length).toBe(2) // place + weather for the cell
+  })
+
+  it('fills in once per cell while paused, so a paused seek gets its fix', async () => {
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+    simulationClock.setMode('PAUSED')
+
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000)
+    expect(fetchMock.mock.calls.length).toBe(2)
+
+    // Seek to a different ground cell while paused: a fill-in fires for the
+    // NEW cell. (The geo/weather limiters may split it across ticks — the
+    // weather limiter's interval is shorter — so assert on the call targets,
+    // not an exact count.)
+    const callsAfterFirstCell = fetchMock.mock.calls.length
+    useTelemetryStore.setState(BUENOS_AIRES)
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterFirstCell)
+    const targets = fetchMock.mock.calls.map((call) => String(call[0]))
+    expect(targets.some((url) => url.includes('latitude=-33.87'))).toBe(true)
   })
 })

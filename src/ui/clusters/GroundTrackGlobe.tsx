@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useOrbitalState } from '@/hooks/useOrbitalState'
 import { useGeoStore } from '@/stores/geoStore'
+import { useSimulationStore } from '@/stores/simulationStore'
 import { formatLatitude, formatLongitude } from '@/utils/formatters'
 
 /**
@@ -11,6 +12,11 @@ import { formatLatitude, formatLongitude } from '@/utils/formatters'
  * Beneath it, the ground story: the place being overflown (country + continent
  * or ocean/sea), the coordinates, and the local clock with current weather —
  * served by GeoLookupService at its own 5 s cadence.
+ *
+ * While simulation time is accelerated, place/time/weather are withheld (the
+ * lookup service pauses and its last answer would misrepresent a ground
+ * point racing at thousands of km/s). The coordinates stay — they are live
+ * telemetry and honestly show the race.
  */
 
 const SIZE = 78
@@ -62,6 +68,7 @@ function graticulePath(
 
 export function GroundTrackGlobe(): JSX.Element {
   const { latitude, longitude } = useOrbitalState()
+  const accelerated = useSimulationStore((state) => state.mode === 'ACCELERATED')
 
   const { placeName, continent, localTime, tzAbbr, temperatureC, weatherLabel } = useGeoStore(
     useShallow((state) => ({
@@ -135,15 +142,19 @@ export function GroundTrackGlobe(): JSX.Element {
       <span className="hud-label" style={{ fontSize: 8 }}>
         Passing over
       </span>
-      <span className="hud-place" title={placeTitle}>
-        {placeText}
-      </span>
+      {!accelerated && (
+        <span className="hud-place" title={placeTitle}>
+          {placeText}
+        </span>
+      )}
       <span className="hud-fine hud-groundcoords" style={{ whiteSpace: 'nowrap' }}>
         {formatLatitude(latitude, 2)} · {formatLongitude(longitude, 2)}
       </span>
-      <span className="hud-fine hud-groundwx" style={{ whiteSpace: 'nowrap', color: 'var(--hud-lo)' }}>
-        {wxText}
-      </span>
+      {!accelerated && (
+        <span className="hud-fine hud-groundwx" style={{ whiteSpace: 'nowrap', color: 'var(--hud-lo)' }}>
+          {wxText}
+        </span>
+      )}
     </div>
   )
 }

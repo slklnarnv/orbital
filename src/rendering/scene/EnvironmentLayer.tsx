@@ -4,7 +4,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import sunVert from '../shaders/sun.vert'
+import billboardVert from '../shaders/billboard.vert'
 import sunFrag from '../shaders/sun.frag'
 
 // ─── Preload Starmap Texture at Module Scope ─────────────────────────────────
@@ -141,15 +141,18 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       sunMeshRef.current.lookAt(state.camera.position)
 
       // Dynamically scale the sun billboard to maintain a constant apparent angular size.
-      // Without this, zooming out to maxDistance (500,000 km) makes the billboard resolve
+      // Without this, zooming out to maxDistance makes the billboard resolve
       // into a visible finite-size plane instead of looking like a distant point source.
       //
-      // Physics: the real sun subtends ~0.53° (0.00925 rad) from 1 AU. The shader's bright
-      // core disc occupies ~3% of billboard UV space, so a billboard angular size of 0.20 rad
-      // yields a core of 0.20 × 0.03 = 0.006 rad ≈ 0.34° — slightly smaller than the real
-      // sun for a restrained, cinematic look. Corona extends to ~0.20 × 0.20 = 0.04 rad (~2.3°).
+      // Angular budget: billboard = 0.185 rad (~10.6°). The shader's disc edge
+      // sits at d ≈ 0.031 of UV space → ~0.66° visible disc (the real solar disc
+      // is 0.53°), with the haze dying out by ~3.5°. The extra quad width is
+      // what lets the shader carry the WHOLE halo: at the old 0.078 rad the
+      // billboard's axis edge sat at ~2.2°, so anything wider had to come from
+      // the bloom pass — which turned the compact core into a square. See
+      // sun.frag; PLANE_FULL_RAD there must track this number.
       const camToSun = state.camera.position.distanceTo(sunMeshRef.current.position)
-      const targetAngularSize = 0.20 // radians — yields ~0.34° core + ~2.3° corona glow
+      const targetAngularSize = 0.185 // radians — ~0.66° disc + ~3.5° haze
       const dynamicScale = camToSun * targetAngularSize
       sunMeshRef.current.scale.setScalar(dynamicScale / 110000) // normalize against the base 110K geometry
     }
@@ -176,8 +179,8 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       {/* Primary directional light source representing the Sun */}
       <directionalLight
         ref={sunLightRef}
-        intensity={1.8}         // Calibrated: slightly restrained for photographic contrast
-        color="#fff8f0"          // Subtle warmth — sun at orbital distance is slightly warm
+        intensity={1.9}         // Slightly lifted to keep the smaller sun disc dominant
+        color="#fff3e2"          // Warm solar white — warms further via the terminator shading
         castShadow={false}
       />
 
@@ -191,7 +194,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       <mesh ref={sunMeshRef} renderOrder={2}>
         <planeGeometry args={[110000, 110000]} />
         <shaderMaterial
-          vertexShader={sunVert}
+          vertexShader={billboardVert}
           fragmentShader={sunFrag}
           transparent={true}
           blending={THREE.AdditiveBlending}

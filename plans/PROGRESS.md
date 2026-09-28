@@ -1,8 +1,17 @@
 # PROGRESS — plan 001 implementation ledger
 
 Update this file after every landed change. A fresh session resumes from here.
-Last updated: 2026-09-28 — Phases A, B, C, F and E landed and verified.
-Remaining: Phase D (optional perf batching) only.
+Last updated: 2026-09-29 (later) — OrbitLine repaired after the tick-mask
+rewrite left it permanently invisible (bootstrap deadlock; component
+simplified back to LineMaterial's own dash), and the ISS tracking glint
+recolored golden → light blue per user request. Also: the lens flare the
+"fresh start" entry below claims DELETED is BACK in the tree by user decision
+(`SunFlare.ts` + `lensFlare` setting, default off) — the deletion note was
+wrong for the shipped state; see "Lens flare re-landed" below. Remaining:
+the owed lens-flare improvement pass, the user-reported performance run
+("heavy and laggy" — see "Performance / optimization run — OWED" below),
+and Phase D (optional perf batching) only.
+2026-09-28 (later): user-facing time control LANDED (below, "Time control feature").
 
 ## Done (landed, verified)
 
@@ -198,7 +207,625 @@ Remaining: Phase D (optional perf batching) only.
   sun-track, and its joint axes are unvalidated in this asset (plan stop
   condition). Left parked.
 
-### Remaining work (not started, plan order)
+### Time control feature (2026-09-28, user-requested) — LANDED + browser-verified
+
+Plan approved in-session (AskUserQuestion decisions: full scope incl. tape
+scrub; presets 1×/10×/60×/300×; Live = hard snap back to wall now — a smooth
+glide is infeasible, the 50 km/tick interpolation bound caps catch-up at
+~65× and a 5 h lead would glide for minutes).
+
+- **Store** (`src/stores/simulationStore.ts`, was deliberate dead code, now
+  the single UI write path): `setRate(scale)` → ACCELERATED preset,
+  `togglePause()` with `{resumeMode, resumeScale}` memory,
+  `seek(epochMs)` which DETACHES from REALTIME into PAUSED first (REALTIME
+  re-pins the epoch to the wall each tick, so an undetached seek would be
+  undone within 100 ms) and clamps to ±7 days of wall now.
+- **Transport row** (`src/ui/clusters/TimeControls.tsx`, NEW — rendered
+  inside MissionClockCluster below the caption): pause/play icon, presets,
+  Live (always visible, active while REALTIME), seek popover (SettingsGear
+  pattern; datetime-local field interpreted as UTC, `Apply`, nudges
+  ±1/±10 min / ±1 orbit; orbit = current telemetry period). Space = global
+  pause toggle, exempting inputs/contentEditable/modifiers. No signal
+  colors — active state is `--hud-hi` + hairline underline.
+- **Orbit tape** (`OrbitTape.tsx`): now an interactive ARIA slider
+  (was `pointer-events:none`, `aria-hidden`). Marker sweeps at the
+  SIMULATION rate (per-frame rate factor: 0 paused / timeScale accelerated /
+  wall live — no 10 Hz stepping), glides toward the 1 Hz measured target,
+  SNAPS when the target jumps > 0.2 turn (seek). Pointer drag = continuous
+  seek (base epoch + wrapped phase delta × period); scrubbing pauses any
+  running rate first and release STAYS PAUSED; click = seek to that phase;
+  ArrowLeft/Right ±1 min, PageUp/Down ±10 min; aria-valuetext = UTC.
+- **Geo gate** (`GeoLookupService.ts` + `GroundTrackGlobe.tsx`): while
+  ACCELERATED, no new geo lookups (at 300× the ground point crosses a cache
+  cell per 5 s tick — unbounded fetch churn otherwise); tick cadence kept,
+  in-flight finish, resume on Live is automatic; PAUSED keeps the
+  cell-change one-shot (paused seek still fills in). The passing-over line
+  withholds place/time/weather while accelerated (stale place would
+  misrepresent a racing ground point); coords stay live.
+- **INTERPOLATOR FIX (plan-001 correction):** `MAX_INTERPOLABLE_STEP_KM`
+  50 → 400 (`OrbitalRenderInterpolator.ts`). The old value was derived from
+  a 10× arithmetic error (300× stride is 7.66 km/s × 300 × 0.1 s ≈ 230 km,
+  not ~23 km) and reseeded EVERY snapshot at accelerated rates — 10 Hz
+  stepping + camera thrash at close range. 400 km sits above the largest
+  continuous stride (230 km @ 300×) and below the smallest deliberate jump
+  (±1 min nudge ≈ 460 km); plan-001 seek fixtures (≥ ~9,600 km) unchanged.
+- **INTERPOLATOR FIX 2 (user-reported, same day):** the discontinuity
+  anchor `lastSnapshotPosition` was only ever written in `reseed()`, so the
+  bound measured the distance from the last reseed — the ACCUMULATED arc —
+  not the per-snapshot stride. At 300× that reseeded every 2nd snapshot
+  (460 km arc > 400 km): hold-then-teleport at ~5 Hz at every zoom level,
+  reported as "ISS teleports to the next calculated spot" in Follow mode.
+  Fix: re-anchor on every accepted snapshot
+  (`lastSnapshotPosition.copy(this.target)` in the accept branch).
+  Measured in-browser (Follow · Locked, 300×, camera per-frame
+  displacement): before p10/p90 = 32.9/236 (bimodal stutter, 12.5×
+  spread); after p10/p90 = 31.7/43.7 around mean ≈ 40 — smooth glide with
+  rare (~3%) single-frame hitches from renderer hiccups, accepted.
+  Regression test `stays interpolated across SUSTAINED accelerated
+  strides` fails without the anchor update by construction.
+- **OrbitLine** (`OrbitLine.tsx`): backward seek no longer freezes the arc
+  (signed throttle now also regenerates when `nowMs < lastRefresh`), plus a
+  250 ms wall floor so 300× cannot spend every frame on ~185 SGP4
+  propagations.
+- **SimulationClock.ts**: comments only (stale "scale 0 = paused" and
+  "ignored in PAUSED/REPLAY" docstrings corrected; no behavior change).
+- Tests: `tests/unit/clock/SimulationStore.test.ts` (NEW, 8),
+  `SimulationClock.test.ts` (+3 seek/pause contracts),
+  `OrbitalRenderInterpolator.test.ts` (+2: 300× stride interpolates,
+  ±1 min nudge snaps), `GeoLookupService.test.ts` (+2 service-level gate
+  tests with fake timers + stubbed fetch). 181/181.
+- Gates: `tsc` clean; `npx vitest --run` 181/181; `npm run verify` green
+  (incl. production build).
+- Browser matrix (dev server + IAB): Live within 35–59 ms of wall; Space /
+  toggle pause; paused epoch frozen; 300× implied rate ≈278× with ZERO new
+  geo fetches; place/wx withheld + coords live while accelerated; Live
+  snap-back; geo refetch in Live; typed UTC seek → epoch exact to the ms;
+  scrub +100 px → +400.9 s (expected ≈400 s); ArrowRight/PageDown →
+  +60/−600 s; transport row visuals per design system; console clean
+  throughout, app restored to Live before wrap-up.
+- **Found + fixed during verification:** `periodMsOf` in OrbitTape floored
+  MINUTES at 600 (copied from a SECONDS floor) making every scrub offset
+  6.45× too large — caught by the quantitative browser check, fixed, and
+  re-verified to ±0.5 s.
+- **SCRUB FOLD FIX (user-reported, same day):** the scrub delta was wrapped
+  to shortest-path ±0.5 turn, so dragging past half the tape FOLDED: the
+  epoch seeked a full orbit away (~±92 min) — the ISS lands one period
+  later at a near-identical position (looks accurate) while Earth's GMST
+  visibly jumps. Fix: accumulate each pointermove's shortest arc instead
+  of wrapping the total (`scrubAccumRef` + `base.prevPhase` in
+  OrbitTape.tsx) — edge-to-edge drag = exactly one monotonic revolution.
+  Verified by seek-log during a full-tape drag: 13 seeks, 0 folds,
+  down→release offset +5530.6 s vs ~5531 s expected. Also hardened
+  `setPointerCapture` with try/catch (capture is an optimization; synthetic
+  pointers have no capturable id).
+- Known/accepted (documented in code): seek/scrub during a Locate flight
+  completes to the captured pose then re-captures; TLE age/confidence
+  follow sim epoch (past seeks show confidence 1.0); TLE-swap blend can
+  briefly reseed at 300× (4-hourly event); ACCELERATED tab-suspension
+  loses wall time beyond the 100 ms tick clamp (pre-existing).
+
+## Visual refresh — sun, terminator, orbit line, ISS highlight (2026-09-28, user-requested) — LANDED + browser-verified
+
+Approved in-session (user choices: subtle HDR bloom with an off toggle,
+physical low-sun warmth terminator, compact 2–5° sun, optional lens flare we
+can delete later; the white limb arc kept, only its orange segment softened).
+
+- **Terminator** (`earthSurface.frag`, `clouds.frag`, `atmosphere.frag`): the
+  three painted sunset bands DELETED (`twilightWarm`, `sunsetGlow`, and the
+  atmosphere crimson/gold mix cut 0.68 → 0.35 with rose-gold hues). Replaced
+  by one physical rule — the SUNLIGHT reddens at grazing incidence:
+  `lowSun = 1.0 - smoothstep(0.02, 0.35, sunDot)` +
+  `sunWarmth = mix(vec3(1.0), vec3(1.0, 0.52, 0.22), lowSun)` with the
+  IDENTICAL literal in ground and clouds (tints terrain diffuse, ocean glint,
+  cloud diffuse + forward scatter). Day/night masks widened (day
+  (−0.10, 0.18), night 1−smoothstep(−0.14, 0.02)) — gradient, not a line.
+  White limb arc untouched.
+- **Sun**: billboard 0.20 → 0.055 rad (~3.2°; disc ≈0.6°, corona ~2.5°),
+  `sun.frag` reworked (no lens ring, no painted streaks, quad-edge fade that
+  accounts for d ∈ [0, 0.707] — the first cut faded at 0.72+ and showed the
+  quad as a square). Disc luminance 0.58 — deliberately UNDER the bloom
+  threshold: blooming a tiny HDR-22 source smeared UnrealBloom's coarsest mip
+  into a visible square; the shader corona carries the glow instead. Light
+  #fff3e2 @ 1.9.
+- **Orbit line** (`OrbitLine.tsx`): THREE.Line + custom shaders → Line2 +
+  LineMaterial (~2 px AA stroke). Per-point alpha via injected
+  `instanceAlphaStart/End` attributes (onBeforeCompile, mirroring the
+  instanceColor pattern; curve evaluated CPU-side per refresh: past 0→0.30,
+  future 0.60). `orbitLine.vert/.frag` deleted. Resolution synced to
+  viewport; frustumCulled off.
+- **ISS zoom-out highlight** (`ISSModel.tsx`): aura sphere → billboarded
+  gaussian-glow shader plane (`softGlow.frag`, amber/cyan shadow logic kept);
+  beacon ring+dot → SDF reticle plane (`reticle.frag`: corner brackets +
+  hairline circle + center dot, HUD reticle geometry rule). Distances,
+  pulse, scaling unchanged. New shared `billboard.vert`.
+- **Postprocessing** (`src/rendering/post/Postprocessing.tsx` NEW +
+  SceneRoot): EffectComposer + RenderPass + UnrealBloom (0.3 strength /
+  0.5 radius / **1.25 threshold** — sits ABOVE the ISS PBR highlight range so
+  the station never sparkles, below the sun corona + city-light cores) +
+  OutputPass, rendered at useFrame priority 1 (CameraControls −1 ordering
+  preserved; Locate flight verified with composer active). `PostprocessingGate`
+  unmounts the whole chain when the toggle is off — OFF == the exact old
+  direct pipeline (verified). `OutputPass` owns ACES/sRGB; material tonemapping
+  includes untouched (EarthVisualContracts still green).
+- **Sun look tuning pass (user feedback "sun looks shit / ISS too shiny"):**
+  disc 0.85 (crisp, hot white through ACES) + the CORONA made the HDR element
+  (`innerCorona = exp(-d*9)*1.6`) — bloom glows the wide soft corona instead
+  of a tiny hard source, which is what previously smeared into squares.
+  Verified cresting-the-limb shot: blazing compact star + one-sided
+  anamorphic streak, no square, station matte in Follow mode.
+- **Lens flare** (`src/rendering/post/SunFlare.ts` NEW): ShaderPass after
+  bloom — anamorphic streak + ghosts, gated per-frame by (a) analytic
+  camera→sun ray vs Earth-sphere occlusion with penumbra, (b) Earth-disc
+  screen-space occlusion so the flare never draws over the planet, (c)
+  frame-border fade so no element touches the screen edge. Single ephemeris
+  (sunDirectionWorld). Toggled in render settings (default on; deletable).
+  **Reworked same day after user review** ("laser line + dirty smudge"):
+  streak now a tapered two-tier profile (thin core 0.20 + soft wings 0.05,
+  both dying by ~25% of the frame), ghosts cut from three warm blobs to two
+  faint cool ones (0.045/0.030), global proximity falloff, frame fade.
+  **Final state (2026-09-29, "fresh start" user rework)**: lens flare pass
+  DELETED entirely (`src/rendering/post/SunFlare.ts` removed; Postprocessing
+  is bloom + output only; `sunFlare` setting + "Lens flare" toggle removed —
+  a stale `sunFlare` key in a user's persisted localStorage is ignored
+  harmlessly). Sun rewritten fresh (`sun.frag`): crisp 0.65° disc (HDR 3.2)
+  + two-tier exponential glow measured from the disc edge + white→gold→amber
+  radial gradient, all faded to zero inside the quad (edgeFade completes at
+  d≈0.49; quad UV d only reaches 0.707). Billboard enlarged to 0.078 rad
+  (~4.5°) in EnvironmentLayer. Bloom: strength 0.26 / radius 0.4 /
+  **threshold 2.4** — kills the "cloudy circles" the limb's HDR (~7) used to
+  smear at planetary zoom. (Superseded 2026-09-29: the sun no longer feeds
+  bloom at all — see the RESOLVED entry below.)
+- **RESOLVED — fresh-sun visual verification (2026-09-29).** The sun is now
+  confirmed in-frame, and the verification found three real defects, all
+  fixed. Method note: the harness model has no image input, so the sun was
+  judged by (a) numeric pixel analysis of lossless PNG captures
+  (radial profile + axis/diagonal *sector* ratio, which is what discriminates
+  a round halo from a square one) and (b) a Gemini-3.8-backed subagent
+  reading the images through a vision query.
+  1. **The bloom "square" was real and was entirely bloom-side.** Axis/diagonal
+     sector ratio with bloom ON: **0.43** (energy biased along the quad
+     diagonals, i.e. square corners) out to r≈140 px. With bloom OFF: a clean
+     **1.00**, glow dead by r≈44 px. UnrealBloom resolves its coarsest mip at
+     1/16 of the frame and a ~15 px HDR disc is barely one texel there. Fix:
+     the sun no longer feeds bloom at all — its whole halo is carried by the
+     shader (exact, radial, still one additive quad), with the raw peak at
+     **2.30 < BLOOM_THRESHOLD 2.4**. Threshold untouched, so the Earth limb
+     and the ISS are unaffected by construction.
+  2. **`sun.frag` had no `<tonemapping_fragment>` / `<colorspace_fragment>`**
+     — unlike earthSurface/clouds/atmosphere, which all end with both. The
+     direct pipeline therefore bypassed ACES *and* the sRGB encode: raw
+     radiance clamped at 1.0, so the disc was a flat 255 stamp and the haze
+     rendered ~2x dark and desaturated (the "murky brown" halo). It also made
+     the two pipelines disagree — three disables per-material tone mapping
+     only while rendering into a render target (`WebGLPrograms`:
+     `currentRenderTarget === null`), so OutputPass tone-mapped the sun with
+     the composer on and nothing tone-mapped it with the composer off.
+     Peak is now **239, unclipped**, and both pipelines agree.
+  3. **The dither hash did not dither.** `fract(sin(dot(gl_FragCoord, k)) * s)`
+     exceeds fp32's 24-bit mantissa at gl_FragCoord ~5e4, so the fractional
+     part degenerated into correlated bands — it was *adding* structure where
+     it was meant to hide posterisation. Replaced with Hoskins' `hash21`
+     (multiply after `fract`), amplitude 1.6/255. Reviewed as "well-dithered,
+     no distinct hard concentric rings".
+  Also: the disc was **1.34°** across (2.5x the real sun; the old "~0.65°
+  disc" comment described the disc's *radius*). Now 0.66° diameter on a
+  0.185 rad billboard (was 0.078 — the old quad axis edge sat at ~2.2°, so
+  anything wider *had* to come from bloom), with a ~0.29° e-fold glare and a
+  ~2.3° knee power-law haze. PLANE_FULL_RAD in sun.frag must track
+  `targetAngularSize`.
+  Vision verdict after the rework: "bright central point with a tight
+  Gaussian-like roll-off", "no distinct perimeter", no polygons, no moiré,
+  no rings, no spikes/streaks/ghost rings; 6.5/10. Its one remaining ask was
+  diffraction spikes — declined, they are explicitly banned by the brief.
+  Tuning: sun constants in `sun.frag`, bloom in `Postprocessing.tsx`
+  (BLOOM_*), billboard angle in `EnvironmentLayer.tsx` (targetAngularSize
+  **0.185**).
+- **NEW FINDING (out of scope, not fixed): the ISS planetary reticle is
+  ~3 px.** `beaconRef` scales as `max(1.2, distanceKm / 6800)` on a 16 km
+  plane, i.e. a *constant* angular size of ~0.135°: measured **3.06 px** at
+  23,631 km (`softGlow` measures 19.06 px at the same distance, and that is
+  what the eye actually reads). The SDF reticle — corner brackets + hairline
+  circle + centre dot — cannot be legible at 3 px; it aliases into the
+  faint 4-point cross/star the vision pass reported. Pre-existing, untouched
+  by the sun work, and left alone per "don't change anything else".
+- **Settings**: `settingsStore` gains persisted `postprocessing`;
+  SettingsGear popover gains a Visuals section (role="switch", just "Bloom").
+  (The `sunFlare` field existed briefly and was removed with the flare pass.)
+- **Tests**: ShaderRamps ramp table deliberately re-pinned (new low-sun
+  window 0.02–0.35 in three rows, sun disc 0.15–0.19, corona edge
+  0.72–0.98; lens-ring row deleted); EarthVisualContracts gains the
+  low-sun consistency pins (identical window+tint literals in ground and
+  clouds; painted bands must not return). 184/184.
+- Gates: tsc clean; vitest 184/184; `npm run verify` green (build included).
+- Browser matrix (dev server + IAB): terminator limb (warm dusk gradient, no
+  stripe), night side (bloomed city lights), day side, sun framing (compact
+  star, one-sided streak occluded by Earth-disc gate, no quad edge, no bloom
+  square), Follow · Locked (model visuals unchanged, flight completes with
+  composer active), bloom toggle off == old pipeline, console clean, app left
+  in Live with defaults restored.
+- Note: two "black canvas" scares during verification were the IAB tab being
+  MINIMIZED (rAF suspended → reload raced a frozen renderer). HANDOFF already
+  warns foreground-only for rAF work; a dev boot-error tape
+  (`window.__bootErrors`, main.tsx, dev-only) was added while diagnosing and
+  kept — it captures window errors, rejections, and console.error.
+
+## Locate under accelerated time (2026-09-29, user-reported) — FIXED + browser-verified
+
+**Report:** "at 300× speed pressing locate button the camera tries to catch up
+the ISS but fails."
+
+**Reproduced and measured** (dev server, 300×, overview → Locate, per-150 ms
+sampling of eye→ISS, pivot, target→ISS and the eye's Earth-centre radius):
+
+| t (ms) | eye→ISS | pivot | target→ISS | eye radius |
+|---|---|---|---|---|
+| 2225 | 30276 | 26000 | 6810 | 26000 |
+| 4826 | **6476** | 6460 | 17.7 | 8943 |
+| 5377 | 5652 | 5635 | 17.7 | 7137 |
+| 6381 | 6415 | 6398 | 17.7 | **6500** |
+| 11621 | 13047 | 13022 | 80.4 | **6500** |
+
+**Cause.** `CameraFlightPath.planLocate` baked the arrival point — 250 km up the
+station's radial plus 250 km back along the sweep tangent — from the station
+position at PLANNING time, and `sampleLocate` then flew to that fixed inertial
+point. The flight lasts 2–4 s; at 300× the station covers ~2,300 km per wall
+second (≈6,500 km across the flight, ~55° of orbit), so the eye arrived at the
+station's OLD address — 6,460 km away instead of the intended ~353 km standoff.
+Tracking then locked the target onto the live station, but the eye was far
+outside and drifting inward; the moment it crossed the 6,500 km
+`CameraNavigationConstraint` sphere the clamp broke the rigid eye↔target
+relation, the eye was pinned at exactly 6500, and the station ran away — the
+camera chased and never converged.
+
+**Fix** (`src/interaction/camera/CameraFlightPath.ts`): the plan is kept exactly
+as tuned (fixed-axis uniform sweep, same duration estimate — so 1× is
+bit-for-bit the same route) and is then carried **station-relative**:
+`planLocate` records the station at planning time and `sampleLocate` translates
+the whole route by the station's drift since then. At progress 1 the eye is
+`station_planned + standoff + (station_now − station_planned)` = the standoff of
+the station as it is NOW. Translation is exact and has no singularity.
+
+Two alternatives were tried and rejected on measurement:
+- **Re-deriving the sweep plane from the live station each frame** (same
+  construction as the plan). This has a sign flip: `cross(dirStart, stationDir)`
+  reverses when the station's direction crosses the departure radial, and
+  `applyAxisAngle` then mirrors the eye across the axis — measured as a
+  **25,343 km single-step teleport** mid-sweep in the new test. Also degenerate
+  (cross → 0) at exactly the antipodal crossing.
+- **Predicting the station's future position at planning time.** At 300× one
+  flight spans ~750 sim-seconds ≈ 47° of orbit, so linear extrapolation is badly
+  wrong and a real prediction needs SGP4 inside the camera path.
+
+**Verified (browser, 300×):** flight now ends on `pivot = 353.6 km` (the exact
+250 / 250 standoff); over a FULL orbit afterwards `eye→ISS` stays within
+**341–369 km** and the eye's radius oscillates **6518–7082**, never reaching the
+6,500 km clamp — no escape. The 1× route is unchanged (arrival 359 km, stable,
+same framing).
+
+**Tests** (`tests/unit/camera/CameraFlightPath.test.ts`, +2 → 186/186):
+- `lands on the live standoff when the station travels far during the flight` —
+  proven to fail without the fix: **6,618 km** off instead of 353.6 km.
+- `stays smooth while the live station drifts during the sweep` — no single
+  sample step may exceed 1,500 km across a 300-sample sweep.
+
+Gates: tsc clean; `npx vitest --run` 186/186; `npm run verify` green.
+
+## Render settings: orbit-line style + lens flare (2026-09-29, user-requested)
+
+Two new render-settings controls, both persisted in `orbital-settings`
+(zustand's shallow merge gives older stored state the new defaults).
+
+- **Orbit line: Dashed / Continuous** (`settingsStore.orbitLineStyle`,
+  default `'dashed'`), with **screen-constant tick size**.
+  The dash is `LineMaterial`'s own (`dashed: true` compiled in permanently; the
+  style toggle only moves the duty cycle, so switching never recompiles the
+  program), which needs the cumulative arc length per endpoint — pre-allocated
+  into the geometry alongside the alpha buffer, in place, not via
+  `computeLineDistances()` (which allocates a fresh
+  `InstancedInterleavedBuffer` and would reopen the leak described above).
+  `dashSize`/`gapSize` are set **every frame** from
+  `DASH_SCREEN_PX 7` / `GAP_SCREEN_PX 6` converted to world units at the
+  perspective scale measured at the pivot (the station — measuring to Earth's
+  centre instead would stretch the ticks ~20× in Follow mode, where the camera
+  sits 70–350 km out). So zooming in subdivides the arc into more ticks while
+  the on-screen pitch holds: measured **66 → 205 dashes** and a **9.9 → 10.7 px
+  pitch** as the camera came from 26,000 km to 9,000 km. The arc is one full
+  period, so its far half is up to 4× deeper than the station and the ticks
+  compress with distance there — correct perspective, not a defect.
+  Doing the sizing on the throttled refresh (4 Hz) would let the ticks stretch
+  and pop during a dolly, which is why it runs every frame. Verified: the
+  geometry stays a continuous polyline in both styles (`maxGap 0`), so the
+  ticks can never reintroduce the broken-connection bug fixed above.
+  Spacing is uniform (~30 s of orbit ≈ 230 km per segment), so the ticks are
+  even. A style change clears the refresh throttle stamps so it appears on the
+  next frame rather than up to 250 ms later.
+- **Lens flare** (`src/rendering/post/SunFlare.ts`, default `off`). A
+  composer ShaderPass after bloom and before OutputPass: a halo centred on
+  the sun plus three iris ghosts mirrored through the screen centre along the
+  flare axis (warm inner, two cooler and larger outside). Added in linear
+  space before tone mapping, like every other material.
+  Gated per frame on the CPU: sun in front of the camera (dot guard — never
+  `project()` the sun from behind, the documented mirrored-garbage trap), not
+  behind the Earth (soft limb, ~1.1° penumbra), and a border fade as the sun
+  leaves the frame; the shader additionally blanks everything inside the
+  planet's screen disc, so the flare can never paint over the Earth. A
+  disabled ShaderPass is skipped outright by the composer, so off costs
+  nothing.
+  **Deliberately excluded, both removed after earlier review: no anamorphic
+  streak and no lens rings.**
+  Because it is a post pass it only exists while the compositor does; the
+  settings switch disables itself and reads "Needs Bloom" rather than being
+  silently inert.
+  Amplitude note: the first cut (halo 0.30/0.085, ghosts 0.03/0.02/0.012) was
+  reviewed as "borders on imperceptible" — the ghosts were below the starfield
+  noise. Current values are ~3x that; re-reviewed as "restrained and
+  photographic… reads like real internal lens reflections rather than an
+  exaggerated video-game preset", with the three ghosts landing where the
+  maths puts them (39% / 29% / 18% screen width on the axis).
+- **Settings UI**: the model-quality rows, the new orbit-line radio pair and
+  both switches now share one `.hud-option` class in `index.css` instead of
+  three copies of the same inline style object.
+
+Gates: asset budget ✓, shader ramps ✓, `npx vitest --run` 186/186,
+`npm run verify` exit 0, browser pass console-clean with an empty
+`__bootErrors`.
+
+## Pre-commit diff review + cleanup (2026-09-29)
+
+Full review of the uncommitted visual-refresh + time-control diff (31 modified
+files, 6 new, ~1,450 insertions) before the first push. Review discipline:
+every finding verified against the actual source, by-design behaviour separated
+from defects, nothing shipped that could not be verified on the surface it
+changes.
+
+**Applied (cleanup / optimisation / consistency):**
+- **`OrbitLine.tsx` — GPU buffer leak, fixed.** `LineGeometry.setPositions()`
+  REPLACES its `instanceStart`/`instanceEnd` buffers, and three frees a replaced
+  attribute's GL buffer only through `WebGLAttributes.remove`, which the
+  renderer reaches from `onGeometryDispose` for the geometry's CURRENT
+  attributes alone (`node_modules/three/src/renderers/webgl/WebGLAttributes.js`).
+  The refresh path also built a fresh `InstancedInterleavedBuffer` for the alpha
+  pairs every time. At the 250 ms wall floor that orphaned ~2 VBOs per refresh,
+  ~4/s, forever — invisible in the frame rate, unbounded in GPU memory. Both
+  buffers are now allocated ONCE at `MAX_ORBIT_POINTS` and mutated in place;
+  the live span is set via `geometry.instanceCount`. Verified in-browser: the
+  buffer UUIDs are identical across refreshes and a backward seek, capacity
+  219, live span 185, and the arc still moves on seek.
+  **This rewrite also introduced a real rendering regression — see the
+  CORRECTION at the end of this section: it wrote the polyline into a
+  segment-pair buffer and dashed the line. Fixed and re-verified (maxGap 0).**
+- **`sun.vert` deleted** — byte-identical to `billboard.vert` apart from line
+  endings. `EnvironmentLayer` now imports the shared file, and `billboard.vert`
+  documents that it does NOT billboard (orientation comes from the per-frame
+  `lookAt`, which is load-bearing).
+- **`periodMsOf` deduplicated** into `src/utils/orbitalTime.ts`. It existed
+  twice (OrbitTape + TimeControls) with a *disagreeing* fallback (92.9 vs the
+  `ISS_ORBITAL_PERIOD_MIN = 92.68` already in constants). This formula's floor
+  was once scaled as seconds instead of minutes, making every scrub offset
+  6.45× too large — two copies is two places to reintroduce that.
+- **`OrbitTape` frame loop**: ARIA is now written at most once per whole
+  second. It previously formatted a `Date` and built a string 60×/s, forever,
+  for a value that can only change one second per second.
+- **`TimeControls` Space shortcut**: no longer hijacks Space on controls that
+  Space natively activates (button/a/summary). Previously `preventDefault()`
+  ran for any non-input target, so Space on a focused button paused the clock
+  instead of pressing the button — which broke keyboard activation for the
+  entire HUD. Verified: Space on a focused button leaves the mode untouched,
+  Space on the body still pauses, Space in a field is still ignored.
+- **`SettingsGear`**: `]/**` line merge (the model-options array closer had
+  fused with the JSDoc opener) and the now-stale "nothing else lives here"
+  docstring.
+- **`SceneRoot`**: comment still advertised an "optional sun flare" that was
+  deleted after review.
+- **`docs/NEXT_STEPS.md`**: the "DONE" entry still claimed a "compact ~3.2° sun"
+  and "HDR bloom + lens-flare with toggles" — the flare was deleted, there is
+  one toggle, and the sun is a 0.66° disc on a 0.185 rad billboard.
+
+**Applied on explicit request (the two held-back findings):**
+- **Marker pipeline parity** (`reticle.frag`, `softGlow.frag`). Two changes,
+  both source-proven:
+  1. They were the only two custom shaders without
+     `<tonemapping_fragment>`/`<colorspace_fragment>`. three disables
+     per-material tone mapping only while rendering into a render target, so
+     with Bloom ON they were tone-mapped by OutputPass but with Bloom OFF they
+     rendered raw — clamped, un-encoded, and measurably dimmer (peak at the
+     same pose: **249.6 ON vs 201.7 OFF**).
+  2. Opacity is now folded into the colour with **alpha pinned to 1**. The
+     material is AdditiveBlending with SrcAlpha as its source factor, so
+     `rgb * alpha` is emitted either way — but the two pipelines tone-map at
+     different points (OutputPass on the linear sum vs per-material before the
+     scale), so leaving the scale in alpha would tone-map BEFORE it in one path
+     and AFTER it in the other. With alpha = 1 the two evaluate the identical
+     expression, and the composer path is mathematically unchanged.
+  After: peak parity is within a few counts (**250.9 ON vs 255.0 OFF**; and
+  251.8 vs 252.4 in a second pair). A residual mean difference remains and is
+  NOT a defect: the reticle and aura are concentric additive layers, and
+  "tone-map the sum" cannot equal "tone-map each, then add in display space".
+  Separately, with Bloom ON a nearby bright object (the Earth's limb) blooms
+  and lifts the whole neighbourhood — expected bloom behaviour, not marker
+  drift.
+- **Tracking marker → bare glint** (`ISSModel.tsx`, `softGlow.frag`;
+  `reticle.frag` DELETED). History, so this isn't re-litigated: the marker was
+  a hairline circle + centre dot + corner brackets in a signal cyan, which is
+  why it could never be legible — `max(1.2, distanceKm / 6800)` held a constant
+  *angle* of ~0.135°, i.e. **3.06 px** measured at 23,631 km, and the circle's
+  0.010-wide edge relaxed over a fifth of a pixel (hence the stair-stepping).
+  It was then reworked to HUD-proportioned corner ticks in instrument white at
+  0.5 opacity, which the user reviewed as "sloppy and too sci-fi" — corner
+  brackets read as a tactical targeting box regardless of weight. Chosen
+  replacement: **no chrome at all.**
+  The marker is now a single radially symmetric glint: a tight white-hot core
+  (`exp(-d²·30)`, ~7% of the quad) marking the exact point, inside a soft amber
+  halo (`exp(-d²·3.2)·0.45`), tinted toward white at the core so the point
+  still reads as a point when `uColor` is the cool shadow tone. Sized in SCREEN
+  space at `GLINT_SCREEN_PX = 22` (measured 24.6 CSS px) instead of the old
+  fixed angle, with a 0.4 Hz pulse carried over from the removed beacon.
+  Opacity now fades in to 0.32 and **holds** — it used to decay to 0.15 out at
+  planetary range, back when the reticle carried that range; the glint is the
+  only marker now, so it has to stay findable there.
+  `reticle.frag`, the beacon group, `beaconRef`, `BEACON_RADIUS_KM`,
+  `BEACON_SCREEN_PX` and `BEACON_ACTIVATE_KM` are all deleted
+  (`sceneHasReticle` verified false in-browser).
+  Verified by vision: "no reticles, brackets, bounding boxes, rings, or
+  crosshairs"; distinct whitish core against a warm halo; smooth radial falloff
+  with no square edge; "reads as a radial point-source bloom / lens flare
+  rather than a vector UI marker".
+  **Trade-off, stated deliberately:** the removed ticks were also what made the
+  marker's roll visible — the beacon used to `lookAt` the camera with world up,
+  so it visibly turned as the camera orbited (which the user liked). A radially
+  symmetric glow is rotation-invariant, so that cue is gone. The facing
+  `lookAt` is still required (an edge-on plane would vanish); only the visible
+  roll is lost. If it is missed, two short opposed ticks would restore it
+  without bringing the box back.
+
+**Reviewed, confirmed correct, unchanged:**
+- `GeoLookupService`'s ACCELERATED gate, `simulationStore` seek/pause
+  semantics, the interpolator's 400 km bound and re-anchoring, the
+  `OrbitTape` unwrapped scrub accumulator, the `SimulationClock` comment-only
+  diff, `main.tsx`'s dev boot tape, and `CameraFlightPath`'s station-relative
+  sweep all check out against their tests.
+
+**CORRECTION — I introduced an orbit-line regression and then wrongly
+"refuted" the finding that caught it.**
+A vision pass reported the orbit line rendering as "dashed with regular gaps".
+I dismissed it on two measurements: the alpha buffer is a smooth monotone ramp
+(true — adjacent step 0.0033 vs two-step 0.0065, zero alternation), and
+blueness sampled along the projected polyline showed no dark runs. **That
+second test was invalid**: it took a MAX over a 5×5 neighbourhood per sample,
+which bridges exactly the small gaps a dash pattern produces. The user
+independently reported seeing the dashes, which forced a proper check.
+
+The real cause was my own in-place buffer rewrite. `LineGeometry.setPositions()`
+converts a polyline into an **interleaved segment-pair buffer** (stride 6:
+`start.xyz, end.xyz`). My rewrite wrote the polyline FLAT into that buffer, so
+element k received points (2k, 2k+1) — pairing every other point and dropping
+every other connection. Measured: consecutive segments were separated by a
+**229.8 km gap**, exactly one polyline step (a continuous polyline has gap 0).
+The tail elements also read past the written span into zeros, so the back half
+of the arc drew toward the origin.
+
+Fixed by writing the pairs explicitly (element k = path[k] → path[k+1]).
+Re-verified in-browser: **maxGap 0** across all consecutive segments.
+The lesson worth keeping: a max-filtered sample can never prove the absence of
+gaps, and the alpha metadata being smooth says nothing about the geometry
+layout.
+
+Gates after the pass: tsc clean; `npx vitest --run` 186/186; `npm run verify`
+green; browser pass console-clean with an empty `__bootErrors`.
+
+## OrbitLine repair + glint recolor (2026-09-29, user-reported) — FIXED + browser-verified
+
+**Report:** "I used the AI to improve the OrbitLine but it just overcomplicated
+and broke it, fix it properly. Also change the ISS beacon highlight color to
+light blue — I don't like golden."
+
+**Finding: the orbit line had NEVER rendered in the tick-mask rewrite.** The
+in-page diagnostic read `instanceCount: 0` and all-zero buffers. Cause: the
+frame loop's tick-sizing block early-returned on `totalArc <= 0` BEFORE the
+throttled path-regeneration block, and `totalArc` is only produced by a
+refresh — a bootstrap deadlock, so the first (and every) refresh never ran.
+Note the component also contradicted this ledger: the custom tick-mask GLSL
+(`uTickPeriod/uTickLen/uTickAA`, `vArc`, hysteresis re-subdivision) was not the
+documented "LineMaterial's own dash" design, and its Earth-centre depth
+reference was never validated (the deadlock meant nothing ever rendered).
+
+**Rewrite** (`src/rendering/iss/OrbitLine.tsx`, 367 → 314 lines): same
+feature set, deliberately boring machinery —
+- Line2 + LineMaterial, 2 px screen-space stroke, `#93C5FD`, NormalBlending +
+  depthTest, `frustumCulled` off (unchanged).
+- Dash is **LineMaterial's own** (`dashed: true` compiled in permanently, so
+  the Dashed/Continuous toggle never recompiles; continuous = one dash
+  spanning the whole arc, `gapSize` 0). This deletes the injected tick mask,
+  the three `uTick*` uniforms and the re-subdivision hysteresis.
+- **Kept:** the per-point alpha injection (`instanceAlphaStart/End` via
+  onBeforeCompile — LineMaterial has no per-vertex alpha; past trail 0 → 0.30,
+  future plateau 0.60, smooth 0.45–0.55 crossover); the allocate-once/
+  mutate-in-place buffers with `instanceCount` limiting the live span (the
+  verified VBO-leak fix); explicit segment-pair writes (the 229.8 km-gap fix);
+  the 60 s-sim + 250 ms-wall refresh throttle with backward-seek
+  regeneration.
+- **Frame order fixed:** the throttled refresh runs FIRST; the dash sizing
+  after it early-returns on `totalArc <= 0` — nothing can gate the refresh on
+  its own output again. Dash pitch is screen-constant, sized at the STATION's
+  depth (`engine.propagateAt` + `temeToWorld` per frame, Earth-radius
+  fallback) — 7 px dash / 6 px gap, the documented values; measuring at
+  Earth's centre would stretch the ticks ~20× in Follow mode.
+
+**Glint recolor** (`ISSModel.tsx` + `softGlow.frag`): sunlit marker
+`#FFD580` (amber) → `#A8D8FF` (light blue); shadow `#80D0FF` → `#6FAEE0`
+(deeper blue, so the day/night cue survives). The softGlow core tint target
+changed from warm white `(1.0, 0.96, 0.90)` to cool white `(0.90, 0.95, 1.0)`
+so the white-hot core doesn't go warm against the blue halo. Comments updated.
+
+**Verified (browser, dev server 5190 + IAB):**
+- Line renders: 185 live segments, **maxGap 0** across consecutive segments
+  (continuous polyline in BOTH styles), alpha ramp sampled 0 → 0.432 → 0.60,
+  arc end 42,497 km (one full period), dash:gap = 7:6 px ratio live.
+- Dashed → Continuous via the gear popover: `dashSize` becomes the full arc
+  (42,497), `gapSize` 0, arc visibly one unbroken stroke; switched back to
+  Dashed and re-verified. **Default changed to `'continuous'` on the user's
+  follow-up request** (`settingsStore.orbitLineStyle` initial value; a stored
+  `orbital-settings` key from before still wins over the default, by design),
+  and the popover radio pair reordered to Continuous first (SettingsGear
+  `ORBIT_LINE_OPTIONS`).
+- Sun-frame shot: compact blinding white disc + tight warm glow, no square,
+  no streaks/rings — the resolved sun design is untouched by this work.
+- Glint at 0.32 full opacity: live uniform `#a8d8ff`, reads as a white-blue
+  point on the arc (the core is white by design; the halo is light blue).
+- Console clean (`__bootErrors` empty) across the whole session; app restored:
+  Live, home view (Reset completed, button hidden), default settings.
+
+Gates: `tsc --noEmit` clean; `npx vitest --run` 186/186; `npm run verify`
+exit 0.
+
+**Lens flare re-landed (2026-09-29, user-confirmed) — LEDGER CORRECTION.** The
+"fresh start" entry above says the flare pass was "DELETED entirely"; that was
+true of that moment but NOT of the state that shipped — a later same-day pass
+re-added it, and the user has now confirmed the re-add was deliberate ("the
+lens flare was added but didn't update in progress. do not delete it,
+although it must be improved later"). Current tree, verified by source read:
+- `src/rendering/post/SunFlare.ts` — a composer `ShaderPass` seated after
+  bloom and before OutputPass (added in linear space, tone-mapped with
+  everything else; a disabled pass is skipped outright, so off costs
+  nothing). Warm halo (#ffc27a; `exp(-d·6)·0.55 + exp(-d·1.6)·0.14`) plus
+  three iris ghosts mirrored through the screen centre along the flare axis
+  (0.45/0.85/1.30 radii; one warm, two cool #9fc4ff, widening and fainting
+  outward). Deliberately excluded after earlier review: no anamorphic streak,
+  no lens rings.
+- Per-frame CPU gating in `update()`: behind-camera dot guard (never
+  `project()` the sun from behind — the documented mirrored-garbage trap),
+  Earth-disc occlusion with a ~1.1° limb penumbra, a frame-border fade, and a
+  shader-side Earth-disc mask so it can never paint over the planet;
+  `uStrength ≤ 0.002` early-outs to an untouched texture copy.
+- Wiring: `Postprocessing.tsx` seeds the pass's enabled state from the store
+  when the composer builds and toggles `pass.enabled` on setting changes (no
+  rebuild); `settingsStore.lensFlare` (persisted, default **off**); the gear
+  toggle is disabled while Bloom is off, since a composer pass cannot exist
+  without the composer.
+- Status: landed, default off. **OWED: an improvement pass** (user
+  directive). Not yet browser-exercised in this session with the toggle ON —
+  fold that verification into the improvement pass.
+
+## Performance / optimization run — OWED (2026-09-29, user-reported, NOT STARTED)
+
+**Report:** "after all today's work the entire app feels a little heavy and
+laggy, so we need to do an optimization and performance run later sometime."
+
+Today's landed stack is the suspect list: the EffectComposer (full-frame
+render + UnrealBloom mip chain + OutputPass every frame), the lens-flare pass
+(default off), the rebuilt sun/glow additive quads, the Line2 orbit line with
+per-frame dash sizing (one SGP4 `propagateAt` per frame), and the time-control
+frame work. Nothing has been measured yet — the run must be **measure-first**:
+baseline frame times (p10/p50/p90) at Follow / orbital / planetary zoom,
+crossed with Bloom on/off, flare on/off, and model quality, recorded here
+BEFORE any change; then targeted cuts (candidate order and constraints in
+`docs/NEXT_STEPS.md` item 0 — dpr clamp, composer target options, half-res
+bloom, OrbitLine propagate caching). Constraints: verified visuals must not
+regress; Bloom OFF must remain bit-for-bit the old pipeline; any asset
+batching inherits the Phase D constraints below. Gate: a before/after
+frame-time table plus a console-clean browser pass.
+
+## Remaining work (not started, plan order)
 - **Phase D** — animation-safe rigid batching: **POSTPONED by user decision
   (2026-09-28)** — "only very slight benefits in performance" weighed against
   the risk/complexity. Nothing was implemented; constraints for a future pass

@@ -10,8 +10,10 @@ Orbital propagates public Two-Line Element sets with SGP4 and renders the result
 
 - SGP4 propagation at 10 Hz, decoupled from React and the WebGL frame loop
 - Display rate interpolation without altering simulation truth
+- Simulation time controls: pause, 1×–300× acceleration, absolute UTC seeks, and a scrubbable revolution tape
 - Validated TLE acquisition through a CDN-cached Vercel function, IndexedDB cache, and packaged fallback
 - Custom GLSL for the day/night terminator, ocean response, clouds, atmosphere, Sun, and orbit trail
+- HDR bloom compositing with an optional Earth-occluded lens flare, toggleable in render settings
 - Multi modal camera system with distance aware sensitivity and ISS tracking
 - Animated ISS parts (sun-tracking arrays, radiators, cameras) on the authored joint hierarchy
 - Ground context with place, local time, and weather
@@ -56,7 +58,11 @@ The packaged TLE seeds propagation synchronously. Cached entries expire after se
 
 The HUD pairs orbital telemetry with a station-centered ground-track globe and a one-revolution phase tape. BigDataCloud supplies land or marine-region names; Open-Meteo supplies timezone data and current weather for the local ground clock. Results are grouped into 2° cells, cached in memory and IndexedDB, and refreshed under independent rate limits with bounded backoff.
 
-These enrichment requests run directly from the browser, so the current ground coordinates and client network address are visible to those providers.
+These enrichment requests run directly from the browser, so the current ground coordinates and client network address are visible to those providers. Under accelerated time the service holds new lookups — a ground point racing through cache cells would otherwise churn requests — while the coordinates stay live and enrichment resumes automatically on Live.
+
+## Time controls
+
+The clock can be paused, accelerated up to 300×, or returned to the wall clock with Live; Live snaps exactly to wall time rather than gliding back. A seek popover accepts an absolute UTC timestamp with one-minute, ten-minute, and one-orbit nudges, clamped to a week from the present. The revolution tape along the bottom edge doubles as a scrubber — drag for a continuous seek, click to jump, arrow keys for one-minute steps — and Space toggles pause. Seeking detaches from real time into pause; resuming Live re-pins to the wall.
 
 ## Technical notes
 
@@ -66,7 +72,7 @@ The Earth renderer uses a spherical `6,371 km` radius while the project computes
 
 ## ISS model
 
-The model is the IGOAL-derived asset (`public/models/iss_igoal.glb`) with the station's real part hierarchy. The **Render Settings** switches between animated high fidelity and the static legacy fallback models.
+The model is the IGOAL-derived asset (`public/models/iss_igoal.glb`) with the station's real part hierarchy. The **Render Settings** switches between animated high fidelity and the static legacy fallback models. Beyond about 150 km the station is marked by a light-blue screen-space glint.
 
 Solar arrays track the Sun and the thermal radiators run a bounded demo motion, all driven through the asset's authored joint hierarchy. The animation details live in `src/rendering/iss/ISSJointKinematics.ts`.
 
@@ -76,12 +82,16 @@ Rebuilding the asset requires the source FBX (not in the repo, obtained from NAS
 node scripts/build-iss-model.mjs "path/to/ISS.fbx"
 ```
 
+## Render settings
+
+The gear popover switches the ISS model quality, the orbit-line style (continuous or dashed with an on-screen-constant dash pitch), and HDR bloom. Bloom composites the frame through UnrealBloom and an output pass; with it off, rendering is exactly the direct pipeline. When bloom is on, a lens-flare pass — a warm halo and faint iris ghosts, gated by Earth occlusion and the frame edge — is available and defaults to off.
+
 ## Camera controls
 
 - Drag to orbit; scroll or pinch to zoom. Response becomes finer near Earth and in ISS close-ups.
 - Right-drag or two-finger pan moves the pivot and releases tracking into Free mode. Ordinary orbiting and centered pinches keep the ISS locked. Zooming well out of a Free pan hands navigation back to Earth view — after about the same gesture that would leave Inspect (~1.5× at close range), never a huge zoom demand.
 - **Reset View** appears as soon as the view leaves its home framing — any orbit, zoom, or pan, in any mode — and uses a 2.2-second eased transition to a 25,000 km Earth overview, moving farther out on narrow screens so the globe and orbit fit. It keeps the current viewing side, turns smoothly even from an outward-facing Free view, does not wait for ISS detail loading, and hides again once it arrives.
-- **Locate ISS** always re-flies to the station, including while already tracking it or mid-flight — a new press re-captures the flight from the current pose (from the canonical tracking framing it is visually a no-op). Flights turn the view onto the station and approach at the same time — once the station is centered it stays pinned — and hand their orientation back to manual navigation without a roll snap.
+- **Locate ISS** always re-flies to the station, including while already tracking it or mid-flight — a new press re-captures the flight from the current pose (from the canonical tracking framing it is visually a no-op). Flights turn the view onto the station and approach at the same time — once the station is centered it stays pinned — and hand their orientation back to manual navigation without a roll snap. Under accelerated time the flight path is carried with the station's motion, so Locate still lands on it at 300×.
 - Zoom labels describe the current view, with hysteresis at their boundaries. All manual ISS modes share a 70 km model-clearance limit.
 - Manual navigation stays outside a 6,500 km Earth-center radius. Collisions slide along that boundary; blocked pans keep the camera and pivot together. Rotation orbits over both poles Google-Earth style, without gimbal stops. Close-Earth Locate arcs around the globe at low altitude while the view sweeps across the surface onto the station, so the ground fills the frame until the station crests into view — no pullback detour.
 

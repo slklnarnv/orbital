@@ -14,7 +14,11 @@ type Unsubscribe = () => void
  * Rules:
  * - No system reads Date.now() directly — they call clock.now()
  * - tick() is owned by the application runtime, never the renderer
- * - timeScale 1.0 = real-time, 10.0 = 10× speed, 0 = paused
+ * - Rate is chosen by mode: REALTIME pins to the wall clock (timeScale
+ *   ignored), PAUSED freezes, ACCELERATED/REPLAY advance by
+ *   wallDelta × timeScale. There is no "scale 0 = paused" — pause is a mode.
+ * - seekTo() only sticks while detached from the wall (any mode but
+ *   REALTIME); the next REALTIME tick re-pins to Date.now() by design.
  */
 export class SimulationClock {
   private _mode: ClockMode = 'REALTIME'
@@ -81,7 +85,10 @@ export class SimulationClock {
     this._mode = mode
   }
 
-  /** Set time scale multiplier (ignored in PAUSED/REPLAY mode) */
+  /**
+   * Set time scale multiplier. Applied in ACCELERATED/REPLAY; ignored in
+   * REALTIME (wall-pinned) and PAUSED (frozen).
+   */
   setTimeScale(scale: number): void {
     this._timeScale = Math.max(0.1, Math.min(scale, 1000))
   }

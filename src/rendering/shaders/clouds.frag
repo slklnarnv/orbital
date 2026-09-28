@@ -26,13 +26,15 @@ void main() {
   // ── Sunlight Intensity & Terminator ──────────────────────────────────────────
   float sunDot = dot(normal, normalize(sunDirection));
 
-  // Smooth day/night transition — wider band prevents harsh binary flip
-  float dayMask = smoothstep(-0.12, 0.12, sunDot);
+  // Smooth day/night transition — wide band prevents harsh binary flip
+  float dayMask = smoothstep(-0.12, 0.14, sunDot);
 
-  // ── Rayleigh Sunset Warming (Terminator Glow) ─────────────────────────────────
-  // Restrained twilight golden-orange sliver at terminator boundary
-  float sunsetMask = 1.0 - smoothstep(0.0, 0.15, abs(sunDot - 0.02));
-  vec3 sunsetGlow = vec3(0.92, 0.44, 0.10) * sunsetMask * 0.35;
+  // ── Low-Sun Warmth (physical sunset light) ───────────────────────────────────
+  // The identical window and tint as earthSurface.frag: clouds turn sunset-orange
+  // because they are LIT by the same reddening sunlight as the terrain, not
+  // because an orange band is painted over them.
+  float lowSun = 1.0 - smoothstep(0.02, 0.35, sunDot);
+  vec3 sunWarmth = mix(vec3(1.0), vec3(1.0, 0.52, 0.22), lowSun);
 
   // ── Dayside vs. Nightside Cloud Shading ───────────────────────────────────────
   // Soft diffuse lighting — clouds are lit by sun angle like any diffuse surface.
@@ -43,11 +45,12 @@ void main() {
 
   // Tight, restrained Mie forward scattering. A broad lobe turns dense clouds
   // into a screen-sized white wash when the camera approaches the subsolar point.
+  // Forward-scattered light is direct sunlight — it warms with the low sun too.
   float dotVS = dot(viewDir, normalize(sunDirection));
   float forwardScatter = pow(max(dotVS, 0.0), 8.0) * 0.08 * dayMask;
 
   // Dayside clouds: boosted photographic albedo, shaded by solar angle with dynamic silver lining
-  vec3 dayColor = (vec3(1.08, 1.09, 1.12) * lightTerm) + (vec3(1.00, 1.00, 1.00) * forwardScatter) + sunsetGlow;
+  vec3 dayColor = (vec3(1.08, 1.09, 1.12) * lightTerm * sunWarmth) + (vec3(1.00, 1.00, 1.00) * forwardScatter * sunWarmth);
 
   // Nightside clouds: deep dark silhouette to block city lights beneath
   vec3 nightColor = vec3(0.01, 0.01, 0.02);

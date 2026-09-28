@@ -21,16 +21,24 @@ void main() {
   float sunDot = dot(normal, normalize(sunDirection));
 
   // ── Day / Night Blending ──────────────────────────────────────────────────────
-  // Soft terminator transition. The -0.08 to 0.14 range gives a realistic
-  // twilight blend width without the terminator being too sharp or too wide.
-  float dayMask   = smoothstep(-0.08, 0.14, sunDot);
-  // City lights fade in on the dark side starting at sunDot=0.04 (just past terminator).
-  float nightMask = 1.0 - smoothstep(-0.12, 0.04, sunDot);
+  // Wide soft twilight: the day fade and the city-light fade overlap across a
+  // broad gradient so the terminator reads as dusk, not as a drawn line.
+  float dayMask   = smoothstep(-0.10, 0.18, sunDot);
+  // City lights fade in on the dark side starting just past the terminator.
+  float nightMask = 1.0 - smoothstep(-0.14, 0.02, sunDot);
 
   // Restrained solar-incidence response gives the sphere material depth without
   // double-lighting the baked relief in the Blue Marble albedo.
   float solarIncidence = smoothstep(0.0, 0.90, max(sunDot, 0.0));
   float terrainLight = mix(0.58, 1.0, solarIncidence);
+
+  // ── Low-Sun Warmth (physical sunset light) ───────────────────────────────────
+  // The sunlight itself reddens at grazing incidence: Rayleigh scattering strips
+  // blue as the path through the atmosphere lengthens. One smooth window drives
+  // a light-color tint instead of a painted stripe — terrain, ocean glint and
+  // clouds (which share this exact literal) all warm coherently.
+  float lowSun = 1.0 - smoothstep(0.02, 0.35, sunDot);
+  vec3 sunWarmth = mix(vec3(1.0), vec3(1.0, 0.52, 0.22), lowSun);
 
   // Sample the same rotating density field as the visible cloud shell. The
   // relative Y rotation maps to a longitude offset; a five-tap filter prevents
@@ -44,7 +52,7 @@ void main() {
   float cloudShadowDay = smoothstep(0.04, 0.40, sunDot);
   float cloudTransmittance = 1.0 - cloudShadowDensity * cloudShadowDay * 0.18;
 
-  vec3 dayColor = texture2D(dayMap, vUv).rgb * terrainLight * cloudTransmittance;
+  vec3 dayColor = texture2D(dayMap, vUv).rgb * terrainLight * cloudTransmittance * sunWarmth;
 
   // ── City Lights — Warm Amber Tint & Photographic Response ────────────────────
   // NASA Black Marble images have a raw white-dominant encoding.
@@ -54,14 +62,6 @@ void main() {
   vec3 cityTint = vec3(1.0, 0.80, 0.48);
   vec3 rawNight = texture2D(nightMap, vUv).rgb;
   vec3 nightColor = pow(rawNight, vec3(1.5)) * nightIntensity * cityTint;
-
-  // ── Terminator Terrain Warming ────────────────────────────────────────────────
-  // A very subtle localized golden-hour warmth at the solar terminator on the lit side.
-  // Physical basis: low-angle sunlight passes through thick atmosphere, Rayleigh
-  // scattering removes blue, leaving red-orange terrain illumination.
-  // Tight sliver: only active close to the terminator on the sun-facing side.
-  float sunsetFactor = (1.0 - smoothstep(0.0, 0.12, abs(sunDot - 0.01))) * smoothstep(-0.02, 0.05, sunDot);
-  vec3 twilightWarm = vec3(0.85, 0.42, 0.12) * sunsetFactor * 0.07; // Highly restrained, dusty golden warmth
 
   // ── Ocean Specularity & Sky Fresnel Reflection ────────────────────────────────
   // Read the grayscale specular mask (1.0 for ocean, 0.0 for land)
@@ -80,14 +80,15 @@ void main() {
 
   // Clouds block the reflected solar disc as well as direct terrain light. This
   // prevents a broad white glint from showing through dense weather systems.
+  // The glint is direct sunlight, so it warms with the same low-sun color.
   float clearSky = 1.0 - cloudShadowDensity * 0.85;
-  vec3 specColor = spec * oceanMask * dayMask * clearSky * vec3(0.88, 0.92, 0.98) * 0.10;
+  vec3 specColor = spec * oceanMask * dayMask * clearSky * vec3(0.88, 0.92, 0.98) * 0.10 * sunWarmth;
 
   // Glancing-angle water sky Fresnel reflection: reflects a very subtle, dark navy sky color at the horizon
   vec3 skyGlowReflection = vec3(0.04, 0.16, 0.38) * waterFresnel * oceanMask * dayMask * 0.08;
 
   // ── Final Composite ───────────────────────────────────────────────────────────
-  vec3 finalTerrain = (dayColor + twilightWarm) * dayMask;
+  vec3 finalTerrain = dayColor * dayMask;
   vec3 finalCities  = nightColor * nightMask;
   vec3 color = finalTerrain + finalCities + specColor + skyGlowReflection;
 

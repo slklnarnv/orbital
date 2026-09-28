@@ -8,9 +8,14 @@ const MAX_SAMPLE_INTERVAL_SECONDS = 0.25
 // smoothed interpolation: linearly bridging a seek-sized chord sweeps the
 // station through Earth's interior (measured: a half-orbit seek dipped the
 // rendered radius from 6,794 km through 2,253 km). Such jumps RESEED at the
-// new truth instead. 50 km ≈ 6.5 s of orbital motion, 5× headroom over the
-// 120× accelerated-time snapshot stride.
-const MAX_INTERPOLABLE_STEP_KM = 50
+// new truth instead. The bound must sit ABOVE the largest continuous stride
+// the time control can produce (300× at the 10 Hz runtime cadence ≈ 30 s of
+// sim motion ≈ 230 km — the old 50 km value came from a 10× arithmetic
+// error and reseeded every tick at accelerated rates, visibly stepping the
+// station) and BELOW the smallest deliberate jump (the ±1 min seek nudge
+// ≈ 460 km), so seeks still snap instantly. Chord curvature is a non-issue
+// at this size: sagitta ≈ 3 km against a 420 km orbital altitude.
+const MAX_INTERPOLABLE_STEP_KM = 400
 // A step is also discontinuous when it is nonphysical for the simulated time
 // between the snapshots (seek with a matching clock jump), with margin for
 // propagation jitter. The physical bound adapts to any time-scale.
@@ -76,6 +81,12 @@ export class OrbitalRenderInterpolator {
         )
         this.lastSnapshot = snapshot
         this.lastSnapshotFrameSeconds = frameTimeSeconds
+        // Re-anchor the discontinuity check on the snapshot just accepted.
+        // The anchor must track consecutive snapshots: leaving it at the
+        // last reseed measures the accumulated arc instead of the per-step
+        // stride, which reseeds every couple of ticks at accelerated rates
+        // (hold-then-teleport motion in Follow mode).
+        this.lastSnapshotPosition.copy(this.target)
       }
     }
 

@@ -1,10 +1,12 @@
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { formatUtcClockParts } from '@/utils/formatters'
+import { TimeControls } from '@/ui/clusters/TimeControls'
 
 /**
  * MissionClockCluster — the console's center of gravity. UTC mission time at
  * display size, in aviator's Zulu notation, captioned with the tracked
- * object. Link state is declared once, in the top corner — not repeated here.
+ * object, with the time transport beneath it. Link state is declared once,
+ * in the top corner — not repeated here.
  */
 export function MissionClockCluster(): JSX.Element {
   const simTime = useSimulationClock(1000)
@@ -38,6 +40,7 @@ export function MissionClockCluster(): JSX.Element {
       <span className="hud-label" style={{ marginTop: 2, color: 'var(--hud-hi)', fontWeight: 500 }}>
         ISS · ZARYA
       </span>
+      <TimeControls />
     </div>
   )
 }

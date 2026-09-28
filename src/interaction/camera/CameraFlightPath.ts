@@ -17,6 +17,11 @@ const REF_B = new THREE.Vector3(1, 0, 0)
  * arrival orientation, no per-frame shortest-arc decisions. Near-antipodal
  * departures bow the sweep slightly sideways so the interpolated direction
  * never passes through zero.
+ *
+ * The sweep is station-RELATIVE: the plan is built once, then translated by
+ * the station's drift since planning, so the route is the one that was tuned
+ * at 1x but still lands on the station when accelerated time outruns the
+ * flight.
  */
 export class CameraFlightPath {
   readonly startRadius: number
@@ -32,6 +37,10 @@ export class CameraFlightPath {
   private sweepAngle = 0
   private radiusStart = 0
   private radiusEnd = 0
+  // Station position captured at planning time; the whole planned route is
+  // translated by the station's drift since then (see sampleLocate).
+  private readonly stationPlanned = new THREE.Vector3()
+  private readonly stationDrift = new THREE.Vector3()
 
   constructor(
     readonly position: THREE.Vector3,
@@ -62,12 +71,24 @@ export class CameraFlightPath {
    * per-frame view spike) and never degenerates, even for antipodal routes.
    * `arrivalEye` is retained for call-site stability; the arrival pose derives
    * from the station and the sweep's own approach side.
+   *
+   * The plan is then carried station-RELATIVE by `sampleLocate`: it translates
+   * the whole route by the station's drift since planning. The plan alone is
+   * only correct if the station holds still for the flight's 2-4 s, and at 300x
+   * it covers thousands of km in that window — a plan-time arrival point left
+   * the camera aiming at the station's old address (measured live: the eye
+   * arrived 6,460 km short of the ~353 km standoff, the Earth-clearance sphere
+   * then pinned it, and the station escaped, so Locate chased and never caught
+   * up). Translating is exact and singularity-free: at progress 1 the eye is
+   * `station_planned + standoff + (station_now - station_planned)`, i.e. the
+   * standoff of the station as it is NOW.
    */
   planLocate(_arrivalEye: THREE.Vector3, station: THREE.Vector3): number {
     const stationDir = station.clone().normalize()
     this.dirStart.copy(this.radial)
     this.radiusStart = this.startRadius
     this.targetStart.copy(this.target)
+    this.stationPlanned.copy(station)
 
     // The sweep axis is perpendicular to both the departure and the station
     // directions; colinear departures (same side or antipodal) fall back to a
@@ -105,6 +126,13 @@ export class CameraFlightPath {
       CAMERA_ZOOM_RANGES.ORBITAL.minDistance + 1,
     )
     eye.multiplyScalar(radius)
+    // Carry the planned route with the station. At 1x the drift is a few tens
+    // of km across the flight, so the route is the one that was tuned; at
+    // accelerated rates it is what keeps the arrival on the live station. The
+    // descent stays above the clearance sphere because the drift is tangential
+    // and the plan already ends ~254 km above the station's own altitude.
+    this.stationDrift.subVectors(station, this.stationPlanned)
+    eye.add(this.stationDrift)
     // The look target slides from the captured pivot to the station, completing
     // its pan before the eye arrives so the final phase is pure descent with
     // the view locked on the station.

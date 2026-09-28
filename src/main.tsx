@@ -74,6 +74,27 @@ window.addEventListener('error', (event) => {
   console.error('[Global Runtime Error]', event.error || event.message)
 })
 
+// DEV BOOT ERROR TAPE: captures errors that fire before devtools/hooks attach —
+// a crashed R3F subtree unmounts silently otherwise. Also tapes console.error:
+// three.js and R3F report shader/loop failures there, not via window.onerror.
+if (import.meta.env.DEV) {
+  ;(window as unknown as Record<string, unknown>).__bootErrors = [] as string[]
+  const tape = (window as unknown as Record<string, unknown>).__bootErrors as string[]
+  window.addEventListener('error', (event) => {
+    tape.push(String((event as ErrorEvent).message ?? event.error))
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    tape.push('rejection: ' + String((event as PromiseRejectionEvent).reason))
+  })
+  const originalConsoleError = console.error.bind(console)
+  console.error = (...args: unknown[]) => {
+    if (tape.length < 40) {
+      tape.push(args.map((a) => (typeof a === 'string' ? a : String((a as Error)?.message ?? a))).join(' | ').slice(0, 500))
+    }
+    originalConsoleError(...args)
+  }
+}
+
 // DEV TEST HOOK (plan 001 §7 fault-injection matrix): `?failAssets=igoal,legacy`
 // answers matching asset requests with HTTP 503 so model-load failures can be
 // exercised from a fresh page load. Dev builds only.

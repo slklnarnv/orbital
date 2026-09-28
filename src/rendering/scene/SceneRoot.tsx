@@ -4,6 +4,7 @@ import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { EnvironmentLayer } from './EnvironmentLayer'
+import { PostprocessingGate } from '../post/Postprocessing'
 import { EarthGroup } from '../earth/EarthGroup'
 import { ISSGroup } from '../iss/ISSGroup'
 import { OrbitLine } from '../iss/OrbitLine'
@@ -164,6 +165,11 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
         <Suspense fallback={null}>
           {/* Celestial environment (stars and solar light) */}
           <EnvironmentLayer />
+
+          {/* HDR bloom + output compositing. Mounted only while the
+              render-settings toggle is on — with it off, the direct pipeline
+              renders exactly as before. */}
+          <PostprocessingGate />
 
           {/* PBR indirect-specular environment (local RoomEnvironment, low intensity) */}
           <RuntimeEnvironment />

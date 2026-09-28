@@ -136,6 +136,18 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   after each variant produced its own jank. Keep it simple. Flight time scales
   with the sweep angle (350 ms/rad) plus a distance term
   (min(2000, max(0, startRadius − 20,000) × 0.025) ms).
+- **The sweep is station-RELATIVE.** `planLocate` builds the route once and
+  records the station position; `sampleLocate` translates that whole route by
+  the station's drift since planning. Do NOT go back to flying to the planned
+  arrival point — the flight lasts 2–4 s, and at 300× the station covers
+  ~6,500 km in that window, so the camera landed at the station's old address
+  (6,460 km out instead of the ~353 km standoff), the 6,500 km clearance clamp
+  then pinned the eye, and Locate visibly chased the station and never caught
+  up. Do NOT instead re-derive the sweep axis/plane from the live station each
+  frame: `cross(dirStart, stationDir)` flips sign as the station crosses the
+  departure radial and `applyAxisAngle` mirrors the eye across the axis — a
+  measured 25,343 km single-step teleport mid-sweep. Translation is exact,
+  singularity-free, and leaves the 1× route bit-for-bit what it was.
 - Flight horizon (`FlightHorizon`): the captured up is transported with the view
   each frame. Locate passes `worldUpBlend = 0` — the horizon is kept exactly as
   the user had it, with NO forced arrival orientation (forcing world-up rolled
@@ -207,7 +219,8 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   and the station rises into an already centered view. Do not reintroduce
   horizon-level "cruise" looking or two-stage view turns — they read as a
   zoom-out followed by a zoom-in. The arrival standoff is captured at planning
-  time and applied rigidly to the live station.
+  time and then CARRIED relative to the live station (see the station-relative
+  bullet above) — freezing it in inertial space is what broke Locate at 300×.
 - Leaving a FREE pan on zoom-out is decided by
   `CameraStateMachine.isFreeZoomOut`: release at `max(220 km, 1.25 × the pivot
   distance when the pan began)`. The floor matches INSPECT's own exit band, so

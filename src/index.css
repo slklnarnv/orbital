@@ -152,6 +152,42 @@ body,
   to { transform: rotate(360deg); }
 }
 
+/* ─── Selectable rows (model quality, orbit line, visuals switches) ────── */
+/* One style for every selectable row in the settings popover. Selection is
+   carried by a brightened label over a hairline border — never a signal
+   colour, which is reserved for data-link status. */
+
+.hud-option {
+  appearance: none;
+  position: relative;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  padding: 7px 10px;
+  color: var(--hud-mid);
+  cursor: pointer;
+  transition: color var(--transition-ui), border-color var(--transition-ui);
+}
+
+.hud-option:hover:not(:disabled) {
+  color: var(--hud-hi);
+}
+
+.hud-option--on {
+  border-color: var(--hud-hi);
+  color: var(--hud-hi);
+}
+
+.hud-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hud-option:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 2px;
+}
+
 /* ─── Frame scrims ─────────────────────────────────────────────────────── */
 
 .hud-settings-popover {
@@ -385,6 +421,97 @@ body,
   background: var(--signal-offline);
 }
 
+/* ─── Time transport (bottom-center, under the mission clock) ──────────── */
+/* Bare typography buttons matching the Reset View pattern: active state is
+   a brightened label over a hairline underline — no signal colors, time
+   state is not data-link state. */
+
+.hud-transport {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.hud-transport__btn {
+  appearance: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--hud-mid);
+  transition: color var(--transition-ui);
+}
+
+.hud-transport__btn:hover:not(:disabled) {
+  color: var(--hud-hi);
+}
+
+.hud-transport__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hud-transport__btn--active {
+  color: var(--hud-hi);
+  border-bottom-color: var(--hud-line-strong);
+}
+
+.hud-transport__btn:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 2px;
+}
+
+.hud-transport__icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+}
+
+.hud-transport__icon svg {
+  display: block;
+}
+
+/* Seek popover — viewport-anchored like the settings popover, but bottom
+   centered so it hangs above the transport row it belongs to. */
+.hud-transport-popover {
+  position: fixed;
+  bottom: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 252px;
+  padding: 12px 14px;
+  background: rgba(4, 8, 14, 0.92);
+  border: 1px solid var(--hud-line);
+}
+
+.hud-transport-input {
+  appearance: none;
+  border: 1px solid var(--hud-line);
+  background: transparent;
+  margin-top: 8px;
+  padding: 6px 8px;
+  width: 100%;
+  color-scheme: dark;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--hud-hi);
+}
+
+.hud-transport-input:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 1px;
+}
+
 /* ─── Orbit tape (one revolution as a bottom-edge ruler) ───────────────── */
 
 .hud-tape {
@@ -394,7 +521,19 @@ body,
   bottom: 0;
   height: 36px;
   z-index: 9;
-  pointer-events: none;
+  /* Interactive: the tape is the time-control scrub surface now. */
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.hud-tape:hover .hud-tape__line {
+  background: var(--hud-line-strong);
+}
+
+.hud-tape:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 2px;
 }
 
 .hud-tape__line {

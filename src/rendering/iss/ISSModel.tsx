@@ -11,7 +11,7 @@
 //   outside the model's measured swept envelope (~68 km half-diagonal incl. array
 //   animation) — see ISS_MODEL_CLEARANCE_KM in CameraStateMachine.ts.
 //   DO NOT "fix" this to real scale — the entire camera system (INSPECT minDistance,
-//   LOD hysteresis bands, beacon/aura scaling, fill-light distances) is calibrated
+//   LOD hysteresis bands, glint scaling, fill-light distances) is calibrated
 //   to these units. Only the per-model normalization constants below change.
 //
 // Physical ISS dimensions (real-world, for reference only):
@@ -29,8 +29,8 @@
 // Level of Detail (LOD) Strategy:
 //   - Near Range (< 2,800–3,200 km): selected detailed model (PBR textures).
 //   - Far Range (3,000–12,000 km): Model A (7.5k Verts, flat schematic PBR colors).
-//   - Deep Planetary Scale (> 12,000 km): Model A + unlit Beacon sphere (8.0 km radius) to
-//     ensure spatial tracking visibility above Earth at global distances.
+//   - Deep Planetary Scale (> 12,000 km): Model A + the tracking glint, so the
+//     station stays findable above Earth at global distances.
 //
 // Hysteresis implementation:
 //   To prevent LOD flickering/thrashing near the boundary:
@@ -62,6 +62,8 @@ import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
+import billboardVert from '../shaders/billboard.vert'
+import softGlowFrag from '../shaders/softGlow.frag'
 
 // ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
 // Instead of the gstatic.com CDN (blocked in offline/private-network environments),
@@ -173,15 +175,19 @@ const MODEL_A_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
 // on Locate intent or the first transition into near range and remains cached thereafter.
 useGLTF.preload(FALLBACK_MODEL_URL)
 
-/** Planetary tracking beacon radius (km) */
-const BEACON_RADIUS_KM = 8.0
+/**
+ * On-screen width of the tracking glint, in CSS pixels.
+ *
+ * It is the ONLY tracking marker — the corner-tick reticle that used to carry
+ * the far range was removed by request — so it is specified in SCREEN space
+ * and projected back to world units, and it is what has to stay findable at
+ * planetary range.
+ */
+const GLINT_SCREEN_PX = 22
 
 /** LOD hysteresis bands to prevent boundary thrashing (km) */
 const LOD_ENTER_NEAR_KM = 2800
 const LOD_EXIT_NEAR_KM = 3200
-
-/** Planetary scale boundary for beacon visibility (km) */
-const BEACON_ACTIVATE_KM = 12000
 
 const _sunDirVec = new THREE.Vector3()
 
@@ -392,7 +398,6 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const { scene } = useThree()
 
   // Element Refs for direct vis/light mutation (zero garbage collection)
-  const beaconRef = useRef<THREE.Group>(null)
   const auraRef = useRef<THREE.Mesh>(null)
   const lightPrimaryRef = useRef<THREE.PointLight>(null)
   const lightSecondaryRef = useRef<THREE.PointLight>(null)
@@ -538,22 +543,12 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       }
     }
 
-    // 2. Evaluate planetary beacon visibility
-    const isBeaconVisible = !nextIsNear && distanceKm > BEACON_ACTIVATE_KM
-
-    // 3. Compute distance-adaptive optical glint halo (Amber/Blue glow)
-    // The halo represents photovoltaic solar panel glint visible at mid-range distances.
-    // Restrained: invisible close-up (protects ISS model detail), subtle at range.
-    let auraOpacity = 0.0
-    if (distanceKm > 150.0) {
-      if (distanceKm < 2000.0) {
-        // Smoothly fade in from 150 km to 2000 km, peaking at 0.35
-        auraOpacity = ((distanceKm - 150.0) / 1850.0) * 0.35
-      } else {
-        // Decays slowly to a faint, stable 0.15 at far planetary distances
-        auraOpacity = 0.35 - Math.min(0.20, ((distanceKm - 2000.0) / 10000.0) * 0.20)
-      }
-    }
+    // 3. Compute the tracking glint's opacity.
+    // Fades in over the approach so the close-range model is never washed out,
+    // then HOLDS: the glint is the only tracking marker now, so it has to stay
+    // findable at planetary range. (It used to decay to 0.15 out there, back
+    // when the reticle carried the far range.)
+    const glintOpacity = 0.32 * Math.min(1, Math.max(0, (distanceKm - 150.0) / 850.0))
 
     // 3b. Shadow detection for dynamic color-shifting halo
     const simTime = simulationClock.now()
@@ -617,29 +612,26 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     }
 
     // 4. Mutate high-frequency Three.js effects directly (bypasses React virtual DOM rendering)
-    if (beaconRef.current) {
-      beaconRef.current.visible = isBeaconVisible
-      // Rotate the telemetry tracking ring to face the camera perfectly
-      beaconRef.current.lookAt(state.camera.position)
-      // Dynamic screen-proportional scaling so the locator remains readable at global scales
-      // Calibration: Math.max(1.2, distanceKm / 6800.0) ensures clean visibility against the Earth limb.
-      const dynamicScale = Math.max(1.2, distanceKm / 6800.0)
-      // Add a gentle, slow scientific telemetry pulse (0.4 Hz)
-      const pulse = 1.0 + 0.16 * Math.sin(simTime.epochMs * 0.0025)
-      beaconRef.current.scale.setScalar(dynamicScale * pulse)
-    }
     if (auraRef.current) {
       auraRef.current.visible = distanceKm > 150.0
+      // Billboard toward the camera — the plane would otherwise disappear as
+      // the view passes edge-on. (Its roll is invisible: the glow is radially
+      // symmetric, so only the facing matters.)
+      auraRef.current.lookAt(state.camera.position)
 
-      // Dynamic screen-proportional scaling so the halo remains readable at global scales
-      const dynamicScale = Math.max(1.0, distanceKm / 800.0)
-      auraRef.current.scale.setScalar(dynamicScale)
+      // Screen-constant sizing: derive the world size that lands
+      // GLINT_SCREEN_PX CSS pixels wide at this distance and field of view.
+      const halfFovRad = (state.camera as THREE.PerspectiveCamera).getEffectiveFOV() * Math.PI / 360
+      const worldPerPx = (2 * Math.tan(halfFovRad) * distanceKm) / Math.max(1, state.size.height)
+      // Add a gentle, slow scientific telemetry pulse (0.4 Hz)
+      const pulse = 1.0 + 0.12 * Math.sin(simTime.epochMs * 0.0025)
+      auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
-      const mat = auraRef.current.material as THREE.MeshBasicMaterial
+      const mat = auraRef.current.material as THREE.ShaderMaterial
       if (mat) {
-        mat.opacity = auraOpacity
-        // Dynamic daylight (warm amber glint) vs. shadow (cool blue/cyan) color shift
-        mat.color.set(isShadowed ? '#80D0FF' : '#FFD580')
+        mat.uniforms.uOpacity.value = glintOpacity
+        // Daylight (light blue glint) vs. shadow (deeper blue) color shift
+        ;(mat.uniforms.uColor.value as THREE.Color).set(isShadowed ? '#6FAEE0' : '#A8D8FF')
       }
     }
   })
@@ -705,47 +697,25 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         </FallbackModelErrorBoundary>
       )}
 
-      {/* ─── Concentric Telemetry Tracking Beacon Ring ─── */}
-      <group
-        ref={beaconRef}
-        visible={false} // Managed dynamically by useFrame loop
-      >
-        {/* Outer tracking ring */}
-        <mesh>
-          <ringGeometry args={[BEACON_RADIUS_KM - 0.8, BEACON_RADIUS_KM, 32]} />
-          <meshBasicMaterial
-            color="#90e0ff" // Bright luminous aerospace blue/cyan
-            transparent={true}
-            opacity={0.85}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-        {/* Inner core telemetry tracking dot */}
-        <mesh>
-          <sphereGeometry args={[1.5, 8, 8]} />
-          <meshBasicMaterial
-            color="#bae6fd"
-            transparent={true}
-            opacity={0.85}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-      </group>
-
-      {/* ─── Photographic Optical Aura / Glint Halo ─── */}
+      {/* ─── Tracking glint — the station's only marker ─── */}
+      {/* A radially symmetric glow: a hot white core marking the exact point
+          inside a soft light-blue halo. No brackets, ring or crosshair — those
+          were removed by request. Sized and pulsed by the frame loop. */}
       <mesh
         ref={auraRef}
         visible={false} // Managed dynamically by useFrame loop
       >
-        <sphereGeometry args={[6.0, 16, 16]} />
-        <meshBasicMaterial
-          color="#FFD580" // Photographic warm amber — restrained solar panel glint
+        <planeGeometry args={[12.0, 12.0]} />
+        <shaderMaterial
+          vertexShader={billboardVert}
+          fragmentShader={softGlowFrag}
+          uniforms={{
+            uColor: { value: new THREE.Color('#A8D8FF') }, // Light blue glint (shadow shifts deeper blue)
+            uOpacity: { value: 0.0 },
+          }}
           transparent={true}
-          opacity={0.0}
           depthWrite={false}
+          depthTest={true}
           blending={THREE.AdditiveBlending}
         />
       </mesh>

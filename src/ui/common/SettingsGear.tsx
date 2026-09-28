@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
+import {
+  useSettingsStore,
+  type IssModelQuality,
+  type OrbitLineStyle,
+} from '@/stores/settingsStore'
 import { useLoadingStore } from '@/stores/loadingStore'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
@@ -7,17 +11,27 @@ const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string
   { value: 'legacy', label: 'Legacy', hint: 'Performance · static' },
 ]
 
+const ORBIT_LINE_OPTIONS: Array<{ value: OrbitLineStyle; label: string }> = [
+  { value: 'continuous', label: 'Continuous' },
+  { value: 'dashed', label: 'Dashed' },
+]
+
 /**
  * SettingsGear — discreet render-settings access, parked in the top-right
  * corner cluster. Deliberately minimal: a gear that opens a small popover
- * with the ISS model selection. Nothing else lives here (yet), so the
- * standard orbital-visualization experience stays unobscured.
+ * with the ISS model selection and a Visuals section (bloom).
  */
 export function SettingsGear(): JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const issModelQuality = useSettingsStore((state) => state.issModelQuality)
   const setIssModelQuality = useSettingsStore((state) => state.setIssModelQuality)
+  const postprocessing = useSettingsStore((state) => state.postprocessing)
+  const setPostprocessing = useSettingsStore((state) => state.setPostprocessing)
+  const orbitLineStyle = useSettingsStore((state) => state.orbitLineStyle)
+  const setOrbitLineStyle = useSettingsStore((state) => state.setOrbitLineStyle)
+  const lensFlare = useSettingsStore((state) => state.lensFlare)
+  const setLensFlare = useSettingsStore((state) => state.setLensFlare)
   // Loading indicator for the pending model candidate.
   const issDetail = useLoadingStore((state) => state.issDetail)
   const isLoadingModel = issDetail.status === 'loading' || issDetail.status === 'preparing'
@@ -96,18 +110,7 @@ export function SettingsGear(): JSX.Element {
                   role="radio"
                   aria-checked={isSelected}
                   onClick={() => setIssModelQuality(option.value)}
-                  className="hud-label"
-                  style={{
-                    appearance: 'none',
-                    position: 'relative',
-                    textAlign: 'left',
-                    background: 'transparent',
-                    border: '1px solid',
-                    borderColor: isSelected ? 'var(--hud-hi)' : 'var(--hud-line)',
-                    color: isSelected ? 'var(--hud-hi)' : 'var(--hud-mid)',
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                  }}
+                  className={`hud-label hud-option${isSelected ? ' hud-option--on' : ''}`}
                 >
                   {option.label}
                   <span
@@ -120,6 +123,57 @@ export function SettingsGear(): JSX.Element {
                 </button>
               )
             })}
+          </div>
+
+          <span className="hud-label" style={{ marginTop: 12, color: 'var(--hud-mid)' }}>
+            Orbit line
+          </span>
+
+          <div
+            role="radiogroup"
+            aria-label="Orbit line style"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}
+          >
+            {ORBIT_LINE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={orbitLineStyle === option.value}
+                onClick={() => setOrbitLineStyle(option.value)}
+                className={`hud-label hud-option${orbitLineStyle === option.value ? ' hud-option--on' : ''}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <span className="hud-label" style={{ marginTop: 12, color: 'var(--hud-mid)' }}>
+            Visuals
+          </span>
+
+          <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={postprocessing}
+              onClick={() => setPostprocessing(!postprocessing)}
+              className={`hud-label hud-option${postprocessing ? ' hud-option--on' : ''}`}
+            >
+              Bloom
+            </button>
+            {/* The flare is a composer pass, so it cannot exist without the
+                compositor. Disabled with a reason rather than silently inert. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={lensFlare}
+              disabled={!postprocessing}
+              onClick={() => setLensFlare(!lensFlare)}
+              className={`hud-label hud-option${lensFlare && postprocessing ? ' hud-option--on' : ''}`}
+            >
+              Lens flare
+            </button>
           </div>
 
         </div>

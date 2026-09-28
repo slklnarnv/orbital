@@ -145,4 +145,90 @@ describe('OrbitalRenderInterpolator', () => {
     interpolator.sample(next, 0.2, result)
     expect(result.x).toBeCloseTo(7, 3)
   })
+
+  // ─── Time-control strides (300× preset) ───
+  // At 300× accelerated time the 10 Hz snapshot stride is ~30 s of orbital
+  // motion ≈ 230 km — genuine continuous motion that must stay INTERPOLATED.
+  // The pre-time-control bound (50 km) reseeded every such snapshot, stepping
+  // the station at 10 Hz. Deliberate jumps (the ±1 min seek nudge ≈ 460 km)
+  // must still snap.
+
+  it('interpolates a 300× snapshot stride (~230 km) instead of reseeding', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const result = new THREE.Vector3()
+    // Along-track positions one 30 s stride apart on the r = 6794 km orbit:
+    // theta = 230/6794 ≈ 0.03385 rad → (6790.11, 229.97, 0).
+    const theta = 230 / 6794
+    const before = { ...orbitalState(1_000, { x: 6794, y: 0, z: 0 }), speed: 7.66 }
+    const after = {
+      ...orbitalState(31_000, {
+        x: 6794 * Math.cos(theta),
+        y: 6794 * Math.sin(theta),
+        z: 0,
+      }),
+      speed: 7.66,
+    }
+
+    interpolator.sample(before, 0, result)
+    interpolator.sample(after, 0.1, result)
+    // Halfway across the observed 100 ms transition the render sits halfway
+    // along the stride — proof of interpolation, not a reseed snap. (ECI y
+    // maps to world −z.)
+    interpolator.sample(after, 0.15, result)
+    expect(result.z).toBeCloseTo((-6794 * Math.sin(theta)) / 2, 0)
+    interpolator.sample(after, 0.2, result)
+    expect(result.z).toBeCloseTo(-6794 * Math.sin(theta), 0)
+  })
+
+  it('stays interpolated across SUSTAINED accelerated strides (no anchor drift)', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const result = new THREE.Vector3()
+    // Five consecutive 300× strides. The discontinuity anchor must advance
+    // with each accepted snapshot: an anchor frozen at the last reseed
+    // measures the accumulated arc (2 strides = 460 km > 400 km bound) and
+    // reseeds every second snapshot — the hold-then-teleport Follow-mode
+    // stutter. Collinear km positions keep the arithmetic transparent.
+    const strideKm = 230
+    const timestamps = [1_000, 31_000, 61_000, 91_000, 121_000]
+
+    interpolator.sample({ ...orbitalState(timestamps[0], { x: 0, y: 0, z: 0 }), speed: 7.66 }, 0, result)
+    for (let k = 1; k < timestamps.length; k += 1) {
+      const snapshot = {
+        ...orbitalState(timestamps[k], { x: k * strideKm, y: 0, z: 0 }),
+        speed: 7.66,
+      }
+      const arrival = 0.1 * k
+      interpolator.sample(snapshot, arrival, result)
+      // At arrival the previous transition has completed: exactly on stride k−1.
+      expect(result.x).toBeCloseTo((k - 1) * strideKm, 0)
+      // Halfway into the new transition: halfway along stride k — a reseed
+      // here would hold the render at k × strideKm instead.
+      interpolator.sample(snapshot, arrival + 0.05, result)
+      expect(result.x).toBeCloseTo((k - 1) * strideKm + strideKm / 2, 0)
+    }
+  })
+
+  it('still snaps a ±1 min seek nudge (~460 km jump)', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const result = new THREE.Vector3()
+    // The smallest seek the transport offers: 60 s of orbital motion.
+    const theta = 460 / 6794
+    const before = { ...orbitalState(1_000, { x: 6794, y: 0, z: 0 }), speed: 7.66 }
+    const after = {
+      ...orbitalState(61_000, {
+        x: 6794 * Math.cos(theta),
+        y: 6794 * Math.sin(theta),
+        z: 0,
+      }),
+      speed: 7.66,
+    }
+
+    interpolator.sample(before, 0, result)
+    interpolator.sample(after, 0.1, result)
+    // First frame after the nudge is already at the new truth — a seek is a
+    // snap, never a fast-forward slide. (ECI y maps to world −z.)
+    expect(result.z).toBeCloseTo(-6794 * Math.sin(theta), -1)
+    interpolator.sample(after, 0.15, result)
+    expect(result.z).toBeCloseTo(-6794 * Math.sin(theta), -1)
+  })
 })

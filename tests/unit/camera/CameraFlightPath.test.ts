@@ -163,4 +163,56 @@ describe('simple Locate sweep', () => {
     path.sampleLocate(arrival, station, 1, b, t2)
     expect(a.distanceTo(b)).toBeLessThan(1)
   })
+
+  it('lands on the live standoff when the station travels far during the flight', () => {
+    // Accelerated time: at 300x the station covers thousands of km while the
+    // 2-4 s flight runs. Baking the arrival point at planning time left the
+    // eye at the station's OLD address (~6,460 km off, measured live), after
+    // which the Earth-clearance sphere pinned it and the station escaped —
+    // Locate visibly chased and never caught up. The sweep is station-relative,
+    // so progress 1 must land on the standoff of the station as it is NOW.
+    const start = new Vector3(0, 0, 26000)
+    const path = new CameraFlightPath(start, origin.clone())
+    const stationAtPlan = new Vector3(2326, 0, -6390)
+    path.planLocate(new Vector3(), stationAtPlan)
+
+    const stationLater = stationAtPlan.clone().applyAxisAngle(new Vector3(0, 1, 0), (55 * Math.PI) / 180)
+    expect(stationLater.distanceTo(stationAtPlan)).toBeGreaterThan(6000)
+
+    const eye = new Vector3()
+    const target = new Vector3()
+    path.sampleLocate(new Vector3(), stationLater, 1, eye, target)
+
+    // The view is locked on the live station...
+    expect(target.distanceTo(stationLater)).toBeLessThan(1e-9)
+    // ...and the eye sits at its standoff: 250 km radial + 250 km tangent.
+    expect(eye.distanceTo(stationLater)).toBeCloseTo(Math.hypot(250, 250), 6)
+    expect(eye.distanceTo(stationLater)).toBeLessThan(400)
+    expect(eye.length()).toBeGreaterThanOrEqual(CLEARANCE)
+  })
+
+  it('stays smooth while the live station drifts during the sweep', () => {
+    const start = new Vector3(0, 0, 26000)
+    const path = new CameraFlightPath(start, origin.clone())
+    const stationAtPlan = new Vector3(2326, 0, -6390)
+    path.planLocate(new Vector3(), stationAtPlan)
+
+    const eye = new Vector3()
+    const target = new Vector3()
+    const previousEye = new Vector3()
+    let maxStep = 0
+    for (let i = 0; i <= 300; i++) {
+      const t = i / 300
+      // ~6,000 km of orbit travel across the flight, easing off near arrival.
+      const station = stationAtPlan.clone().applyAxisAngle(new Vector3(0, 1, 0), (55 * Math.PI / 180) * t)
+      path.sampleLocate(new Vector3(), station, t, eye, target)
+      expect(Number.isFinite(eye.x + eye.y + eye.z + target.x + target.y + target.z)).toBe(true)
+      expect(eye.length()).toBeGreaterThanOrEqual(CLEARANCE)
+      if (i > 0) maxStep = Math.max(maxStep, eye.distanceTo(previousEye))
+      previousEye.copy(eye)
+    }
+    // Continuous route, no teleport: the whole 26,000 km descent is sampled in
+    // 300 steps, so any single step beyond ~1,500 km is a discontinuity.
+    expect(maxStep).toBeLessThan(1500)
+  })
 })

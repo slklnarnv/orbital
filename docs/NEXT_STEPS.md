@@ -13,10 +13,58 @@ Merged 2026-09: the camera overhaul (pole-free orbit, Earth clearance, simple
 sweep Locate, Reset View, no forced arrival horizon) is complete and merged;
 none of the items below touch it except where noted.
 
+## 0. Performance / optimization run — added 2026-09-29, NOT STARTED
+
+User report after the visual refresh + time controls + flare work landed:
+"the entire app feels a little heavy and laggy." No numbers yet — so this is
+a **measure-first** pass; no speculative cuts. Suggested shape:
+
+1. **Baseline.** Frame-time sampling (p10/p50/p90 via a rAF delta accumulator
+   or `stats.js`) at the three canonical regimes — Follow ~350 km, orbital
+   ~18,000 km, planetary ~40,000 km — crossed with Bloom on/off, flare
+   on/off, and each ISS model quality. Record the table in
+   plans/PROGRESS.md before touching anything.
+2. **Known suspects from the recent work** (in rough cost order):
+   - **The composer** — the biggest single addition: a full-scene render into
+     a non-MSAA target + UnrealBloom's mip chain + OutputPass, every frame.
+     Things to try in order of invasiveness: clamp the device pixel ratio
+     (`gl.setPixelRatio(Math.min(devicePixelRatio, 2))`), give the
+     composer's render target `samples` for MSAA only if aliasing demands it,
+     half-resolution bloom, and verify `PostprocessingGate` fully unmounts
+     when off (it does — off must stay == the old pipeline).
+   - **Per-frame SGP4 in OrbitLine** — the 2026-09-29 rewrite calls
+     `engine.propagateAt()` once per frame for dash sizing. One call is
+     cheap; measure, and if hot, reuse the refresh-time station position
+     instead.
+   - **Always-on extras**: RoomEnvironment PMREM at startup, per-frame joint
+     kinematics on the detailed model, the additive sun/glow quads, the
+     composer resize path on window resize.
+   - **Bundle** — the `three-core` chunk > 500 kB warning is LOAD time, not
+     frame time; don't conflate the two when judging "heavy".
+3. **Constraints.** Verified visuals must not regress (terminator, sun,
+   orbit-line fade + dash pitch, glint, flare). Any asset batching inherits
+   the Phase D constraints in plans/PROGRESS.md (nothing that can plausibly
+   be animated may be merged; pre-phase-D asset kept as rollback).
+4. **Gate.** Before/after frame-time table + a console-clean browser pass;
+   update plans/PROGRESS.md with what landed and what was measured.
+
 ## 1. Quick wins bundle — do first
 
 Small, independent, safe. One or two commits total.
 
+- ~~**Orbit line + ISS highlight + orange terminator**~~ — **DONE (2026-09-28
+  visual refresh, sun reworked 2026-09-29)**: terminator repainted as physical
+  low-sun warmth (one shared light-color term in ground+clouds, painted stripes
+  deleted), orbit line upgraded to a fat anti-aliased Line2 with the per-point
+  fade (rewritten 2026-09-29 after a deadlock left it invisible — see
+  plans/PROGRESS.md), ISS zoom-out marker now a soft glow glint (light blue,
+  no reticle chrome), sun rebuilt as a 0.66° photosphere with a tight glare
+  and a wide amber haze on a 0.185 rad billboard (no longer feeds bloom — see
+  plans/PROGRESS.md), and HDR bloom with a single "Bloom" toggle in the render
+  settings popover. A reworked lens flare (halo + three iris ghosts, no
+  streak/rings) exists behind a "Lens flare" toggle — default **off**, needs
+  Bloom, improvement pass owed.
+  (Shader-ramp contract updated deliberately; see plans/PROGRESS.md.)
 - **Branding pass** — favicon, app icon, loading screen, name review. Assets
   already exist (`public/favicon.png|ico`, title in `index.html`); this is an
   asset swap plus loading-screen styling in `App.tsx`.
@@ -25,33 +73,27 @@ Small, independent, safe. One or two commits total.
 - **Info/About panel** — small modal/popover: what the app shows, data sources
   (TLE/SGP4, BigDataCloud, Open-Meteo), the honest-instrument caveats from the
   README.
-- **Orbit line + ISS highlight + orange terminator** — orbit line is a
-  color/fade tweak in `OrbitLine.tsx`; the ISS beacon/aura styling lives in
-  `ISSModel.tsx`. The terminator's orange band is in the earth fragment shader
-  with frozen ramp thresholds — updating it means deliberately updating the
-  `ShaderRamps.test.ts` contract, not just the shader.
 
 ## 2. Time controls + keyboard shortcuts + accessibility
 
+STATUS (2026-09-28): **DONE — landed.** Pause/play, rate presets
+(1× / 10× / 60× / 300× — 1× is a free-running offset clock, distinct from
+Live), Live snap-back, seek-to-UTC-time popover with ±min/±orbit nudges, and
+a scrubbable orbit tape (drag, click, arrow keys). Transport row lives under
+the mission clock (`src/ui/clusters/TimeControls.tsx`); the seek semantics
+(all seeks detach from Live into PAUSED; REALTIME re-pins to the wall each
+tick) live in `src/stores/simulationStore.ts`. The orbit tape sweeps at
+simulation rate and is an ARIA slider. Under accelerated time the geo
+enrichment service is gated (no lookups for transient ground cells; the
+passing-over line shows live coords only). The render interpolator's
+discontinuity bound was corrected (50 → 400 km — the old value came from a
+10× arithmetic error and reseeded every snapshot at accelerated rates).
+Shortcuts: `Space` = pause. Remaining from this item: `L` / `H` / `R`
+shortcuts and the `prefers-reduced-motion` flight pass.
+
+Original notes (superseded):
+
 (PREVIOUSLY ITEM 1 — still the highest value-per-effort feature.)
-
-Pause, real-time, and accelerated modes (10× / 60× / 300×) plus the shortcut
-and accessibility layer, now bundled with the "accessibility and keyboard
-shortcuts" idea:
-
-- The simulation core already supports this: `SimulationClock` implements
-  `setMode('ACCELERATED')` / `setTimeScale()` and is unit-tested; nothing in
-  the UI exposes it. Work is a small control cluster near the mission clock.
-- Shortcuts: `Space` = pause, `L` = locate ISS, `H` = hide HUD, `R` = reset
-  view (Reset already exists; just bind it).
-- Accessibility pass: focus states on all controls, ARIA labels on the new
-  cluster, `prefers-reduced-motion` (damped/manual navigation only, flights
-  become near-instant or disabled).
-- Design decision: which clock surfaces rescale (UTC readout keeps real time
-  while simulation time accelerates, or shows simulation time explicitly).
-
-When time controls land, the orbit tape, ground-point places, and
-passing-over weather all start telling a story — an orbit flown in seconds.
 
 ## 3. ISS attitude + sun-tracking arrays (NASA-Eyes-level motion)
 

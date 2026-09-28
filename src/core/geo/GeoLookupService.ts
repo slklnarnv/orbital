@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { ApiRateLimiter } from '@/core/api/ApiRateLimiter'
+import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
 import { useGeoStore } from '@/stores/geoStore'
 
@@ -228,6 +229,15 @@ export class GeoLookupService {
     }
 
     if (!this._hasRealFix) return
+    // Time-control gate: under accelerated time the ground point crosses
+    // several cache cells per tick, so new lookups would chase transient
+    // places forever (the HUD withholds enrichment while accelerated
+    // anyway — a frozen place name would misrepresent a racing ground
+    // point). Only the fetch decision is gated: the tick keeps its cadence,
+    // in-flight fetches finish, and returning to Live resumes on the next
+    // tick with a fresh cell evaluation. Paused keeps the cell-change
+    // behavior below, so a paused seek still gets its one-shot fill-in.
+    if (simulationClock.mode === 'ACCELERATED') return
     const { latitude, longitude } = useTelemetryStore.getState()
     const cellKey = cellKeyFor(latitude, longitude)
 
