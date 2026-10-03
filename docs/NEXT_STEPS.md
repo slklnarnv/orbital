@@ -13,6 +13,88 @@ Merged 2026-09: the camera overhaul (pole-free orbit, Earth clearance, simple
 sweep Locate, Reset View, no forced arrival horizon) is complete and merged;
 none of the items below touch it except where noted.
 
+## Roadmap (2026-10-04, after the gcdatlas comparison)
+
+Each item has a minimal first cut: the smallest version that ships value and
+can be extended. "Touches" lists the files expected to change.
+
+### A. Close-out (before new features)
+
+1. **Commit + preview deploy.** Split the uncommitted work into tooling /
+   API / rendering / UI commits; deploy a Vercel preview. Check: no CSP
+   violations in the console; `/api/tle` 200 with `Vercel-CDN-Cache-Control`,
+   `/api/tle?x=1` 404, HEAD 200 empty.
+2. **Measured perf run** (item 0 below). Matrix: Follow / orbital /
+   planetary × Bloom on/off × flare on/off × model quality, plus 300×.
+   Record p50/p95/p99 and `renderer.info.memory` after 5 Bloom toggles and
+   3 model switches (leak check). Table goes in PROGRESS before any cut.
+3. **Browser smoke suite (Playwright).** `tests/e2e/smoke.spec.ts`, Chromium
+   only, `page.clock` fixed, `vite preview` as the web server. Cases: boots
+   with no console errors; camera position finite after 5 s; Locate reaches
+   "Follow · Locked"; Space pauses; settings survive reload; `?failAssets`
+   style TLE failure ends in OFFLINE/RECOVERY. `npm run test:e2e`, wired into
+   CI after `verify`.
+4. **Unit tests for untested frame-math modules** (CoordinateConversions,
+   OrbitalEngine edge cases): known-answer vectors (GMST at J2000, sun
+   direction at an equinox, ECI→geodetic round trip).
+
+### B. Features
+
+1. **Orbital day/night + countdown.** Pure function
+   `eclipseState(posEciKm, sunDir)` using the cylindrical shadow model
+   (in shadow when `dot(r, s) < 0` and `|r − (r·s)s| < R⊕`). Countdown: step
+   the propagator forward at 10 s, then bisect the transition to 1 s; recompute
+   once per transition, not per frame. HUD line "Daylight · sunset in 12:41".
+   Touches: new `core/orbital/Eclipse.ts`, telemetry store, one HUD cluster.
+   Optional second cut: tint the orbit line's shadowed span.
+2. **Ground track + footprint.** Sample ±1 orbit at 30 s steps (≈190 points)
+   on each TLE swap and every 60 s; draw as a Line2 on the globe surface
+   (r = R⊕ + 2 km, in the EarthGroup/ECEF frame). Footprint: circle of
+   half-angle `acos(R⊕/(R⊕+h))` around the sub-satellite point, 64 segments.
+   Touches: new `rendering/earth/GroundTrack.tsx`, settings toggle.
+3. **Next visible pass.** Observer from a typed lat/lon or a city search
+   (default), with optional browser geolocation (needs `Permissions-Policy`
+   `geolocation=(self)`). Scan 48 h at 30 s with `satellite.ecfToLookAngles`;
+   a pass is visible when elevation > 10°, the ISS is sunlit (B.1) and the sun
+   is below −6° at the observer. Run in a Web Worker. Observer location kept in
+   localStorage only, never sent anywhere. Panel: rise/max/set times, max
+   elevation, "Jump to pass" (uses the existing seek).
+4. **Share links.** `#t=<epochMs>&m=<mode>&q=<quality>`; parse with a
+   whitelist for enums and clamp for numbers (same rule as the settings
+   sanitizer). Write the hash at most once a second; apply once on load.
+5. **More stations.** Generalise `ISSEntity` into a config-driven entity;
+   `/api/tle?id=` stays refused, add `/api/tle/<name>` routes from a fixed map
+   (`iss`, `css`, `hst`). Start with CSS as a second marker and orbit line, no
+   detailed model.
+6. **Reboost detection.** On a TLE swap, compare mean motion and the
+   propagated altitude at the same instant; above a threshold (≈0.3 km), emit
+   a `TELEMETRY_EVENT` and show a toast "Reboost detected, +0.8 km".
+7. **"What's real" panel.** Static content in the planned Info/About popover:
+   measured (position, TLE age, sun, terminator) vs illustrative (attitude
+   details, joint angles, clouds, flare, glint). One table, no new logic.
+8. **Ground observer view.** Camera mode at an observer's ECEF position
+   looking up, horizon mask, ISS as a bright point. Depends on B.3 for the
+   observer. Large; only after B.1–B.3.
+
+### C. Engineering
+
+1. **Offline / PWA.** `vite-plugin-pwa` with precache for the app shell +
+   textures + the fallback model, runtime cache (network-first) for
+   `/api/tle`; manifest + icons. The OFFLINE mode already exists.
+2. **Bundle + textures.** `React.lazy` the postprocessing chain and the IGOAL
+   pipeline; convert Earth textures to KTX2/Basis (`toktx`) with a WebP
+   fallback. Measure first (C.2 follows A.2's numbers).
+3. **Mobile.** Check pinch, two-finger slide, lifting one finger mid-gesture,
+   portrait HUD; fix what breaks. Add a 390×844 case to the Playwright suite.
+4. **Accessibility.** `aria-live="polite"` region announcing the place below
+   (at most once per minute), a `?` shortcut-help overlay, the remaining
+   `L` / `H` / `R` shortcuts (item 2), a high-contrast HUD class.
+5. **Release routine.** Scheduled CI job running `npm run refresh:tle` that
+   opens a PR when the fallback changes; a short `CHANGELOG.md`.
+
+Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2.
+
+
 ## 0. Performance / optimization run — added 2026-09-29, NOT STARTED
 
 User report after the visual refresh + time controls + flare work landed:

@@ -934,3 +934,111 @@ frame-time table plus a console-clean browser pass.
   designed (6 frames + WebP) — flips to exit 0 after the Phase C rebuild.
 - Shipped `public/models/iss_igoal.glb` is UNCHANGED so far (byte-hash guard
   covered by tests); candidate rebuild pending.
+
+## Independent engineering pass (2026-10-03) — LANDED + browser-smoked
+
+Audit across core, rendering, camera/UI, and tooling; every finding vetted
+against source before change. Landed:
+- `SimulationRuntime.run`: a throwing `step()` no longer kills the 10 Hz chain
+  (logged, scheduling continues; regression test added).
+- `GeoLookupService`: a cell cached with `placeName: null` after a failed place
+  fetch (weather succeeded) is retried once per session instead of pinning "—"
+  for the 30-day place TTL (regression test added; geo store reset per test).
+- `OrbitTape`: target carried forward at the sweep rate between 1 Hz
+  measurements — at 300× the marker previously lagged tens of degrees and
+  snapped 72°; browser-measured ≈0.05 rev/s, no snaps. Trail visibility uses a
+  rate-scaled threshold with hysteresis (82% on at 300×, was 42%). Multi-touch
+  no longer hijacks a scrub. Header comment corrected: Play after a scrub from
+  Live re-pins to the wall (store contract, unchanged).
+- `TimeControls`: held Space no longer strobes pause (`event.repeat` guard).
+- `CameraController`: listener teardown removes from the captured controls
+  instance (the shared ref is already null at unmount); Locate departure gate
+  bounded at 8 s so a stalled GLB fetch cannot freeze the view.
+- `Postprocessing`: bloom/flare/output passes disposed on composer teardown
+  (EffectComposer.dispose frees none of them — ~7 MB GPU per Bloom toggle at
+  1080p); redundant bloom `setSize` removed. `RoomEnvironment` disposed.
+- `SceneRoot`: `EarthGroup` wrapped in `CanvasErrorBoundary` — a texture
+  failure no longer replaces the whole app with the crash screen.
+- `OrbitLine`: dash sizing reads the latest 10 Hz snapshot instead of a
+  per-frame SGP4 propagation + allocation (perf-run suspect from item 0).
+- `ISSModel`: glint pulse on wall time (strobed at ~120 Hz under 300×); body
+  frame comments corrected (+Y = −orbit normal, as built in ISSGroup).
+- Dead code removed: `prewarmingComplete` path, `REPLAY` clock mode,
+  `DRIFT_DETECTED`/`clear()`, `ApiRateLimiter.msUntilNext/reset`,
+  `InterpolationService.reset`, `SimulationClock.dispose`, unused math helpers,
+  `formatUtcClock`/`formatKilometers*`, camera type scaffolding; tautological
+  ShaderRamps block deleted.
+- `api/tle.ts`: already-aborted request signal propagated to upstream racers.
+- Tooling: `engines.node >=20`, `chunkSizeWarningLimit: 800`, baseline
+  security headers in `vercel.json`. Comment fixes (GMST units, nlerp, geo
+  limiter provider, formatter example, mirror source label).
+
+Not changed (judgment): CSP (Google Fonts + three external APIs need a tuned
+policy and a live-deploy check), ESLint/CI, untested frame-math modules,
+packaged fallback TLE (10 days old — refresh at release), Nauka hull (user
+decision), Phase D (postponed). The measured perf run in item 0 is still owed.
+
+Gates: `npm run verify` exit 0 (182 tests); browser smoke on dev server —
+boot clean, Locate → "Follow · Locked", Space pause, 300× tape sampling,
+Bloom/flare toggle round-trips with persistence intact, no console errors.
+
+## Follow-up pass — deferred items closed (2026-10-03) — LANDED + browser-smoked
+
+Closes the "Not changed" list above (except Nauka hull / Phase D):
+- Fallback TLE refreshed (epoch 2026-10-02T11:10:18Z) and `npm run refresh:tle`
+  added (`scripts/refresh-fallback-tle.mjs`: CelesTrak → wheretheiss.at,
+  line shape + checksum + catalog validated before write). Run at release.
+- Fonts self-hosted (`public/fonts/`, latin + latin-ext variable woff2,
+  88 KiB, counted in the asset budget); Google Fonts links removed, latin
+  files preloaded. CSP added to `vercel.json` (self + wheretheiss.at,
+  bigdatacloud, open-meteo; `wasm-unsafe-eval` + `blob:` workers for Draco).
+  CSP is NOT exercised by `vite dev` — verify on a preview deploy.
+- `typecheck` now covers tests/scripts/configs (`tsconfig.test.json`,
+  `@types/node` pinned). Surfaced and fixed: unused test locals, nullable
+  accessors, and an invalid `compress` option in `vite.config.ts` (`minify`).
+- ESLint (flat config, typescript-eslint + react-hooks) at `--max-warnings 0`,
+  wired into `verify`; `.github/workflows/verify.yml` runs verify + prod audit.
+- `GeoLookupService`: one per-session sweep deletes expired `geo:` cells from
+  IndexedDB (TTL was read-side only; the ground track visits every cell).
+- `InterpolationService`: lat/lon (wrap-safe)/altitude/speed decay with the
+  ECI offset, so HUD gauges no longer jump on a TLE swap (tests added).
+- `RuntimeEnvironment`: PMREM environment rebuilt on `webglcontextrestored`.
+- Settings radio groups: arrow/Home/End selection with roving tabindex
+  (`ui/common/radioGroup.ts`). Escape in both popovers is scoped to focus
+  inside the popover (or body) and returns focus to the trigger.
+
+Perf baseline (item 0, first measurement): dev server, headless Chromium,
+AMD Radeon iGPU (ANGLE/D3D11), default view, 599 frames — p50 16.7 ms,
+p95 17.1, p99 17.4, max 18.0, 0 frames > 33 ms (vsync-capped at 60 Hz). Does
+not cover 300×, close-up high-fidelity ISS, or a discrete-GPU/low-end matrix.
+
+Gates: `npm run verify` exit 0 (186 tests, lint 0 warnings); browser smoke —
+only local font requests, arrow keys move + select orbit-line radio, Escape
+closes settings and refocuses the gear, no page errors.
+
+## gcdatlas comparison pass (2026-10-03) — LANDED + browser-smoked
+
+Read eshin087/gcdatlas (API guard, render loop, settings, input, tests, docs)
+and adopted only what fits this architecture:
+- `api/tle.ts`: query strings refused with a cacheable 404 (the edge cache keys
+  on the full URL, so `?x=n` would otherwise bypass it and hit CelesTrak); HEAD
+  supported; warm-instance memo (15 min) with in-flight dedupe (the shared race
+  is decoupled from any one request's abort); stale-on-error serves the last
+  good TLE with `X-TLE-Stale: 1`; upstream User-Agent.
+- `settingsStore`: custom `merge` keeps only known keys with valid values, so a
+  legacy/hand-edited `issModelQuality` can no longer reach `MODEL_SPECS` as undefined.
+- `GeoLookupService`: no fetches while `document.visibilityState === 'hidden'`.
+- `DprGovernor` + `AdaptiveDpr`: frame-time EMA, 18/28 ms hysteresis band, hitch
+  (≥100 ms) and hidden frames ignored, decisions ≤1/s, ≤3 downs/ups per session;
+  composer follows `viewport.dpr`.
+- Camera flights: `prefers-reduced-motion` shortens flights to 0.35× (path kept).
+- `vite.config.ts`: dev middleware serves `/api/tle` via the real handler.
+
+Rejected: single-file concat bundle, ASCII/cell renderer, focus-relative
+light-year camera (scene spans ~10⁵ km; float32 suffices), J2 two-body
+propagation (SGP4 is already correct), reload-on-context-restore (we rebuild),
+feature flags, PR-per-release/handoff docs, Playwright SwiftShader suite (deferred).
+
+Gates: `npm run verify` exit 0 (206 tests); browser smoke on dev server —
+`/api/tle` GET 200 celestrak, `?x` 404, HEAD 200 empty, POST 405; p50 16.7 /
+p99 16.9 ms, DPR held at device ceiling (1.25); no console errors.
