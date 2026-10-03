@@ -35,9 +35,10 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
   const size = useThree((state) => state.size)
+  // Changes when the DPR governor calls setDpr; the composer must follow.
+  const dpr = useThree((state) => state.viewport.dpr)
 
   const composerRef = useRef<EffectComposer | null>(null)
-  const bloomRef = useRef<UnrealBloomPass | null>(null)
   const flareRef = useRef<SunFlare | null>(null)
 
   const lensFlare = useSettingsStore((state) => state.lensFlare)
@@ -62,23 +63,29 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
     flare.pass.enabled = useSettingsStore.getState().lensFlare
     composer.addPass(flare.pass)
 
-    composer.addPass(new OutputPass())
+    const outputPass = new OutputPass()
+    composer.addPass(outputPass)
 
     composer.setSize(size.width, size.height)
     composer.setPixelRatio(gl.getPixelRatio())
 
     composerRef.current = composer
-    bloomRef.current = bloom
     flareRef.current = flare
 
     return () => {
+      // EffectComposer.dispose frees only its own ping-pong targets and copy
+      // pass; each pass owns GPU targets/materials (bloom: 11 HalfFloat mips)
+      // that would otherwise leak on every Bloom toggle.
+      bloom.dispose()
+      flare.pass.dispose()
+      outputPass.dispose()
       composer.dispose()
       composerRef.current = null
-      bloomRef.current = null
       flareRef.current = null
     }
     // `size` is intentionally excluded — the sync effect below keeps a built
     // composer resized without rebuilding the pass chain on every resize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, scene, camera])
 
   // Keep composer resolution in lockstep with the viewport (and re-sync after
@@ -86,10 +93,10 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
   useEffect(() => {
     const composer = composerRef.current
     if (!composer) return
+    // composer.setSize resizes every pass, bloom included.
     composer.setSize(size.width, size.height)
     composer.setPixelRatio(gl.getPixelRatio())
-    bloomRef.current?.setSize(size.width, size.height)
-  }, [size, gl])
+  }, [size, dpr, gl])
 
   // Enable/disable the flare without rebuilding the composer — a disabled
   // ShaderPass is skipped outright by the composer's render loop, so the off

@@ -61,7 +61,7 @@ function generateRestrainedStars(count: number) {
 
     // Astro-luminance hierarchy - calibrated to complement the real NASA starmap
     const randLuminance = Math.random()
-    let brightness = 0.0
+    let brightness: number
 
     if (randLuminance <= 0.95) {
       // Faint background stars (1.5x boosted: 0.027 to 0.068 brightness)

@@ -50,7 +50,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { issEntity } from '@/core/entities/ISSEntity'
 import { generateOrbitPath } from '@/core/orbital/OrbitPredictor'
-import { temeToWorld } from '@/core/orbital/CoordinateConversions'
+import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ORBIT_PATH_REFRESH_MS } from '@/utils/constants'
 
@@ -86,6 +86,9 @@ function alphaCurve(temporalAlpha: number): number {
   const past = (temporalAlpha / 0.5) * PAST_MAX_ALPHA
   return past + (FUTURE_ALPHA - past) * smoothstepJs(0.45, 0.55, temporalAlpha)
 }
+
+/** Frame-loop scratch for the station's world position (TEME (x,y,z) → world (x,z,−y)). */
+const _liveWorldPos = new THREE.Vector3()
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -289,10 +292,13 @@ export function OrbitLine(): JSX.Element {
     if (totalArc <= 0) return
 
     const halfFovRad = (state.camera as THREE.PerspectiveCamera).getEffectiveFOV() * Math.PI / 360
-    const liveTeme = issEntity.engine.propagateAt(nowMs)
-    const livePos = liveTeme ? temeToWorld(liveTeme) : null
-    const referenceDepthKm = livePos
-      ? state.camera.position.distanceTo(livePos)
+    // Depth reference from the latest 10 Hz snapshot (≤100 ms old → <0.1%
+    // pitch error), not a fresh SGP4 propagation every frame.
+    const liveState = telemetryManager.lastState
+    const referenceDepthKm = liveState
+      ? state.camera.position.distanceTo(_liveWorldPos.set(
+          liveState.positionECI.x, liveState.positionECI.z, -liveState.positionECI.y,
+        ))
       : state.camera.position.length()
 
     const worldPerPx =
