@@ -119,6 +119,26 @@ describe('SimulationRuntime', () => {
     expect(harness.clock.tick).toHaveBeenLastCalledWith(0)
   })
 
+  it('keeps ticking after a step throws', () => {
+    const harness = createHarness()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.mocked(harness.telemetry.update).mockImplementationOnce(() => {
+      throw new Error('propagation failed')
+    })
+
+    harness.runtime.start()
+    expect(harness.runtime.isRunning).toBe(true)
+    expect(harness.timers.size).toBe(1)
+
+    harness.runNextTimer()
+    expect(harness.telemetry.update).toHaveBeenCalledTimes(2)
+    expect(harness.timers.size).toBe(1)
+    expect(errorSpy).toHaveBeenCalledOnce()
+
+    harness.runtime.stop()
+    errorSpy.mockRestore()
+  })
+
   it('rejects invalid scheduler cadences', () => {
     const clock: RuntimeClock = { tick: () => simTime(0) }
     const telemetry: RuntimeTelemetry = { update: () => undefined }

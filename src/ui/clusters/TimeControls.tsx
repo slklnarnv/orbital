@@ -58,6 +58,7 @@ export function TimeControls(): JSX.Element {
     epochToUtcInputValue(simulationClock.now().epochMs),
   )
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   // Seek popover dismissal — same contract as the settings popover:
   // outside pointerdown or Escape closes it.
@@ -66,8 +67,15 @@ export function TimeControls(): JSX.Element {
     const onPointerDown = (event: PointerEvent): void => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setSeekOpen(false)
     }
+    // Scoped Escape: only when focus is inside this cluster (or nowhere).
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setSeekOpen(false)
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const active = document.activeElement
+      const focusInside = active !== null && rootRef.current?.contains(active)
+      if (!focusInside && active !== document.body) return
+      event.preventDefault()
+      setSeekOpen(false)
+      if (focusInside) triggerRef.current?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -86,6 +94,11 @@ export function TimeControls(): JSX.Element {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.code !== 'Space') return
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+      // Held Space auto-repeats keydown; one press is one toggle.
+      if (event.repeat) {
+        event.preventDefault()
+        return
+      }
       const target = event.target as HTMLElement | null
       // Inputs and contentEditable keep their spaces; buttons, links and
       // summaries keep their native Space activation.
@@ -176,6 +189,7 @@ export function TimeControls(): JSX.Element {
       </button>
 
       <button
+        ref={triggerRef}
         type="button"
         className={transportButton(false)}
         aria-expanded={seekOpen}

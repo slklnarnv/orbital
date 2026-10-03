@@ -11,7 +11,6 @@ import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
 import { CameraCluster } from '@/ui/clusters/CameraCluster'
 import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
 import { OrbitTape } from '@/ui/clusters/OrbitTape'
-import { useLoadingStore } from '@/stores/loadingStore'
 
 /**
  * Pure JavaScript utility to check if WebGL is available in the current browser session.
@@ -156,7 +155,6 @@ function WebGLDiagnosticScreen(): JSX.Element {
  */
 function LoadingScreen(): JSX.Element | null {
   const { active, progress } = useProgress()
-  const prewarmingComplete = useLoadingStore((state) => state.prewarmingComplete)
   const [mounted, setMounted] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -165,18 +163,15 @@ function LoadingScreen(): JSX.Element | null {
   // to prevent the visual "double load" glitch (0->100->0->100).
   const displayProgress = hasLoaded ? 100 : progress
 
-  // Dynamic message to keep the user informed during download vs. GPU initialization stages
-  const statusMessage = (!prewarmingComplete && progress >= 100 && !active)
-    ? 'Initializing Graphics'
-    : `Loading ${Math.round(displayProgress)}%`
+  const statusMessage = `Loading ${Math.round(displayProgress)}%`
 
   useEffect(() => {
     // If we have already started the exit sequence, ignore further useProgress updates.
     // This prevents the loading screen from returning once it starts fading out.
     if (hasLoaded) return
 
-    // Wait until downloads complete (progress >= 100 & !active) AND the GPU prewarmer completes
-    if (progress >= 100 && !active && prewarmingComplete) {
+    // Wait until downloads complete (progress >= 100 & !active)
+    if (progress >= 100 && !active) {
       setHasLoaded(true)
 
       // We purposefully DO NOT return a cleanup function (clearTimeout) here.
@@ -191,7 +186,7 @@ function LoadingScreen(): JSX.Element | null {
         }, 800)
       }, 400)
     }
-  }, [progress, active, prewarmingComplete, hasLoaded])
+  }, [progress, active, hasLoaded])
 
   if (!mounted) return null
 

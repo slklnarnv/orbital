@@ -47,6 +47,13 @@ const _syncTargetA = new THREE.Vector3()
 const _rollReference = new THREE.Vector3()
 
 /**
+ * Longest a Locate waits at departure for the detail model to finish
+ * preparing. Normal loads finish well inside this; past it the flight departs
+ * on the committed model so a stalled fetch never freezes the view.
+ */
+const LOCATE_DEPARTURE_MAX_WAIT_MS = 8_000
+
+/**
  * Make camera-controls adopt the exact rendered pose, roll included. Flights
  * drive its internal state with a world-up frame while the rendered orientation
  * is transported manually — every takeover (completion, cancellation) must run
@@ -128,17 +135,21 @@ export const CameraController = React.memo(function CameraController({
     elapsedMs: number
     horizon: FlightHorizon
   } | null>(null)
+  // Wall-clock start of the current Locate's departure wait (see the gate).
+  const departureWaitRef = useRef<{ transition: CameraTransitionState; sinceMs: number } | null>(null)
 
-  // BUG-04: Track listener registration status and callback references to ensure clean setup and tear down
-  const listenersAttachedRef = useRef(false)
+  // Listener registration: the controls instance is captured at attach time.
+  // The shared cameraControlsRef is already null when passive unmount cleanups
+  // run (ref detachment happens in the commit's mutation phase), so teardown
+  // must remove from the captured instance, not from the shared ref.
+  const attachedControlsRef = useRef<CameraControlsImpl | null>(null)
   const handleControlStartRef = useRef<(() => void) | null>(null)
   const handleControlRef = useRef<(() => void) | null>(null)
   const wheelCancelRef = useRef<(() => void) | null>(null)
 
-  // Unsubscribe listeners cleanly on unmount
   useEffect(() => {
     return () => {
-      const controls = cameraControlsRef.current
+      const controls = attachedControlsRef.current
       if (controls) {
         if (handleControlStartRef.current) {
           controls.removeEventListener('controlstart', handleControlStartRef.current)
@@ -147,6 +158,7 @@ export const CameraController = React.memo(function CameraController({
           controls.removeEventListener('control', handleControlRef.current)
         }
       }
+      attachedControlsRef.current = null
     }
   }, [])
 
@@ -236,8 +248,17 @@ export const CameraController = React.memo(function CameraController({
     if (!controls) return
     freeOrbitRef.current?.update(controls, delta, !transitionFrameRef.current)
 
-    // BUG-04: Attach event listeners inside the frame loop once the controls become available
-    if (!listenersAttachedRef.current) {
+    // Attach event listeners once the controls instance is available.
+    if (attachedControlsRef.current !== controls) {
+      // A replaced controls instance must not keep the old handlers, and the
+      // canvas must not accumulate a second wheel listener.
+      const previous = attachedControlsRef.current
+      if (previous) {
+        if (handleControlStartRef.current) previous.removeEventListener('controlstart', handleControlStartRef.current)
+        if (handleControlRef.current) previous.removeEventListener('control', handleControlRef.current)
+      }
+      if (wheelCancelRef.current) gl.domElement.removeEventListener('wheel', wheelCancelRef.current)
+
       const cancelActiveFlight = () => {
         const store = useCameraStore.getState()
         if (!store.isTransitioning) return
@@ -274,7 +295,7 @@ export const CameraController = React.memo(function CameraController({
       handleControlStartRef.current = handleControlStart
       handleControlRef.current = handleControl
       wheelCancelRef.current = handleWheelCancel
-      listenersAttachedRef.current = true
+      attachedControlsRef.current = controls
     }
 
 
@@ -294,9 +315,20 @@ export const CameraController = React.memo(function CameraController({
       // After departure the gate is never re-checked — a selection change
       // mid-flight swaps the model in the background while the captured path
       // and horizon continue, so the flight can no longer stall.
+      // The wait is bounded: a stalled GLB fetch (no fetch timeout exists in
+      // the loader) must not park a passive user at the departure pose
+      // forever. Past the bound the flight departs on whatever model is
+      // committed; the detail swap still happens whenever it finishes.
       if (transition.toMode === 'FOLLOW' && flightRef.current?.transition !== transition) {
         const { status } = useLoadingStore.getState().issDetail
-        if (status !== 'ready' && status !== 'failed' && status !== 'unavailable') return
+        if (status !== 'ready' && status !== 'failed' && status !== 'unavailable') {
+          const nowMs = performance.now()
+          if (departureWaitRef.current?.transition !== transition) {
+            departureWaitRef.current = { transition, sinceMs: nowMs }
+          }
+          if (nowMs - departureWaitRef.current.sinceMs < LOCATE_DEPARTURE_MAX_WAIT_MS) return
+        }
+        departureWaitRef.current = null
       }
 
       if (transition.toMode === 'FOLLOW') {
@@ -328,15 +360,20 @@ export const CameraController = React.memo(function CameraController({
           path.position.x, path.position.y, path.position.z,
           path.target.x, path.target.y, path.target.z, false,
         )
+        // Reduced motion (read per flight, so an OS toggle applies at once):
+        // keep the path, so arrival orientation and context are preserved,
+        // but fly it in a fraction of the time. A cut would be more
+        // disorienting than a short glide.
+        const motionScale = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0.35 : 1
         flightRef.current = {
           transition, path, elapsedMs: 0, horizon,
           // Time scales with the visible work: the route's own estimate, plus
           // the horizon roll to settle — only Reset settles onto world-up;
           // Locate keeps the horizon as transported, so it has no roll debt.
-          durationMs: (transition.toMode === 'FOLLOW'
+          durationMs: motionScale * ((transition.toMode === 'FOLLOW'
             ? path.planLocate(_transCamPos, _currentISSPos)
             : transition.durationMs)
-            + (transition.toMode === 'ORBITAL' ? initialRollErrorRad(view, up) * 250 : 0),
+            + (transition.toMode === 'ORBITAL' ? initialRollErrorRad(view, up) * 250 : 0)),
         }
       } else {
         flightRef.current.elapsedMs += Math.min(delta, 0.05) * 1000

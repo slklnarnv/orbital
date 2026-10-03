@@ -90,7 +90,8 @@ export class CameraNavigationConstraint {
     for (let i = 1; i <= steps; i++) {
       const t = i / steps
       this.arcProbe.lerpVectors(this.offsetA, this.offsetB, t)
-      // Normalized lerp of two unit directions is their spherical interpolation.
+      // Normalized lerp samples lie on the great-circle arc between the two
+      // unit directions (not at uniform angular spacing, which this check needs not).
       if (this.arcProbe.lengthSq() === 0) this.arcProbe.copy(this.offsetB)
       this.arcProbe.normalize().multiplyScalar(length).add(this.target)
       if (this.arcProbe.lengthSq() < EARTH_LIMIT * EARTH_LIMIT) return false

@@ -1,4 +1,4 @@
-import { get, set } from 'idb-keyval'
+import { delMany, entries, get, set } from 'idb-keyval'
 import { ApiRateLimiter } from '@/core/api/ApiRateLimiter'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
@@ -168,7 +168,7 @@ export function formatLocalClock(epochMs: number, utcOffsetSeconds: number): str
 
 export class GeoLookupService {
   private _geoLimiter = new ApiRateLimiter({
-    normalIntervalMs: 11_000,   // Nominatim fair use: well under 1 req/s sustained
+    normalIntervalMs: 11_000,   // BigDataCloud fair use: well under 1 req/s sustained
     baseDelayMs: 30_000,
     maxDelayMs: 10 * 60_000,
   })
@@ -185,6 +185,13 @@ export class GeoLookupService {
   private _geoInFlight = false
   private _wxInFlight = false
   private _unsubscribe: (() => void) | null = null
+  /**
+   * Cells whose place lookup actually answered this session. A cached entry
+   * with placeName === null is either a genuine empty answer or a place fetch
+   * that failed while weather succeeded (which would otherwise pin "—" for the
+   * full 30-day place TTL); this set retries the latter once per session.
+   */
+  private _placeAnswered = new Set<string>()
 
   start(): void {
     if (this._timerId !== null) return  // idempotent (StrictMode-style remounts)
@@ -201,6 +208,28 @@ export class GeoLookupService {
       this._tick()
       this._timerId = setInterval(() => this._tick(), TICK_INTERVAL_MS)
     }, FIRST_TICK_DELAY_MS)
+
+    void this._pruneExpiredCells()
+  }
+
+  /**
+   * The 30-day TTL is enforced on read only; the ground track wanders over
+   * every longitude, so never-revisited cells would otherwise accumulate in
+   * IndexedDB forever. One sweep per session drops expired entries.
+   */
+  private async _pruneExpiredCells(): Promise<void> {
+    try {
+      const now = Date.now()
+      const expired: IDBValidKey[] = []
+      for (const [key, value] of await entries<IDBValidKey, GeoSnapshot>()) {
+        if (typeof key !== 'string' || !key.startsWith(IDB_KEY_PREFIX)) continue
+        const fetchedAt = (value as Partial<GeoSnapshot> | undefined)?.fetchedAt
+        if (typeof fetchedAt !== 'number' || now - fetchedAt > GEO_CELL_TTL_MS) expired.push(key)
+      }
+      if (expired.length > 0) await delMany(expired)
+    } catch {
+      // IndexedDB unavailable — nothing persisted to prune
+    }
   }
 
   stop(): void {
@@ -229,6 +258,10 @@ export class GeoLookupService {
     }
 
     if (!this._hasRealFix) return
+    // Hidden tab: nobody reads the HUD, and throttled timers would spend the
+    // fair-use budget on cells the station crosses unseen. The local clock
+    // above still ticks; the first visible tick resumes with the current cell.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     // Time-control gate: under accelerated time the ground point crosses
     // several cache cells per tick, so new lookups would chase transient
     // places forever (the HUD withholds enrichment while accelerated
@@ -244,21 +277,27 @@ export class GeoLookupService {
     const cached = await this._lookupCell(cellKey)
     if (cached) {
       this._applySnapshot(cached)
+      if (cached.placeName === null && !this._placeAnswered.has(cellKey)) {
+        this._requestPlace(latitude, longitude, cellKey)
+      }
       return
     }
 
     // New cell (or long-expired): enrich it. Place first — weather seconds
     // behind it is fine, both land on the same 5 s tick eventually.
-    if (!this._geoInFlight && this._geoLimiter.shouldRequest()) {
-      this._geoInFlight = true
-      this._geoLimiter.recordRequest()
-      void this._fetchPlace(latitude, longitude, cellKey)
-    }
+    this._requestPlace(latitude, longitude, cellKey)
     if (!this._wxInFlight && this._wxLimiter.shouldRequest()) {
       this._wxInFlight = true
       this._wxLimiter.recordRequest()
       void this._fetchWeather(latitude, longitude, cellKey)
     }
+  }
+
+  private _requestPlace(lat: number, lon: number, cellKey: string): void {
+    if (this._geoInFlight || !this._geoLimiter.shouldRequest()) return
+    this._geoInFlight = true
+    this._geoLimiter.recordRequest()
+    void this._fetchPlace(lat, lon, cellKey)
   }
 
   /** Returns a fresh-enough snapshot for the cell from memory or IndexedDB. */
@@ -338,6 +377,7 @@ export class GeoLookupService {
         fetchedAt: Date.now(),
       })
       this._geoLimiter.recordSuccess()
+      this._placeAnswered.add(cellKey)
       this._persistCell(cellKey)
       this._applySnapshot(this._memCache.get(cellKey)!)
     } catch {

@@ -19,7 +19,7 @@ export function computeGMST(julianDate: number): number {
     0.093104 * T * T -
     6.2e-6 * T * T * T;
 
-  // Convert arc-seconds to radians
+  // Seconds of time (mod one day) → radians
   gmst = ((gmst % 86400) * (2 * Math.PI)) / 86400;
   // Normalize to [0, 2π]
   return ((gmst % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);

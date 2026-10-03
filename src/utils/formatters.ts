@@ -24,22 +24,6 @@ export function formatLongitude(lon: number, precision = 4): string {
 }
 
 /**
- * Formats an altitude or absolute distance in kilometers with unit.
- * Example: 408.234 -> "408.2 km"
- */
-export function formatKilometers(km: number, precision = 1): string {
-  return `${km.toFixed(precision)} km`
-}
-
-/**
- * Formats a velocity or linear speed in kilometers per second with unit.
- * Example: 7.6612 -> "7.66 km/s"
- */
-export function formatKilometersPerSecond(kms: number, precision = 2): string {
-  return `${kms.toFixed(precision)} km/s`
-}
-
-/**
  * Formats an orbital period in minutes to a clean scientific duration readout.
  * Example: 92.68 -> "92m 41s"
  */
@@ -69,31 +53,10 @@ export function formatGmst(gmstRad: number, precision = 5): string {
 }
 
 /**
- * Formats a millisecond timestamp into standard high-precision UTC digital clock format.
- * Example: 1779788713076 -> "2026.146 | 11:05:13 UTC" (where 146 is the day of year)
- */
-export function formatUtcClock(epochMs: number): string {
-  const date = new Date(epochMs)
-  
-  const year = date.getUTCFullYear()
-  const hours = date.getUTCHours().toString().padStart(2, '0')
-  const minutes = date.getUTCMinutes().toString().padStart(2, '0')
-  const seconds = date.getUTCSeconds().toString().padStart(2, '0')
-  
-  // Calculate Day of Year (DOY) for professional flight tracking
-  const start = Date.UTC(year, 0, 0)
-  const diff = epochMs - start
-  const oneDay = 1000 * 60 * 60 * 24
-  const doy = Math.floor(diff / oneDay).toString().padStart(3, '0')
-
-  return `${year}.${doy} | ${hours}:${minutes}:${seconds} UTC`
-}
-
-/**
  * Splits the UTC mission clock into display parts for the broadcast-style
  * bottom-center cluster: a large time-of-day numeral and a small
  * year.day-of-year ephemeris line.
- * Example: 1779788713076 -> { time: "11:05:13", date: "2026.244" }
+ * Example: 1779788713076 -> { time: "09:45:13", date: "2026.146" }
  */
 export interface UtcClockParts {
   /** "HH:MM:SS" */
