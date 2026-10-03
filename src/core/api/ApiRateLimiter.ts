@@ -78,15 +78,4 @@ export class ApiRateLimiter {
     this._isInBackoff   = false
     this._lastRequestMs = 0
   }
-
-  /** How many ms until the next request is allowed */
-  msUntilNext(nowMs = Date.now()): number {
-    return Math.max(0, this._lastRequestMs + this._currentDelay - nowMs)
-  }
-
-  reset(): void {
-    this._currentDelay  = this._normalIntervalMs
-    this._lastRequestMs = 0
-    this._isInBackoff   = false
-  }
 }

@@ -13,10 +13,19 @@ const WHERETHEISS_TLE =
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
   'Access-Control-Allow-Headers':
     'Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
 }
+
+const ALLOW = 'GET, HEAD, OPTIONS'
+// Upstreams publish new ISS elements a few times a day. A warm instance
+// reuses its last good answer for this long, so a burst of edge-cache misses
+// (cold POPs, purges) costs one upstream race instead of one per request.
+const MEMO_MIN_AGE_MS = 15 * 60_000
+// Identify ourselves to CelesTrak/wheretheiss.at; anonymous bulk traffic is
+// what their fair-use policies throttle first.
+const USER_AGENT = 'orbital-iss-visualizer (Vercel function; ISS TLE proxy)'
 
 interface TLEData {
   line1: string
@@ -114,7 +123,7 @@ async function tryFetchWithSignal(
 
   try {
     const response = await fetchImplementation(url, {
-      headers: { Accept: 'text/plain' },
+      headers: { Accept: 'text/plain', 'User-Agent': USER_AGENT },
       signal: controller.signal,
     })
     if (!response.ok) return null
@@ -141,61 +150,103 @@ async function fetchAndParse(
   return tle
 }
 
-/** Exported factory keeps upstream behavior testable without network I/O. */
-export function createTLEHandler(fetchImplementation: FetchImplementation = fetch) {
-  return async function handler(request: Request): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: { ...CORS_HEADERS, Allow: 'GET, OPTIONS' },
-      })
-    }
+export interface TLEHandlerOptions {
+  /** Injectable clock for memo-age tests. */
+  now?: () => number
+  memoMinAgeMs?: number
+}
 
-    if (request.method !== 'GET') {
-      return Response.json(
-        { error: 'Method not allowed' },
-        {
-          status: 405,
-          headers: {
-            ...CORS_HEADERS,
-            Allow: 'GET, OPTIONS',
-            'Cache-Control': 'no-store',
-          },
-        },
-      )
-    }
+function reply(method: string, status: number, body: unknown, headers: Record<string, string>): Response {
+  const merged = { ...CORS_HEADERS, ...headers }
+  if (method === 'HEAD') {
+    return new Response(null, { status, headers: { 'Content-Type': 'application/json', ...merged } })
+  }
+  return Response.json(body, { status, headers: merged })
+}
 
+const FRESH_HEADERS = {
+  'Cache-Control': 'public, max-age=60',
+  'Vercel-CDN-Cache-Control': 'max-age=3600, stale-while-revalidate=300',
+}
+// Served from the warm memo after every upstream failed: short edge life so a
+// recovered upstream is picked up quickly. The body's fetchedAt stays the
+// original fetch time, so the client's own staleness accounting is truthful.
+const STALE_HEADERS = {
+  'Cache-Control': 'public, max-age=60',
+  'Vercel-CDN-Cache-Control': 'max-age=300',
+  'X-TLE-Stale': '1',
+}
+
+/**
+ * Exported factory keeps upstream behavior testable without network I/O.
+ *
+ * Abuse/upstream protection (pattern from gcdatlas's api/_lib/guard.js,
+ * adapted to the Web Request/Response handler):
+ *  - Only the bare path is served. The edge cache keys on the full URL, so
+ *    `?x=1`, `?x=2`… would each miss, run the function and hit CelesTrak.
+ *    Query strings get a cacheable 404 before any upstream work.
+ *  - A warm instance reuses its last good TLE for MEMO_MIN_AGE_MS, and
+ *    concurrent misses share one upstream race.
+ *  - If every upstream fails, the last good TLE is served (marked stale)
+ *    instead of a 502.
+ */
+export function createTLEHandler(
+  fetchImplementation: FetchImplementation = fetch,
+  options: TLEHandlerOptions = {},
+) {
+  const now = options.now ?? Date.now
+  const memoMinAgeMs = options.memoMinAgeMs ?? MEMO_MIN_AGE_MS
+  let memo: { at: number; tle: TLEData } | null = null
+  let inflight: Promise<TLEData> | null = null
+
+  // The race is deliberately NOT tied to any one request's signal: it is
+  // shared, so one client disconnecting must not fail the others waiting on
+  // it. Per-source timeouts (≤20 s, under maxDuration 30) bound it.
+  const load = (): Promise<TLEData> => {
+    if (inflight) return inflight
     const controller = new AbortController()
-    const onRequestAbort = () => controller.abort()
-    request.signal.addEventListener('abort', onRequestAbort, { once: true })
-
-    const requests = [
+    inflight = Promise.any([
       fetchAndParse(fetchImplementation, CELESTRAK_ORG(ISS_NORAD_ID), 10_000, controller.signal),
       fetchAndParse(fetchImplementation, CELESTRAK_COM(ISS_NORAD_ID), 10_000, controller.signal),
       fetchAndParse(fetchImplementation, WHERETHEISS_TLE, 20_000, controller.signal),
-    ]
+    ])
+      .then((tle) => {
+        memo = { at: now(), tle }
+        return tle
+      })
+      .finally(() => {
+        controller.abort() // cancel the losing racers
+        inflight = null
+      })
+    return inflight
+  }
+
+  return async function handler(request: Request): Promise<Response> {
+    const method = request.method
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: { ...CORS_HEADERS, Allow: ALLOW } })
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      return reply(method, 405, { error: 'Method not allowed' }, { Allow: ALLOW, 'Cache-Control': 'no-store' })
+    }
+    if (new URL(request.url).search !== '') {
+      return reply(method, 404, { error: 'Not found' }, {
+        'Cache-Control': 'public, max-age=3600',
+        'Vercel-CDN-Cache-Control': 'max-age=86400',
+      })
+    }
+
+    if (memo && now() - memo.at < memoMinAgeMs) return reply(method, 200, memo.tle, FRESH_HEADERS)
+    // Nobody is listening; do not spend an upstream race on it.
+    if (request.signal.aborted) {
+      return reply(method, 502, { error: 'TLE sources unavailable' }, { 'Cache-Control': 'no-store' })
+    }
 
     try {
-      const tle = await Promise.any(requests)
-      return Response.json(tle, {
-        status: 200,
-        headers: {
-          ...CORS_HEADERS,
-          'Cache-Control': 'public, max-age=60',
-          'Vercel-CDN-Cache-Control': 'max-age=3600, stale-while-revalidate=300',
-        },
-      })
+      return reply(method, 200, await load(), FRESH_HEADERS)
     } catch {
-      return Response.json(
-        { error: 'TLE sources unavailable' },
-        {
-          status: 502,
-          headers: { ...CORS_HEADERS, 'Cache-Control': 'no-store' },
-        },
-      )
-    } finally {
-      controller.abort()
-      request.signal.removeEventListener('abort', onRequestAbort)
+      if (memo) return reply(method, 200, memo.tle, STALE_HEADERS)
+      return reply(method, 502, { error: 'TLE sources unavailable' }, { 'Cache-Control': 'no-store' })
     }
   }
 }
@@ -204,4 +255,5 @@ const handler = createTLEHandler()
 
 /** Vercel Web-standard method exports for the standalone `/api/tle` function. */
 export const GET = handler
+export const HEAD = handler
 export const OPTIONS = handler
