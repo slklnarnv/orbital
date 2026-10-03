@@ -58,7 +58,6 @@ import draco3d from 'draco3dgltf'
 import { MeshoptSimplifier } from 'meshoptimizer'
 import sharp from 'sharp'
 import {
-  REQUIRED_NODES,
   TRRJ_LIMITS,
   runtimeSubset,
   validateDocumentRig,

@@ -42,10 +42,6 @@ const SLEW_RAD_PER_SIM_S = IGOAL_TRRJ_LIMITS.slewDegPerSimSecond * DEG2RAD
 const TRRJ_DEF = IGOAL_JOINT_DEFS.find((j) => j.nodeName === 'PORT_TRRJ_GAMMA_ROT')!
 const SARJ_DEF = IGOAL_JOINT_DEFS.find((j) => j.nodeName === 'PORT_ALPHA_ROT')!
 
-function approx(a: number, b: number, eps = 1e-9): boolean {
-  return Math.abs(a - b) <= eps
-}
-
 function approxQuat(a: THREE.Quaternion, b: THREE.Quaternion, eps = 1e-9): boolean {
   return Math.abs(a.dot(b)) >= 1 - eps
 }
@@ -258,7 +254,7 @@ describe('applyJointAngle: composition and stationary shaft', () => {
   })
 
   it('rolls rigidly about the shaft: off-axis landmarks keep their distance to the axis line', () => {
-    const { root, toModel } = buildRigFixture()
+    const { root } = buildRigFixture()
     const result = resolveJoint(root, TRRJ_DEF)
     if (!result.ok) throw new Error(result.reason)
     const { joint } = result

@@ -87,7 +87,6 @@ describe('FlightHorizon', () => {
     const totalSweep = 200 * Math.PI / 180
     let maxRightStep = 0
     let previousRight: Vector3 | null = null
-    let previousUp = up0.clone()
     for (let i = 1; i <= 300; i++) {
       const progress = i / 300
       const view = view0.clone().applyAxisAngle(sweepAxis, -totalSweep * progress)
@@ -97,7 +96,6 @@ describe('FlightHorizon', () => {
         maxRightStep = Math.max(maxRightStep, right.angleTo(previousRight) * 180 / Math.PI)
       }
       previousRight = right
-      previousUp = result.clone()
     }
     // No frame may snap the horizon; rate-capped unwinding stays gentle.
     expect(maxRightStep).toBeLessThan(3)

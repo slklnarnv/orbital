@@ -20,7 +20,7 @@
 
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { NodeIO } from '@gltf-transform/core'
 import {
   EXTTextureWebP,
@@ -156,7 +156,6 @@ export async function checkDeclaredBounds(input, root) {
     if (a.min && a.max) declared.set(i, { min: a.min, max: a.max })
   })
   let compared = 0
-  let diverged = 0
   let maxDelta = 0
   accessors.forEach((attr, i) => {
     const d = declared.get(i)
@@ -180,7 +179,7 @@ export async function checkDeclaredBounds(input, root) {
   })
   // Draco's 14-bit quantization over a ~108 m model gives ~6.6e-3 m envelope;
   // report divergence, only flag it if it exceeds that plausible envelope.
-  diverged = maxDelta > 1e-6 ? compared : 0
+  const diverged = maxDelta > 1e-6 ? compared : 0
   return { supported: true, compared, diverged, maxDelta: Number(maxDelta.toExponential(3)) }
 }
 

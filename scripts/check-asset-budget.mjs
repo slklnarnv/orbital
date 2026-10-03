@@ -12,6 +12,10 @@ const initialAssets = [
   'public/textures/earth-specular-4k.webp',
   'public/textures/starmap-4k.webp',
   'public/models/International Space Station (ISS) (A).glb',
+  'public/fonts/space-grotesk-latin.woff2',
+  'public/fonts/space-grotesk-latin-ext.woff2',
+  'public/fonts/chivo-mono-latin.woff2',
+  'public/fonts/chivo-mono-latin-ext.woff2',
 ]
 
 const runtimeImages = initialAssets.filter((asset) => asset.endsWith('.webp'))
