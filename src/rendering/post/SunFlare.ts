@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
-import { EARTH_RADIUS_KM } from '@/utils/constants'
+import { EARTH_RADIUS_KM, SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import type { Vec3 } from '@/utils/math'
 
 /**
@@ -129,12 +129,19 @@ export class SunFlare {
 
   /**
    * Aim and gate the flare for the frame about to be drawn. `sunDir` is the
-   * world direction from Earth's centre toward the sun — at 1 AU it is also,
-   * to well under a pixel, the direction from the camera.
+   * world direction from Earth's centre toward the sun. The flare aims at the
+   * sun BILLBOARD (drawn at SUN_BILLBOARD_DISTANCE_KM along it), not along
+   * `sunDir` itself: from a camera tens of thousands of km off-centre the two
+   * differ by several degrees of parallax, which detached the halo from the
+   * visible disc.
    */
   update(camera: THREE.PerspectiveCamera, sunDir: Vec3): void {
     const u = this.pass.uniforms
-    _sunDir.set(sunDir.x, sunDir.y, sunDir.z)
+    _sunDir
+      .set(sunDir.x, sunDir.y, sunDir.z)
+      .multiplyScalar(SUN_BILLBOARD_DISTANCE_KM)
+      .sub(camera.position)
+      .normalize()
     const camDist = camera.position.length()
     if (camDist <= EARTH_RADIUS_KM) {
       u.uStrength.value = 0

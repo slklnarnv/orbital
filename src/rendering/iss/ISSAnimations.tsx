@@ -113,10 +113,11 @@ export interface IssAnimationsProps {
 }
 
 const DEG2RAD = Math.PI / 180
-// The BGA slew limit is in simulation seconds; at 300× that alone would let
-// a catch-up (after a seek or an eclipse hold) sweep ~600°/s on screen. This
-// caps the on-screen rate too, so a catch-up always reads as a glide.
-const BGA_MAX_WALL_DEG_PER_SECOND = 12
+// Slew limits are in simulation seconds; at 300× that alone would let the
+// BGAs (2°/sim-s) and TRRJs (0.75°/sim-s) sweep 225–600°/s on screen after a
+// seek or an eclipse transition. This caps the on-screen rate too, so every
+// catch-up reads as a glide.
+const MAX_WALL_DEG_PER_SECOND = 12
 // Sphere-Earth shadow test, identical to the lighting/exposure consumers
 // (ISSModel) and the analytic terminator inputs — one solar ephemeris only.
 const EARTH_RADIUS_KM = 6371
@@ -220,8 +221,9 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
         const dtSim =
           state.lastEpochMs === null ? 0 : Math.max(0, (epochMs - state.lastEpochMs) / 1000)
         state.lastEpochMs = epochMs
-        // In eclipse there is nothing to track: hold the last tilt.
-        const target = sunlit ? bgaTargetAngle(joint, _sunParent.current) : null
+        // Track through eclipse too: holding there and re-adopting the target
+        // at sunrise snapped the wings by up to |β| in one frame.
+        const target = bgaTargetAngle(joint, _sunParent.current)
         if (target === null) continue
         if (!state.initialized) {
           state.applied = target
@@ -229,7 +231,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
         } else {
           const step = Math.min(
             bgaSlewRadPerSimSec * dtSim,
-            BGA_MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
+            MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
           )
           state.applied = advanceToward(state.applied, target, step)
         }
@@ -280,7 +282,11 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
         // a repeated tick inside one frame yields dtSim = 0, never a doubled
         // rate. trrjAdvance relabels the two-sided branch at a travel stop
         // instead of slewing the equivalent antipode.
-        state.applied = trrjAdvance(state.applied, target, slewRadPerSimSec * dtSim, limitRad)
+        const step = Math.min(
+          slewRadPerSimSec * dtSim,
+          MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
+        )
+        state.applied = trrjAdvance(state.applied, target, step, limitRad)
       }
       applyJointAngle(joint, state.applied, _deltaQuat.current)
     }
