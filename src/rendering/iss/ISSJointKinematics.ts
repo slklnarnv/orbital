@@ -26,7 +26,7 @@ import * as THREE from 'three'
 
 export const RIG_SCHEMA_VERSION = 1
 
-export type JointRole = 'sarj' | 'trrj'
+export type JointRole = 'sarj' | 'trrj' | 'bga'
 export type Axis = 'x' | 'y' | 'z'
 
 export interface JointDefinition {
@@ -63,11 +63,30 @@ const TRRJ_DEFS: JointDefinition[] = [
   { id: 'TRRJ_STBD', nodeName: 'STBD_TRRJ_GAMMA_ROT', role: 'trrj', axisModel: [1, 0, 0], normalModel: [0, 1, 0] },
 ]
 
+// Beta Gimbal Assemblies (measured 2026-10-04 on the rebuilt asset): each
+// BGA origin lies on its wing's mast centreline; masts run native ±X
+// (perpendicular to the truss), blankets face native ±Y at authored pose.
+// The reference normal is +Y for every wing: the same face the SARJ law
+// turns toward the sun, so the BGA only adds the out-of-plane (beta) tilt.
+const BGA_DEFS: JointDefinition[] = [
+  { id: 'BGA_2A', nodeName: 'PORT_BETA_ROT_2A', role: 'bga', axisModel: [-1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_4A', nodeName: 'PORT_BETA_ROT_4A', role: 'bga', axisModel: [1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_2B', nodeName: 'PORT_BETA_ROT_2B', role: 'bga', axisModel: [1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_4B', nodeName: 'PORT_BETA_ROT_4B', role: 'bga', axisModel: [-1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_1A', nodeName: 'STBD_BETA_ROT_1A', role: 'bga', axisModel: [1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_3A', nodeName: 'STBD_BETA_ROT_3A', role: 'bga', axisModel: [-1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_1B', nodeName: 'STBD_BETA_ROT_1B', role: 'bga', axisModel: [-1, 0, 0], normalModel: [0, 1, 0] },
+  { id: 'BGA_3B', nodeName: 'STBD_BETA_ROT_3B', role: 'bga', axisModel: [1, 0, 0], normalModel: [0, 1, 0] },
+]
+
 /** IGOAL driven joints — mirror of JOINTS in scripts/iss-rig-manifest.mjs.
- *  (BGA beta-tilt joints were attempted and REVERTED per user decision
- *  2026-09-28 — the live-frame animation read as broken on screen. Revisit
- *  only with a proper validated pass.) */
-export const IGOAL_JOINT_DEFS: JointDefinition[] = [...SARJ_DEFS, ...TRRJ_DEFS]
+ *  Order matters: SARJs first, because each BGA's live parent frame is read
+ *  after its SARJ has been applied this frame. */
+export const IGOAL_JOINT_DEFS: JointDefinition[] = [...SARJ_DEFS, ...TRRJ_DEFS, ...BGA_DEFS]
+
+/** Illustrative BGA slew rate (simulation seconds). Fast enough to follow a
+ *  seek within a few seconds, slow enough that nothing snaps on screen. */
+export const BGA_SLEW_DEG_PER_SIM_SECOND = 2
 
 /** IGOAL camera idle oscillators — mirror of OSCILLATORS in the manifest. */
 export const IGOAL_OSCILLATOR_SPECS: OscillatorSpec[] = [
@@ -240,6 +259,27 @@ export function sarjTargetAngle(joint: ResolvedJoint, sunParent: THREE.Vector3):
 }
 
 /**
+ * BGA beta-tilt target: signed angle about the mast from the blanket normal
+ * to the sun's projection on the plane ⊥ mast. `sunParent` MUST be in the
+ * BGA's LIVE parent frame (after this frame's SARJ rotation): the parent
+ * turns once per orbit with the SARJ, and a mount-time mapping would make
+ * the target sweep a full circle per orbit. With the SARJ tracking, the
+ * result is the out-of-plane residual (≈ the orbit's beta angle), nearly
+ * constant over an orbit. The branch nearest zero keeps the face the SARJ
+ * already turned toward the sun. Returns null when the sun lies along the
+ * mast (hold).
+ */
+export function bgaTargetAngle(joint: ResolvedJoint, sunParent: THREE.Vector3): number | null {
+  _projected.copy(sunParent).addScaledVector(joint.axis, -sunParent.dot(joint.axis))
+  if (_projected.lengthSq() < GIMBAL_SINGULARITY_EPSILON * GIMBAL_SINGULARITY_EPSILON) return null
+  _projected.normalize()
+  const base = wrapPi(signedAngle(joint.normalRef, _projected, joint.axis))
+  // Beyond ±90° the sun is behind the face the SARJ chose (e.g. the SARJ
+  // held at a singularity this frame): hold rather than flip the wing over.
+  return Math.abs(base) <= Math.PI / 2 ? base : null
+}
+
+/**
  * Bounded TRRJ thermal target (plan 001 M3) — an ILLUSTRATIVE autotracking
  * mode, not flight telemetry: real TRRJs are usually parked.
  *
@@ -408,7 +448,7 @@ function validateJointDef(raw: unknown, errors: string[], index: number): JointD
   }
   const j = raw as Record<string, unknown>
   const id = typeof j.id === 'string' ? j.id : `joint[${index}]`
-  if (j.role !== 'sarj' && j.role !== 'trrj') {
+  if (j.role !== 'sarj' && j.role !== 'trrj' && j.role !== 'bga') {
     errors.push(`joint "${id}" has unknown role ${JSON.stringify(j.role)}`)
     return null
   }

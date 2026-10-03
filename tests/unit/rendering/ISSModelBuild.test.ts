@@ -27,7 +27,7 @@ import { EXTTextureWebP } from '@gltf-transform/extensions'
 import { prune, textureCompress } from '@gltf-transform/functions'
 import sharp from 'sharp'
 
-import { validateCandidate, splitRadiatorPanels } from '../../../scripts/build-iss-model.mjs'
+import { validateCandidate, splitRadiatorPanels, stripVertexColors } from '../../../scripts/build-iss-model.mjs'
 import { checkDeclaredBounds } from '../../../scripts/iss-model-manifest.mjs'
 import {
   PROTECTED_FRAMES,
@@ -360,6 +360,31 @@ describe('splitRadiatorPanels', () => {
     expect(coatings).toHaveLength(1)
     // Only nodes named P1_Radiator/S1_Radiator are processed.
     expect(otherMesh.listPrimitives()).toHaveLength(1)
+  })
+})
+
+describe('stripVertexColors', () => {
+  it('drops COLOR_0 from every primitive and reports counts per material', () => {
+    const doc = new Document()
+    const mesh = doc.createMesh()
+    const hull = trianglePrim(doc, 'MLM', [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+    const buffer = doc.getRoot().listBuffers()[0]
+    // Baked near-black shading layer, as on Nauka's hull in the source FBX.
+    hull.prim.setAttribute(
+      'COLOR_0',
+      doc.createAccessor('colors', buffer).setType('VEC4').setArray(new Float32Array(12).fill(0.05)),
+    )
+    const plain = trianglePrim(doc, 'Truss', [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+    mesh.addPrimitive(hull.prim)
+    mesh.addPrimitive(plain.prim)
+    sceneWithMesh(doc, mesh, 'MLM')
+
+    const stripped = stripVertexColors(doc)
+
+    expect(hull.prim.getAttribute('COLOR_0')).toBeNull()
+    expect(hull.prim.getAttribute('POSITION')).not.toBeNull()
+    expect(stripped.get('MLM')).toBe(1)
+    expect(stripped.has('Truss')).toBe(false)
   })
 })
 

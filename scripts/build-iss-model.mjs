@@ -281,6 +281,32 @@ export function splitRadiatorPanels(document) {
   return splits
 }
 
+// ─── Step 3b: strip baked vertex colours ─────────────────────────────────────
+
+/**
+ * FBX2glTF exports the source's per-vertex colour layer as COLOR_0, and
+ * three.js multiplies it into the albedo. Every material's COLOR_0 is pure
+ * white (a no-op) except Nauka's `MLM`, whose hull carries a stale baked
+ * shading layer (≈11% of its vertices near-black) that renders the cream-white
+ * module dark over a correct texture. Dropping COLOR_0 everywhere removes the
+ * defect and is visually identical for every other material.
+ * Returns per-material counts of stripped primitives.
+ */
+export function stripVertexColors(document) {
+  const stripped = new Map()
+  for (const mesh of document.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) {
+      if (!prim.getAttribute('COLOR_0')) continue
+      prim.setAttribute('COLOR_0', null)
+      const name = prim.getMaterial()?.getName() ?? '(none)'
+      stripped.set(name, (stripped.get(name) ?? 0) + 1)
+    }
+  }
+  const total = [...stripped.values()].reduce((a, b) => a + b, 0)
+  if (total > 0) console.log(`[build-iss-model] stripped COLOR_0 from ${total} primitives`)
+  return stripped
+}
+
 // ─── Step 4: optimize into a CANDIDATE (not the runtime asset) ───────────────
 
 export async function optimize(rawGlb) {
@@ -293,6 +319,8 @@ export async function optimize(rawGlb) {
   if (opaqueFixed > 0) {
     console.log(`[build-iss-model] forced ${opaqueFixed} falsely-transparent materials to OPAQUE`)
   }
+  // Before dedup/weld/prune so orphaned colour accessors are dropped.
+  stripVertexColors(document)
 
   await document.transform(
     dedup(),

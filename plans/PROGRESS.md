@@ -1042,3 +1042,58 @@ feature flags, PR-per-release/handoff docs, Playwright SwiftShader suite (deferr
 Gates: `npm run verify` exit 0 (206 tests); browser smoke on dev server —
 `/api/tle` GET 200 celestrak, `?x` 404, HEAD 200 empty, POST 405; p50 16.7 /
 p99 16.9 ms, DPR held at device ceiling (1.25); no console errors.
+
+## Open-items pass (2026-10-04) — LANDED + browser-verified
+
+Branch `feat/hardening-and-gcdatlas-pass` (not merged).
+
+- **Nauka hull fixed (user decision reversed 2026-10-04: attempt the fix).**
+  CORRECTION to the 2026-09-27 finding: the cause was NOT UV islands on black
+  texels (MLM samples bright texels; 0.3% dark by area). It was baked
+  per-vertex colour: `MLM` is the only material with dark `COLOR_0` (5,185
+  near-black vertices; every other material's COLOR_0 is pure white), and
+  three.js multiplies it into albedo. `stripVertexColors` in
+  build-iss-model.mjs drops COLOR_0 from all 49 primitives (visually a no-op
+  elsewhere). Rebuilt + validated; backup `.tmp-iss-build/iss_igoal_pre_nauka_backup.glb`
+  (sha256 870ef11d…, the previous shipped asset).
+- **BGA beta-tilt re-implemented** (user: retry, animated properly).
+  CORRECTION: the 2026-09-28 attempt was never committed (no git history).
+  Measured on the asset: 8 BGA nodes, masts native ±X, blanket normal ±Y,
+  pivots on the mast centreline. Root cause of the old "broken" look: BGAs
+  hang under the rotating SARJ, so a mount-time parent frame is wrong once the
+  SARJ moves. New `bga` role: target computed in the LIVE parent frame after
+  the SARJ is applied (joint order), branch kept within ±90° of the SARJ-chosen
+  face, held in eclipse, slewed at 2°/sim-s AND capped at 12°/s on screen.
+  Rig metadata rebuilt (12 joints). Browser: all 8 wings face the sun
+  (cos 1.000); 600 frames at 300× max step 0.085°/frame; multi-day seek
+  catch-up max 0.35°/frame (glide, no snap). Backup
+  `.tmp-iss-build/iss_igoal_pre_bga_backup.glb` (sha256 71b5ab54…).
+- **Lens flare improvement pass.** The wide corona `exp(-d·1.6)·0.14` never
+  reached zero: it lifted 97% of pixels (mean +25 levels) — a veil. Replaced
+  with a compact-support corona (zero beyond 0.55 frame units), tighter core,
+  soft-edged iris-disc ghosts that fade as the sun leaves centre. Now 8.6% of
+  pixels change, mean +2.4. Default stays off.
+- **Bug found by new tests:** `ecefToGeodetic` returned negative altitude at
+  the south pole (`|z|/sin(lat)` → `z/sin(lat)`). New
+  `CoordinateConversions.test.ts` (16 cases).
+- **Phase D: still POSTPONED** (user, 2026-10-04).
+- **Playwright suite: postponed** (not installed; built-in headless browser
+  sufficed for this pass).
+
+Perf baseline (dev server, AMD Radeon iGPU ANGLE/D3D11, DPR 1, 1258×702,
+vsync 60 Hz), ms:
+
+| Scene | p50 | p95 | p99 | >33 ms frames |
+| --- | --- | --- | --- | --- |
+| Overview | 16.7 | 17.0 | 17.2 | — |
+| Follow, High fidelity | 16.7 | 33.4 | 33.6 | 21 |
+| Follow, 300× | 16.7 | 17.0 | 33.6 | 9 |
+| Bloom on | 16.7 | 16.9 | 17.0 | 1 |
+| Bloom off | 16.7 | 16.9 | 33.4 | 9 |
+
+Leak checks: 5 Bloom toggles and 6 model switches leave geometries 994,
+textures 74, materials 56 unchanged; heap flat/down; no console errors.
+Only measurable cost: close-up High-fidelity (~5% of frames at 30 fps) —
+start any optimisation there. Bloom is not the "heavy" cause on this GPU.
+
+Gates: `npm run verify` exit 0 (227 tests, lint 0 warnings, build).

@@ -56,6 +56,14 @@ export const JOINTS = [
     axisModel: [1, 0, 0],
     normalModel: [0, 1, 0],
   },
+  // Beta Gimbal Assemblies: mast = native ±X (measured; pivots on the mast
+  // centreline), blanket normal +Y (the face the SARJ tracks to the sun).
+  ...[
+    ['BGA_2A', 'PORT_BETA_ROT_2A', -1], ['BGA_4A', 'PORT_BETA_ROT_4A', 1],
+    ['BGA_2B', 'PORT_BETA_ROT_2B', 1], ['BGA_4B', 'PORT_BETA_ROT_4B', -1],
+    ['BGA_1A', 'STBD_BETA_ROT_1A', 1], ['BGA_3A', 'STBD_BETA_ROT_3A', -1],
+    ['BGA_1B', 'STBD_BETA_ROT_1B', -1], ['BGA_3B', 'STBD_BETA_ROT_3B', 1],
+  ].map(([id, nodeName, sx]) => ({ id, nodeName, role: 'bga', axisModel: [sx, 0, 0], normalModel: [0, 1, 0] })),
 ]
 
 /**
