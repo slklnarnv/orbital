@@ -89,7 +89,13 @@ export class SimulationRuntime {
   private run(generation: number): void {
     if (!this.running || generation !== this.generation) return
 
-    this.step()
+    // A throwing step must not end the tick chain: the clock, telemetry and
+    // every 1 Hz HUD projection would freeze while isRunning still read true.
+    try {
+      this.step()
+    } catch (error) {
+      console.error('[SimulationRuntime] step failed; continuing', error)
+    }
     if (!this.running || generation !== this.generation) return
 
     this.timer = this.setTimeoutFn(() => {

@@ -2,7 +2,7 @@ import { buildSimulationTime } from './SimulationTime'
 import type { SimulationTime } from '@/types/orbital'
 
 // ─── Clock Modes ─────────────────────────────────────────────────────────────
-export type ClockMode = 'REALTIME' | 'ACCELERATED' | 'PAUSED' | 'REPLAY'
+export type ClockMode = 'REALTIME' | 'ACCELERATED' | 'PAUSED'
 
 type TickCallback = (simTime: SimulationTime) => void
 type Unsubscribe = () => void
@@ -15,7 +15,7 @@ type Unsubscribe = () => void
  * - No system reads Date.now() directly — they call clock.now()
  * - tick() is owned by the application runtime, never the renderer
  * - Rate is chosen by mode: REALTIME pins to the wall clock (timeScale
- *   ignored), PAUSED freezes, ACCELERATED/REPLAY advance by
+ *   ignored), PAUSED freezes, ACCELERATED advances by
  *   wallDelta × timeScale. There is no "scale 0 = paused" — pause is a mode.
  * - seekTo() only sticks while detached from the wall (any mode but
  *   REALTIME); the next REALTIME tick re-pins to Date.now() by design.
@@ -62,7 +62,7 @@ export class SimulationClock {
       simDelta = wallNow - this._epochMs
       this._epochMs = wallNow
     } else {
-      // ACCELERATED / REPLAY: accumulate scaled deltas
+      // ACCELERATED: accumulate scaled deltas
       simDelta = clampedDelta * this._timeScale
       this._epochMs += simDelta
     }
@@ -86,7 +86,7 @@ export class SimulationClock {
   }
 
   /**
-   * Set time scale multiplier. Applied in ACCELERATED/REPLAY; ignored in
+   * Set time scale multiplier. Applied in ACCELERATED; ignored in
    * REALTIME (wall-pinned) and PAUSED (frozen).
    */
   setTimeScale(scale: number): void {
@@ -105,11 +105,6 @@ export class SimulationClock {
   onTick(callback: TickCallback): Unsubscribe {
     this._subscribers.add(callback)
     return () => this._subscribers.delete(callback)
-  }
-
-  /** Dispose all subscriptions */
-  dispose(): void {
-    this._subscribers.clear()
   }
 }
 

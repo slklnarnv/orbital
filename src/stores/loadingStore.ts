@@ -39,8 +39,6 @@ export interface IssDetailState {
 }
 
 interface LoadingStore {
-  prewarmingComplete: boolean
-  setPrewarmingComplete: (complete: boolean) => void
   issDetail: IssDetailState
   /** Prewarm / Locate intent: starts a load if none is running. */
   requestISSDetail: () => void
@@ -59,8 +57,6 @@ interface LoadingStore {
 }
 
 export const useLoadingStore = create<LoadingStore>((set) => ({
-  prewarmingComplete: true,
-  setPrewarmingComplete: (prewarmingComplete) => set({ prewarmingComplete }),
   issDetail: { status: 'idle', quality: null, activeQuality: null, attempt: 0 },
 
   requestISSDetail: () => set((state) => (

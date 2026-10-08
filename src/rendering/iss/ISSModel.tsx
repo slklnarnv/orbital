@@ -115,13 +115,14 @@ const MODEL_SPECS: Record<IssModelQuality, DetailedModelSpec> = {
 
 // ─── Per-model pre-rotation (native axes → station body axes) ────────────────
 // ISSGroup applies the LVLH/TEA flight attitude in the STATION frame
-// (+X = V-bar forward, +Y = orbit normal, +Z = nadir). Each model was
+// (+X = V-bar forward, +Y = −orbit normal (−ĥ, built as nadir × V-bar in
+// ISSGroup), +Z = nadir). Each model was
 // authored in its own native convention, so each needs a fixed pre-rotation
 // onto that frame before the group attitude applies. Expressed as
 // quaternions so the basis mapping is unambiguous (no Euler-order guesswork).
 const HIGH_PRE_ROTATION = new THREE.Quaternion().setFromEuler(
   // High (IGOAL): native +X forward, truss along native Z, nadir −Y.
-  // Rx(−90°): Z→+Y (orbit normal), Y→−Z (zenith).
+  // Rx(−90°): Z→+Y (−orbit normal), Y→−Z (zenith).
   new THREE.Euler(-Math.PI / 2, 0, 0),
 )
 const LEGACY_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
@@ -160,7 +161,7 @@ const PIVOT_OFFSET_A_Y = -1.4887661
 const PIVOT_OFFSET_A_Z = 3.8792463
 
 // Model A schematic pre-rotation onto the station body frame: its truss runs
-// along native X (→ body +Y orbit normal) and its module stack along native
+// along native X (→ body +Y, −orbit normal) and its module stack along native
 // Z (→ body +X V-bar forward). Expressed as a quaternion so the basis
 // mapping is unambiguous (no Euler-order guesswork).
 const MODEL_A_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
@@ -374,7 +375,7 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
       onError(attempt)
     })
     return () => { cancelled = true }
-  }, [detailedScene, gl, camera, scene, onReady, onError, attempt])
+  }, [detailedScene, gl, camera, scene, onReady, onError, attempt, quality, spec.url])
 
   const normalizationScale = RENDER_ISS_WINGSPAN_UNITS / spec.wingspanM
 
@@ -623,8 +624,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       // GLINT_SCREEN_PX CSS pixels wide at this distance and field of view.
       const halfFovRad = (state.camera as THREE.PerspectiveCamera).getEffectiveFOV() * Math.PI / 360
       const worldPerPx = (2 * Math.tan(halfFovRad) * distanceKm) / Math.max(1, state.size.height)
-      // Add a gentle, slow scientific telemetry pulse (0.4 Hz)
-      const pulse = 1.0 + 0.12 * Math.sin(simTime.epochMs * 0.0025)
+      // Gentle 0.4 Hz pulse on WALL time — sim time would strobe it at
+      // ~120 Hz under 300× acceleration.
+      const pulse = 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
       const mat = auraRef.current.material as THREE.ShaderMaterial

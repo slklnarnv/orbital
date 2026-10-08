@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
+import { useGeoStore } from '@/stores/geoStore'
 import {
   GeoLookupService,
   cellKeyFor,
@@ -121,6 +122,7 @@ describe('GeoLookupService time-control gate', () => {
     vi.useFakeTimers()
     vi.setSystemTime(Date.UTC(2026, 8, 28, 12, 0, 0))
     useTelemetryStore.setState(useTelemetryStore.getInitialState(), true)
+    useGeoStore.setState(useGeoStore.getInitialState(), true)
     simulationClock.setMode('REALTIME')
     simulationClock.setTimeScale(1)
 
@@ -179,5 +181,53 @@ describe('GeoLookupService time-control gate', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterFirstCell)
     const targets = fetchMock.mock.calls.map((call) => String(call[0]))
     expect(targets.some((url) => url.includes('latitude=-33.87'))).toBe(true)
+  })
+
+  it('retries a failed place lookup for a cell whose weather was cached', async () => {
+    // First place request fails; weather succeeds and caches the cell with
+    // placeName null. The cached entry must not pin "—" for the place TTL.
+    let placeCalls = 0
+    fetchMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes('open-meteo')) {
+        return {
+          ok: true,
+          json: async () => ({
+            timezone: 'Asia/Tokyo',
+            timezone_abbreviation: 'JST',
+            utc_offset_seconds: 32400,
+            current: { temperature_2m: 21.4, weather_code: 2 },
+          }),
+        }
+      }
+      placeCalls += 1
+      if (placeCalls === 1) return { ok: false, status: 503, json: async () => ({}) }
+      return { ok: true, json: async () => ({ countryName: 'Japan', continent: 'Asia', locality: '' }) }
+    })
+
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+
+    await vi.advanceTimersByTimeAsync(3_000 + 1_000)
+    expect(placeCalls).toBe(1)
+    expect(useGeoStore.getState().placeName).toBeNull()
+
+    // Past the geo limiter's failure backoff the place is re-requested.
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(placeCalls).toBe(2)
+    expect(useGeoStore.getState().placeName).toBe('Japan')
+  })
+
+  it('skips lookups while the tab is hidden and resumes when visible', async () => {
+    const doc = { visibilityState: 'hidden' as DocumentVisibilityState }
+    vi.stubGlobal('document', doc)
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+
+    await vi.advanceTimersByTimeAsync(3_000 + 21_000)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    doc.visibilityState = 'visible'
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(fetchMock.mock.calls.length).toBe(2)
   })
 })

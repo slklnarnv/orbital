@@ -22,19 +22,23 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { Document, NodeIO } from '@gltf-transform/core'
+import { Document, NodeIO, type Material, type Mesh, type Node as GltfNode, type Primitive, type Scene } from '@gltf-transform/core'
 import { EXTTextureWebP } from '@gltf-transform/extensions'
 import { prune, textureCompress } from '@gltf-transform/functions'
 import sharp from 'sharp'
 
-import { validateCandidate, splitRadiatorPanels } from '../../../scripts/build-iss-model.mjs'
-import { checkDeclaredBounds, createManifestIO } from '../../../scripts/iss-model-manifest.mjs'
+import { validateCandidate, splitRadiatorPanels, stripVertexColors } from '../../../scripts/build-iss-model.mjs'
+import { checkDeclaredBounds } from '../../../scripts/iss-model-manifest.mjs'
 import {
   PROTECTED_FRAMES,
   REQUIRED_NODES,
   parseGlbJsonDeclarations,
   validateDocumentRig,
 } from '../../../scripts/iss-rig-manifest.mjs'
+
+// Parsed GLB JSON chunks are untyped by nature; one alias keeps the escape hatch explicit.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type GlbJson = Record<string, any>
 
 const PUBLISHED_ASSET = path.resolve(__dirname, '../../../public/models/iss_igoal.glb')
 
@@ -57,7 +61,7 @@ function trianglePrim(
   materialName: string,
   positions: number[],
   indices: number[],
-): { prim: any; material: any } {
+): { prim: Primitive; material: Material } {
   const material = doc.createMaterial(materialName)
   // Programmatic documents need accessors attached to a Buffer for writing.
   // NOTE: createAccessor's first argument is the NAME; the type is set
@@ -78,7 +82,7 @@ function trianglePrim(
   return { prim, material }
 }
 
-function sceneWithMesh(doc: Document, mesh: any, nodeName: string): any {
+function sceneWithMesh(doc: Document, mesh: Mesh, nodeName: string): Scene {
   const scene = doc.createScene('scene')
   const node = doc.createNode(nodeName)
   node.setMesh(mesh)
@@ -87,7 +91,7 @@ function sceneWithMesh(doc: Document, mesh: any, nodeName: string): any {
 }
 
 /** Re-serialize a GLB container with a mutated JSON chunk (BIN preserved). */
-function rewriteGlbJson(buffer: Buffer, mutate: (json: Record<string, any>) => void): Buffer {
+function rewriteGlbJson(buffer: Buffer, mutate: (json: GlbJson) => void): Buffer {
   const jsonLen = buffer.readUInt32LE(12)
   const json = JSON.parse(buffer.toString('utf8', 20, 20 + jsonLen))
   mutate(json)
@@ -141,15 +145,15 @@ describe('checkDeclaredBounds', () => {
     // Real files declare POSITION bounds (spec requirement): the glTF-Transform
     // writer computes and emits them for POSITION-attribute accessors, so the
     // fixture matches the production shape without manual setters.
-    const scene = sceneWithMesh(doc, mesh, 'Node')
+    sceneWithMesh(doc, mesh, 'Node')
 
     const io = new NodeIO()
     const cleanPath = path.join(workDir, 'clean.glb')
     await io.write(cleanPath, doc)
 
     const original = await readFile(cleanPath)
-    const originalJson = parseGlbJsonDeclarations(original) as Record<string, any>
-    const positionAccessor = originalJson.accessors.find((a: any) => a.type === 'VEC3')
+    const originalJson = parseGlbJsonDeclarations(original) as GlbJson
+    const positionAccessor = originalJson.accessors.find((a: GlbJson) => a.type === 'VEC3')
     expect(positionAccessor?.min).toBeDefined()
     expect(positionAccessor?.max).toBeDefined()
 
@@ -260,7 +264,7 @@ describe('validateDocumentRig', () => {
   it('passes on a document carrying the protected frames with expected parents', () => {
     const doc = new Document()
     const scene = doc.createScene('scene')
-    const byParent = new Map<string, any>()
+    const byParent = new Map<string, GltfNode>()
     for (const frame of PROTECTED_FRAMES) {
       let parent = byParent.get(frame.parent)
       if (!parent) {
@@ -278,7 +282,7 @@ describe('validateDocumentRig', () => {
 // ─── Radiator panel split (M4 build-time material split) ─────────────────────
 
 describe('splitRadiatorPanels', () => {
-  function radiatorDoc(): { doc: Document; mesh: any; trussMaterial: any } {
+  function radiatorDoc(): { doc: Document; mesh: Mesh; trussMaterial: Material } {
     const doc = new Document()
     const mesh = doc.createMesh()
     // Primitive 0: MLI base-beam stand-in — a +Y-facing triangle that must
@@ -315,16 +319,16 @@ describe('splitRadiatorPanels', () => {
     expect(prims).toHaveLength(3)
 
     // MLI primitive untouched.
-    expect(prims[0].getMaterial().getName()).toBe('MLI.Generic')
-    expect(prims[0].getIndices().getCount()).toBe(3)
+    expect(prims[0].getMaterial()?.getName()).toBe('MLI.Generic')
+    expect(prims[0].getIndices()?.getCount()).toBe(3)
 
     // Truss primitive keeps only the structure triangle.
-    expect(prims[1].getMaterial().getName()).toBe('Truss')
-    expect(prims[1].getIndices().getCount()).toBe(3)
+    expect(prims[1].getMaterial()?.getName()).toBe('Truss')
+    expect(prims[1].getIndices()?.getCount()).toBe(3)
 
     // New panel primitive: coating material, panel indices, SHARED attributes.
-    expect(prims[2].getMaterial().getName()).toBe('Radiator_Panel_Coating')
-    expect(prims[2].getIndices().getCount()).toBe(3)
+    expect(prims[2].getMaterial()?.getName()).toBe('Radiator_Panel_Coating')
+    expect(prims[2].getIndices()?.getCount()).toBe(3)
     expect(prims[2].getAttribute('POSITION')).toBe(prims[1].getAttribute('POSITION'))
 
     // The shared Truss material itself is never modified.
@@ -359,6 +363,31 @@ describe('splitRadiatorPanels', () => {
   })
 })
 
+describe('stripVertexColors', () => {
+  it('drops COLOR_0 from every primitive and reports counts per material', () => {
+    const doc = new Document()
+    const mesh = doc.createMesh()
+    const hull = trianglePrim(doc, 'MLM', [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+    const buffer = doc.getRoot().listBuffers()[0]
+    // Baked near-black shading layer, as on Nauka's hull in the source FBX.
+    hull.prim.setAttribute(
+      'COLOR_0',
+      doc.createAccessor('colors', buffer).setType('VEC4').setArray(new Float32Array(12).fill(0.05)),
+    )
+    const plain = trianglePrim(doc, 'Truss', [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+    mesh.addPrimitive(hull.prim)
+    mesh.addPrimitive(plain.prim)
+    sceneWithMesh(doc, mesh, 'MLM')
+
+    const stripped = stripVertexColors(doc)
+
+    expect(hull.prim.getAttribute('COLOR_0')).toBeNull()
+    expect(hull.prim.getAttribute('POSITION')).not.toBeNull()
+    expect(stripped.get('MLM')).toBe(1)
+    expect(stripped.has('Truss')).toBe(false)
+  })
+})
+
 // ─── WebP extension serialization (P1) ───────────────────────────────────────
 
 describe('WebP extension serialization', () => {
@@ -385,7 +414,7 @@ describe('WebP extension serialization', () => {
     const outPath = path.join(workDir, 'webp.glb')
     await io.write(outPath, doc)
 
-    const json = parseGlbJsonDeclarations(await readFile(outPath)) as Record<string, any>
+    const json = parseGlbJsonDeclarations(await readFile(outPath)) as GlbJson
     expect(json.extensionsUsed).toContain('EXT_texture_webp')
     expect(json.extensionsRequired).toContain('EXT_texture_webp')
     const textureDef = json.textures[0]
@@ -394,7 +423,7 @@ describe('WebP extension serialization', () => {
     // Re-reading through the registered IO exposes real dimensions.
     const reread = await io.read(outPath)
     const size = reread.getRoot().listTextures()[0].getSize()
-    expect(size).not.toBeNull()
+    if (size === null) throw new Error('re-read texture has no size')
     expect(size[0]).toBeGreaterThan(0)
     expect(size[1]).toBeGreaterThan(0)
   })
@@ -415,7 +444,7 @@ describe('WebP extension serialization', () => {
 
     const outPath = path.join(workDir, 'webp-unregistered.glb')
     await new NodeIO().write(outPath, doc)
-    const json = parseGlbJsonDeclarations(await readFile(outPath)) as Record<string, any>
+    const json = parseGlbJsonDeclarations(await readFile(outPath)) as GlbJson
     expect(json.extensionsUsed ?? []).not.toContain('EXT_texture_webp')
   })
 })

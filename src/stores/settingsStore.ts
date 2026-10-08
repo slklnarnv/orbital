@@ -31,6 +31,27 @@ interface SettingsStore {
   setLensFlare: (on: boolean) => void
 }
 
+const MODEL_QUALITIES: readonly IssModelQuality[] = ['high', 'legacy']
+const ORBIT_LINE_STYLES: readonly OrbitLineStyle[] = ['continuous', 'dashed']
+
+type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare'>>
+
+/** Keeps only known, well-typed persisted settings (exported for tests). */
+export function sanitizePersistedSettings(persisted: unknown): PersistedSettings {
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return {}
+  const raw = persisted as Record<string, unknown>
+  const out: PersistedSettings = {}
+  if (MODEL_QUALITIES.includes(raw.issModelQuality as IssModelQuality)) {
+    out.issModelQuality = raw.issModelQuality as IssModelQuality
+  }
+  if (ORBIT_LINE_STYLES.includes(raw.orbitLineStyle as OrbitLineStyle)) {
+    out.orbitLineStyle = raw.orbitLineStyle as OrbitLineStyle
+  }
+  if (typeof raw.postprocessing === 'boolean') out.postprocessing = raw.postprocessing
+  if (typeof raw.lensFlare === 'boolean') out.lensFlare = raw.lensFlare
+  return out
+}
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
@@ -50,15 +71,19 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: 'orbital-settings',
       // The nonce is runtime intent; persisting it would let a stale counter
-      // suppress the next session's first re-selection. A store written before
-      // these keys existed keeps their defaults — zustand's default merge is
-      // shallow over the initial state.
+      // suppress the next session's first re-selection.
       partialize: (state) => ({
         issModelQuality: state.issModelQuality,
         postprocessing: state.postprocessing,
         orbitLineStyle: state.orbitLineStyle,
         lensFlare: state.lensFlare,
       }),
+      // localStorage is user-editable and outlives schema changes. Zustand's
+      // default merge spreads whatever is stored over the defaults, so a
+      // hand-edited or legacy value (e.g. issModelQuality: 'ultra') would reach
+      // MODEL_SPECS[quality] as undefined. Accept only known keys with valid
+      // values; anything else keeps its default.
+      merge: (persisted, current) => ({ ...current, ...sanitizePersistedSettings(persisted) }),
     },
   ),
 )

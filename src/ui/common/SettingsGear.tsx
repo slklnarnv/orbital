@@ -5,6 +5,7 @@ import {
   type OrbitLineStyle,
 } from '@/stores/settingsStore'
 import { useLoadingStore } from '@/stores/loadingStore'
+import { handleRadioGroupKeyDown, radioTabIndex } from './radioGroup'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
   { value: 'high', label: 'High fidelity', hint: 'IGOAL · animated' },
@@ -16,6 +17,9 @@ const ORBIT_LINE_OPTIONS: Array<{ value: OrbitLineStyle; label: string }> = [
   { value: 'dashed', label: 'Dashed' },
 ]
 
+const MODEL_VALUES = MODEL_OPTIONS.map((option) => option.value)
+const ORBIT_LINE_VALUES = ORBIT_LINE_OPTIONS.map((option) => option.value)
+
 /**
  * SettingsGear — discreet render-settings access, parked in the top-right
  * corner cluster. Deliberately minimal: a gear that opens a small popover
@@ -24,6 +28,7 @@ const ORBIT_LINE_OPTIONS: Array<{ value: OrbitLineStyle; label: string }> = [
 export function SettingsGear(): JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const issModelQuality = useSettingsStore((state) => state.issModelQuality)
   const setIssModelQuality = useSettingsStore((state) => state.setIssModelQuality)
   const postprocessing = useSettingsStore((state) => state.postprocessing)
@@ -41,8 +46,16 @@ export function SettingsGear(): JSX.Element {
     const onPointerDown = (event: PointerEvent): void => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setIsOpen(false)
     }
+    // Escape is scoped: it closes this popover only when focus is inside it
+    // (or nowhere), so one keypress never dismisses an unrelated popover.
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const active = document.activeElement
+      const focusInside = active !== null && rootRef.current?.contains(active)
+      if (!focusInside && active !== document.body) return
+      event.preventDefault()
+      setIsOpen(false)
+      if (focusInside) triggerRef.current?.focus()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -55,6 +68,7 @@ export function SettingsGear(): JSX.Element {
   return (
     <div ref={rootRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
       <button
+        ref={triggerRef}
         id="btn-settings"
         type="button"
         aria-label="Render settings"
@@ -99,7 +113,12 @@ export function SettingsGear(): JSX.Element {
             ISS model
           </span>
 
-          <div role="radiogroup" aria-label="ISS model" style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+          <div
+            role="radiogroup"
+            aria-label="ISS model"
+            style={{ display: 'grid', gap: 6, marginTop: 6 }}
+            onKeyDown={(event) => handleRadioGroupKeyDown(event, MODEL_VALUES, issModelQuality, setIssModelQuality)}
+          >
             {MODEL_OPTIONS.map((option) => {
               const isSelected = issModelQuality === option.value
               const isPending = isLoadingModel && issDetail.quality === option.value
@@ -109,6 +128,7 @@ export function SettingsGear(): JSX.Element {
                   type="button"
                   role="radio"
                   aria-checked={isSelected}
+                  tabIndex={radioTabIndex(MODEL_VALUES, issModelQuality, option.value)}
                   onClick={() => setIssModelQuality(option.value)}
                   className={`hud-label hud-option${isSelected ? ' hud-option--on' : ''}`}
                 >
@@ -133,6 +153,7 @@ export function SettingsGear(): JSX.Element {
             role="radiogroup"
             aria-label="Orbit line style"
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}
+            onKeyDown={(event) => handleRadioGroupKeyDown(event, ORBIT_LINE_VALUES, orbitLineStyle, setOrbitLineStyle)}
           >
             {ORBIT_LINE_OPTIONS.map((option) => (
               <button
@@ -140,6 +161,7 @@ export function SettingsGear(): JSX.Element {
                 type="button"
                 role="radio"
                 aria-checked={orbitLineStyle === option.value}
+                tabIndex={radioTabIndex(ORBIT_LINE_VALUES, orbitLineStyle, option.value)}
                 onClick={() => setOrbitLineStyle(option.value)}
                 className={`hud-label hud-option${orbitLineStyle === option.value ? ' hud-option--on' : ''}`}
               >
@@ -167,7 +189,7 @@ export function SettingsGear(): JSX.Element {
             <button
               type="button"
               role="switch"
-              aria-checked={lensFlare}
+              aria-checked={lensFlare && postprocessing}
               disabled={!postprocessing}
               onClick={() => setLensFlare(!lensFlare)}
               className={`hud-label hud-option${lensFlare && postprocessing ? ' hud-option--on' : ''}`}

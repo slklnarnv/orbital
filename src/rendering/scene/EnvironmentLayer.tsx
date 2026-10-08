@@ -4,6 +4,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import billboardVert from '../shaders/billboard.vert'
 import sunFrag from '../shaders/sun.frag'
 
@@ -61,7 +62,7 @@ function generateRestrainedStars(count: number) {
 
     // Astro-luminance hierarchy - calibrated to complement the real NASA starmap
     const randLuminance = Math.random()
-    let brightness = 0.0
+    let brightness: number
 
     if (randLuminance <= 0.95) {
       // Faint background stars (1.5x boosted: 0.027 to 0.068 brightness)
@@ -131,8 +132,8 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
 
     // Position and orient the procedural sun billboard
     if (sunMeshRef.current) {
-      // Place the sun billboard at 270,000 km from Earth center in the sun direction
-      const sunBillboardDist = 270000
+      // Place the sun billboard along the sun direction (the lens flare aims at this same point)
+      const sunBillboardDist = SUN_BILLBOARD_DISTANCE_KM
       sunMeshRef.current.position.set(
         sunDir.x * sunBillboardDist,
         sunDir.y * sunBillboardDist,

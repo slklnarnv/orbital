@@ -7,7 +7,6 @@ export type TelemetryEventMap = {
   'MODE_CHANGE':     TelemetryMode
   'API_ERROR':       { source: string; error: Error }
   'NETWORK_STATUS':  NetworkStatus
-  'DRIFT_DETECTED':  { entityId: string; driftKm: number }
 }
 
 export type TelemetryEventType = keyof TelemetryEventMap
@@ -47,10 +46,6 @@ export class TelemetryEventBus {
         console.error(`[TelemetryEventBus] Error in ${event} listener:`, err)
       }
     })
-  }
-
-  clear(): void {
-    this._listeners.clear()
   }
 }
 

@@ -13,9 +13,12 @@
 //     Earth in eclipse) bounded to the real ±105° software travel at
 //     0.75°/simulation-second. Real TRRJs are usually parked; this is a
 //     visualization of contingency autotracking, not flight telemetry.
-//   - Beta Gimbal Assemblies (PORT/STBD_BETA_ROT_*) stay at their authored
-//     parked pose, matching normal on-orbit operations (plan S2 mode is a
-//     possible future opt-in, deliberately not implemented here).
+//   - Beta Gimbal Assemblies (PORT/STBD_BETA_ROT_*): each wing tilts about
+//     its own mast to take out the out-of-plane (beta) residual the SARJ
+//     cannot. The sun is mapped into each BGA's LIVE parent frame (after the
+//     SARJ is applied this frame); the 2026-09-28 attempt read as broken
+//     because a mount-time frame made the target sweep once per orbit.
+//     Slew-limited, so seeks and singularity holds never snap.
 //   - Pan/tilt TV cameras sweep with a slow sinusoidal idle.
 //
 // The legacy detailed model and Model A are DELIBERATELY STATIC (empty
@@ -36,11 +39,14 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import type { IssModelQuality } from '@/stores/settingsStore'
 import {
+  BGA_SLEW_DEG_PER_SIM_SECOND,
   IGOAL_JOINT_DEFS,
   IGOAL_OSCILLATOR_SPECS,
   IGOAL_TRRJ_LIMITS,
+  advanceToward,
   applyJointAngle,
   applyOscillators,
+  bgaTargetAngle,
   resolveJoint,
   resolveOscillators,
   sarjTargetAngle,
@@ -107,6 +113,11 @@ export interface IssAnimationsProps {
 }
 
 const DEG2RAD = Math.PI / 180
+// Slew limits are in simulation seconds; at 300× that alone would let the
+// BGAs (2°/sim-s) and TRRJs (0.75°/sim-s) sweep 225–600°/s on screen after a
+// seek or an eclipse transition. This caps the on-screen rate too, so every
+// catch-up reads as a glide.
+const MAX_WALL_DEG_PER_SECOND = 12
 // Sphere-Earth shadow test, identical to the lighting/exposure consumers
 // (ISSModel) and the analytic terminator inputs — one solar ephemeris only.
 const EARTH_RADIUS_KM = 6371
@@ -127,6 +138,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
   const _sunParent = useRef(new THREE.Vector3())
   const _nadirParent = useRef(new THREE.Vector3())
   const _deltaQuat = useRef(new THREE.Quaternion())
+  const _parentQuat = useRef(new THREE.Quaternion())
 
   useEffect(() => {
     const root = rootRef.current
@@ -159,7 +171,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
     }
   }, [config, rootRef])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const root = rootRef.current
     if (!root) return
 
@@ -193,9 +205,40 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
 
     const limitRad = config.limits.softwareLimitDeg * DEG2RAD
     const slewRadPerSimSec = config.limits.slewDegPerSimSecond * DEG2RAD
+    const bgaSlewRadPerSimSec = BGA_SLEW_DEG_PER_SIM_SECOND * DEG2RAD
 
     for (const state of jointsRef.current) {
       const { joint } = state
+
+      if (joint.def.role === 'bga') {
+        // Live parent frame: the SARJ above this BGA was applied earlier in
+        // this loop (joint order), so refresh the ancestor matrices first.
+        const parent = joint.node.parent
+        if (!parent) continue
+        parent.updateWorldMatrix(true, false)
+        parent.getWorldQuaternion(_parentQuat.current).invert()
+        _sunParent.current.copy(_sunWorld.current).applyQuaternion(_parentQuat.current)
+        const dtSim =
+          state.lastEpochMs === null ? 0 : Math.max(0, (epochMs - state.lastEpochMs) / 1000)
+        state.lastEpochMs = epochMs
+        // Track through eclipse too: holding there and re-adopting the target
+        // at sunrise snapped the wings by up to |β| in one frame.
+        const target = bgaTargetAngle(joint, _sunParent.current)
+        if (target === null) continue
+        if (!state.initialized) {
+          state.applied = target
+          state.initialized = true
+        } else {
+          const step = Math.min(
+            bgaSlewRadPerSimSec * dtSim,
+            MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
+          )
+          state.applied = advanceToward(state.applied, target, step)
+        }
+        applyJointAngle(joint, state.applied, _deltaQuat.current)
+        continue
+      }
+
       _sunParent.current.copy(_sunLocal.current).applyQuaternion(joint.modelToParent)
 
       if (joint.def.role === 'sarj') {
@@ -239,7 +282,11 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
         // a repeated tick inside one frame yields dtSim = 0, never a doubled
         // rate. trrjAdvance relabels the two-sided branch at a travel stop
         // instead of slewing the equivalent antipode.
-        state.applied = trrjAdvance(state.applied, target, slewRadPerSimSec * dtSim, limitRad)
+        const step = Math.min(
+          slewRadPerSimSec * dtSim,
+          MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
+        )
+        state.applied = trrjAdvance(state.applied, target, step, limitRad)
       }
       applyJointAngle(joint, state.applied, _deltaQuat.current)
     }

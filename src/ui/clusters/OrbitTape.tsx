@@ -34,8 +34,10 @@ import { periodMsOf } from '@/utils/orbitalTime'
  * interaction, so it first detaches from
  * any running rate into PAUSED (a seek under REALTIME would be re-pinned
  * to the wall within 100 ms, and under ACCELERATED time would run under
- * the pointer mid-drag); on release time stays paused and Play (or Live)
- * resumes from the scrubbed epoch. Arrow keys nudge ±1 min, PageUp/Down
+ * the pointer mid-drag); on release time stays paused. Play restores the
+ * pre-scrub mode: from an accelerated preset it runs on from the scrubbed
+ * epoch, from Live it re-pins to the wall (simulationStore resume point).
+ * Arrow keys nudge ±1 min, PageUp/Down
  * ±10 min.
  */
 
@@ -134,13 +136,18 @@ export function OrbitTape(): JSX.Element {
     let raf = 0
     let lastMs = performance.now()
     const periodMs = periodMsOf(orbitalPeriod)
+    // Trail visibility with hysteresis: shown once the marker settles, hidden
+    // only on a clear departure (opening glide, post-seek). A single threshold
+    // flickered at high rates, where 1 Hz measurement jitter straddles it.
+    let trailVisible = false
     const tick = (nowMs: number) => {
       const frameDtSec = Math.min(0.5, (nowMs - lastMs) / 1000)
       lastMs = nowMs
       const phase = phaseRef.current
       if (phase !== null) {
-        let next = phase
+        let next: number
         let delta = 0
+        let settledDelta = TRAIL_SETTLED_DELTA
 
         if (scrubbingRef.current) {
           // The pointer owns the marker for the duration of the drag.
@@ -152,8 +159,20 @@ export function OrbitTape(): JSX.Element {
           const mode = simulationClock.mode
           const rateFactor =
             mode === 'PAUSED' ? 0 : mode === 'ACCELERATED' ? simulationClock.timeScale : 1
-          next = (phase + (frameDtSec * rateFactor) / (periodMs / 1000)) % 1
+          const sweepPerSec = rateFactor / (periodMs / 1000)
+          const sweep = frameDtSec * sweepPerSec
+          next = (phase + sweep) % 1
+          // Measurements trail the clock by up to one 10 Hz telemetry step,
+          // so the residual scales with rate: at 300× it is ~0.005 rev,
+          // beyond the fixed floor, and the trail would flicker off.
+          settledDelta = Math.max(TRAIL_SETTLED_DELTA, sweepPerSec * 0.2)
 
+          // The measurement lands at 1 Hz but the station keeps moving: carry
+          // the target forward at the same sweep rate so the glide only trims
+          // residual drift. Without this the marker was pulled back toward a
+          // measurement up to a second old — ~0.054 rev at 300×, beyond the
+          // correction cap, so it lagged tens of degrees and snapped.
+          if (targetRef.current !== null) targetRef.current = (targetRef.current + sweep) % 1
           const target = targetRef.current
           if (target !== null) {
             delta = ((target - next + 1.5) % 1) - 0.5
@@ -179,7 +198,10 @@ export function OrbitTape(): JSX.Element {
           // sense once the marker has settled onto the measurement — during
           // the opening glide it stays hidden.
           trailRef.current.style.left = `calc(${next * 100}% - 28px)`
-          trailRef.current.style.opacity = Math.abs(delta) < TRAIL_SETTLED_DELTA ? '1' : '0'
+          const absDelta = Math.abs(delta)
+          if (absDelta < settledDelta) trailVisible = true
+          else if (absDelta > settledDelta * 4) trailVisible = false
+          trailRef.current.style.opacity = trailVisible ? '1' : '0'
         }
         // ARIA is refreshed at most once a second. It is read by assistive
         // tech, not the compositor; the per-frame version formatted a Date and
@@ -225,7 +247,8 @@ export function OrbitTape(): JSX.Element {
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
     const base = scrubBaseRef.current
-    if (!scrubbingRef.current || base === null) return
+    // A second finger landing mid-scrub must not hijack the drag.
+    if (!event.isPrimary || !scrubbingRef.current || base === null) return
     const phase = phaseFromClientX(base.rect, event.clientX)
     scrubPhaseRef.current = phase
     // Unwrapped epoch offset: accumulate each move's shortest arc instead of
@@ -241,7 +264,7 @@ export function OrbitTape(): JSX.Element {
   }
 
   const endScrub = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (!scrubbingRef.current) return
+    if (!event.isPrimary || !scrubbingRef.current) return
     scrubbingRef.current = false
     scrubBaseRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {

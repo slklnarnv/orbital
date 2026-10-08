@@ -24,6 +24,7 @@ import {
   advanceToward,
   applyJointAngle,
   applyOscillators,
+  bgaTargetAngle,
   parseRigMetadata,
   resolveJoint,
   resolveOscillators,
@@ -41,10 +42,6 @@ const SLEW_RAD_PER_SIM_S = IGOAL_TRRJ_LIMITS.slewDegPerSimSecond * DEG2RAD
 
 const TRRJ_DEF = IGOAL_JOINT_DEFS.find((j) => j.nodeName === 'PORT_TRRJ_GAMMA_ROT')!
 const SARJ_DEF = IGOAL_JOINT_DEFS.find((j) => j.nodeName === 'PORT_ALPHA_ROT')!
-
-function approx(a: number, b: number, eps = 1e-9): boolean {
-  return Math.abs(a - b) <= eps
-}
 
 function approxQuat(a: THREE.Quaternion, b: THREE.Quaternion, eps = 1e-9): boolean {
   return Math.abs(a.dot(b)) >= 1 - eps
@@ -258,7 +255,7 @@ describe('applyJointAngle: composition and stationary shaft', () => {
   })
 
   it('rolls rigidly about the shaft: off-axis landmarks keep their distance to the axis line', () => {
-    const { root, toModel } = buildRigFixture()
+    const { root } = buildRigFixture()
     const result = resolveJoint(root, TRRJ_DEF)
     if (!result.ok) throw new Error(result.reason)
     const { joint } = result
@@ -358,6 +355,67 @@ describe('sarjTargetAngle', () => {
     const joint = makeLawJoint(SARJ_DEF.nodeName)
     expect(sarjTargetAngle(joint, new THREE.Vector3(0, 0, 1))).toBeNull()
     expect(sarjTargetAngle(joint, new THREE.Vector3(0, 1e-3, 1).normalize())).toBeNull()
+  })
+})
+
+describe('bgaTargetAngle: beta tilt in the live SARJ frame', () => {
+  const BETA = 20 * DEG2RAD
+  const sunAt = (phi: number) =>
+    new THREE.Vector3(Math.cos(BETA) * Math.cos(phi), Math.cos(BETA) * Math.sin(phi), Math.sin(BETA))
+
+  /** root → SARJ (shaft Z) → BGA (mast +X), both at identity authored pose. */
+  function sarjBgaFixture() {
+    const root = new THREE.Group()
+    const sarjNode = new THREE.Group()
+    sarjNode.name = 'PORT_ALPHA_ROT'
+    const bgaNode = new THREE.Group()
+    bgaNode.name = 'PORT_BETA_ROT_4A'
+    sarjNode.add(bgaNode)
+    root.add(sarjNode)
+    root.updateWorldMatrix(true, true)
+    const sarj = resolveJoint(root, SARJ_DEF)
+    const bga = resolveJoint(root, IGOAL_JOINT_DEFS.find((j) => j.nodeName === 'PORT_BETA_ROT_4A')!)
+    if (!sarj.ok || !bga.ok) throw new Error('fixture failed to resolve')
+    return { sarj: sarj.joint, bga: bga.joint, sarjNode }
+  }
+
+  it('rotates the blanket normal onto the sun projection ⊥ mast', () => {
+    const joint = makeLawJoint('PORT_BETA_ROT_4A')
+    const sun = new THREE.Vector3(0.2, 0.9, 0.3).normalize()
+    const target = bgaTargetAngle(joint, sun)
+    expect(target).not.toBeNull()
+    const rotated = joint.normalRef.clone().applyAxisAngle(joint.axis, target!)
+    const projected = sun.clone().addScaledVector(joint.axis, -sun.dot(joint.axis)).normalize()
+    expect(rotated.dot(projected)).toBeCloseTo(1, 10)
+  })
+
+  it('holds when the sun lies along the mast or behind the tracked face', () => {
+    const joint = makeLawJoint('PORT_BETA_ROT_4A')
+    expect(bgaTargetAngle(joint, new THREE.Vector3(1, 0, 0))).toBeNull()
+    // Sun behind the +Y face: never flip the wing over.
+    expect(bgaTargetAngle(joint, new THREE.Vector3(0, -0.9, 0.3).normalize())).toBeNull()
+  })
+
+  it('gives a constant beta tilt over a whole orbit once the SARJ tracks', () => {
+    const { sarj, bga, sarjNode } = sarjBgaFixture()
+    const dq = new THREE.Quaternion()
+    const parentQuat = new THREE.Quaternion()
+    for (let k = 0; k < 24; k += 1) {
+      const sun = sunAt((k / 24) * 2 * Math.PI)
+      applyJointAngle(sarj, sarjTargetAngle(sarj, sun)!, dq)
+      sarjNode.updateWorldMatrix(true, false)
+      sarjNode.getWorldQuaternion(parentQuat).invert()
+      const target = bgaTargetAngle(bga, sun.clone().applyQuaternion(parentQuat))
+      expect(target).not.toBeNull()
+      expect(target!).toBeCloseTo(BETA, 9)
+    }
+  })
+
+  it('a mount-time parent frame (the reverted bug) sweeps or holds instead', () => {
+    const { bga } = sarjBgaFixture()
+    const targets = Array.from({ length: 24 }, (_, k) =>
+      bgaTargetAngle(bga, sunAt((k / 24) * 2 * Math.PI).applyQuaternion(bga.modelToParent)))
+    expect(targets.some((t) => t === null || Math.abs(t - BETA) > 0.5)).toBe(true)
   })
 })
 

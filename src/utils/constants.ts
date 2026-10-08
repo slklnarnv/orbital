@@ -41,6 +41,11 @@ export const CLOUD_RADIUS_FACTOR = 1.003;
 /** Sun's approximate distance in km (used for directional light positioning) */
 export const SUN_DISTANCE_KM = 149_597_870.7;
 
+/** Distance (km from Earth's centre) at which the sun billboard is drawn.
+ *  The lens flare aims at this point, not the true direction, so the two
+ *  never separate through camera parallax. */
+export const SUN_BILLBOARD_DISTANCE_KM = 270_000;
+
 // ─── Time Constants ───────────────────────────────────────────────────────────
 
 /** Julian date of J2000.0 epoch (Jan 1, 2000 12:00:00 TT) */

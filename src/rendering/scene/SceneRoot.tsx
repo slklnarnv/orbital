@@ -1,5 +1,5 @@
 import React, { Suspense, useCallback, useMemo, useRef, useEffect, Component, type ReactNode } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -13,6 +13,7 @@ import { cameraControlsRef } from './cameraControlsRef'
 import { useCameraStore } from '@/stores/cameraStore'
 import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
 import CameraControlsImpl from 'camera-controls'
+import { DprGovernor } from './DprGovernor'
 
 /**
  * F-02 FIX: Error boundary that catches asset-load failures inside the 3D scene.
@@ -97,7 +98,27 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   )
 })
 
+/**
+ * AdaptiveDpr — feeds wall-clock frame deltas to the DprGovernor and applies
+ * its pixel ratio. Starts at R3F's default ceiling (min(devicePixelRatio, 2))
+ * and only steps down on sustained slow frames; hidden-tab and hitch frames
+ * are ignored by the governor.
+ */
+const AdaptiveDpr = React.memo(function AdaptiveDpr(): null {
+  const setDpr = useThree((state) => state.setDpr)
+  const governorRef = useRef<DprGovernor | null>(null)
+  if (governorRef.current === null) {
+    const deviceDpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+    governorRef.current = new DprGovernor({ maxDpr: Math.min(deviceDpr, 2), minDpr: Math.min(deviceDpr, 1) })
+  }
 
+  useFrame((_, delta) => {
+    const next = governorRef.current!.sample(delta * 1000, document.visibilityState === 'visible')
+    if (next !== null) setDpr(next)
+  })
+
+  return null
+})
 
 /**
  * RuntimeEnvironment — locally generated image-based lighting for PBR
@@ -113,15 +134,41 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
   const scene = useThree((state) => state.scene)
 
   useEffect(() => {
-    const pmrem = new THREE.PMREMGenerator(gl)
-    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-    scene.environment = envTexture
-    scene.environmentIntensity = 0.28
+    let pmrem: THREE.PMREMGenerator | null = null
+    let room: RoomEnvironment | null = null
+    let envTexture: THREE.Texture | null = null
+
+    const release = () => {
+      envTexture?.dispose()
+      room?.dispose()
+      pmrem?.dispose()
+      envTexture = null
+      room = null
+      pmrem = null
+    }
+
+    const build = () => {
+      release()
+      pmrem = new THREE.PMREMGenerator(gl)
+      room = new RoomEnvironment()
+      envTexture = pmrem.fromScene(room, 0.04).texture
+      scene.environment = envTexture
+      scene.environmentIntensity = 0.28
+    }
+
+    // The PMREM output lives in a render target: its GPU contents are lost
+    // with the context and three.js cannot re-upload them from a CPU source.
+    // The renderer registers its own restore handler at construction, so by
+    // the time this listener runs the renderer state is already rebuilt.
+    const canvas = gl.domElement
+    canvas.addEventListener('webglcontextrestored', build)
+    build()
+
     return () => {
+      canvas.removeEventListener('webglcontextrestored', build)
       scene.environment = null
       scene.environmentIntensity = 1.0
-      envTexture.dispose()
-      pmrem.dispose()
+      release()
     }
   }, [gl, scene])
 
@@ -176,7 +223,11 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
 
           {/* ─── Layered Earth Rendering System ─── */}
           {/* EarthGroup rotates by GMST — represents the ECEF (Earth-fixed) frame */}
-          <EarthGroup />
+          {/* Earth texture failures degrade to an empty scene region rather
+              than replacing the whole app with the crash screen. */}
+          <CanvasErrorBoundary name="EarthGroup">
+            <EarthGroup />
+          </CanvasErrorBoundary>
 
           {/*
            * ─── ISS Entity Integration ────────────────────────────────────────
@@ -202,7 +253,8 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           {/* Isolated programmatic camera controls */}
           <AppCameraControls />
 
-
+          {/* Frame-time-driven pixel-ratio governor */}
+          <AdaptiveDpr />
         </Suspense>
       </Canvas>
     </div>

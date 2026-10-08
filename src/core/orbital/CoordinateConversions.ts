@@ -60,9 +60,11 @@ export function ecefToGeodetic(ecef: Vec3): {
   const sinLat = Math.sin(lat)
   const cosLat = Math.cos(lat)
   const N = a / Math.sqrt(1 - e2 * sinLat * sinLat)
+  // Near the poles p / cos(lat) is ill-conditioned; z / sin(lat) is exact.
+  // (It was |z| / sin(lat): negative altitude at the south pole.)
   const altitude = Math.abs(cosLat) > 1e-10
     ? p / cosLat - N
-    : Math.abs(z) / sinLat - N * (1 - e2)
+    : z / sinLat - N * (1 - e2)
 
   return {
     latitude: lat * (180 / Math.PI),

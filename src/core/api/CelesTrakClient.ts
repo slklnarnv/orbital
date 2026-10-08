@@ -39,6 +39,8 @@ async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
       line1: lines.find(line => line.startsWith('1 ')),
       line2: lines.find(line => line.startsWith('2 ')),
       fetchedAt: Date.now(),
+      // 'celestrak' denotes any live network source (the proxy also races
+      // this mirror under the same label); it gates LIVE vs fallback/cache.
       source: 'celestrak',
     }
     const validated = validateTLEData(candidate, noradId)

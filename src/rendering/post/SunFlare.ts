@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
-import { EARTH_RADIUS_KM } from '@/utils/constants'
+import { EARTH_RADIUS_KM, SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import type { Vec3 } from '@/utils/math'
 
 /**
@@ -88,23 +88,32 @@ const SunFlareShader = {
       // Never paint over the planet.
       float earthMask = smoothstep(uEarthRadius - 0.01, uEarthRadius + 0.01, length(p - earth));
 
-      // Halo: a tight core inside a wide, faint corona. The first cut used
-      // (9.0, 0.30) / (2.6, 0.085) and was indistinguishable from the sun's own
-      // haze — reviewed as "borders on imperceptible".
+      // Halo: a tight core plus a corona with COMPACT support. The previous
+      // corona, exp(-d * 1.6) * 0.14, never reached zero and lifted ~79% of
+      // the frame by ~31 levels: a grey veil, not a flare. Both terms now
+      // vanish within HALO_R of the sun.
+      const float HALO_R = 0.55;
       float d = length(p - sun);
-      float halo = exp(-d * 6.0) * 0.55 + exp(-d * 1.6) * 0.14;
+      float core = exp(-d * 14.0) * 0.45;
+      float corona = pow(max(0.0, 1.0 - d / HALO_R), 3.0) * 0.12;
+      float halo = core + corona;
 
-      // Iris ghosts, mirrored through the screen centre along the flare axis.
-      // Radii widen with distance, as an out-of-focus element should; the
-      // outermost is the largest and faintest.
+      // Iris ghosts mirrored through the screen centre: soft-edged discs
+      // (zero outside their radius), wider and fainter with distance, as an
+      // out-of-focus aperture image should be. Ascending smoothstep edges
+      // only (the shader-ramp check rejects reversed ones).
       vec2 axis = -sun;
-      float g1 = length(p - axis * 0.45);
-      float g2 = length(p - axis * 0.85);
-      float g3 = length(p - axis * 1.30);
-      float ghostWarm = exp(-g1 * g1 * 1800.0) * 0.10;
-      float ghostCool = exp(-g2 * g2 * 800.0) * 0.07 + exp(-g3 * g3 * 400.0) * 0.045;
+      float g1 = 1.0 - smoothstep(0.022, 0.040, length(p - axis * 0.45));
+      float g2 = 1.0 - smoothstep(0.045, 0.075, length(p - axis * 0.85));
+      float g3 = 1.0 - smoothstep(0.080, 0.125, length(p - axis * 1.30));
+      float ghostWarm = g1 * 0.08;
+      float ghostCool = g2 * 0.05 + g3 * 0.03;
 
-      vec3 flare = uHaloColor * (halo + ghostWarm) + uGhostColor * ghostCool;
+      // Ghosts are strongest with the sun near the frame centre, as the
+      // lens elements line up; the halo stays put.
+      float central = 1.0 - smoothstep(0.2, 1.4, length(uSunNdc));
+
+      vec3 flare = uHaloColor * (halo + ghostWarm * central) + uGhostColor * (ghostCool * central);
       gl_FragColor = vec4(base.rgb + flare * (uStrength * earthMask), base.a);
     }
   `,
@@ -120,12 +129,19 @@ export class SunFlare {
 
   /**
    * Aim and gate the flare for the frame about to be drawn. `sunDir` is the
-   * world direction from Earth's centre toward the sun — at 1 AU it is also,
-   * to well under a pixel, the direction from the camera.
+   * world direction from Earth's centre toward the sun. The flare aims at the
+   * sun BILLBOARD (drawn at SUN_BILLBOARD_DISTANCE_KM along it), not along
+   * `sunDir` itself: from a camera tens of thousands of km off-centre the two
+   * differ by several degrees of parallax, which detached the halo from the
+   * visible disc.
    */
   update(camera: THREE.PerspectiveCamera, sunDir: Vec3): void {
     const u = this.pass.uniforms
-    _sunDir.set(sunDir.x, sunDir.y, sunDir.z)
+    _sunDir
+      .set(sunDir.x, sunDir.y, sunDir.z)
+      .multiplyScalar(SUN_BILLBOARD_DISTANCE_KM)
+      .sub(camera.position)
+      .normalize()
     const camDist = camera.position.length()
     if (camDist <= EARTH_RADIUS_KM) {
       u.uStrength.value = 0
