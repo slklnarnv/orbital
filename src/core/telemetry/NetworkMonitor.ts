@@ -8,7 +8,8 @@ import type { NetworkStatus } from '@/types/orbital'
  */
 export class NetworkMonitor {
   private _status: NetworkStatus = {
-    online: navigator.onLine,
+    // Node 20 (CI) has no global navigator; only the browser does.
+    online: typeof navigator !== 'undefined' ? navigator.onLine : true,
     lastSuccessfulFetch: null,
     consecutiveFailures: 0,
   }

@@ -18,7 +18,8 @@ interface TelemetryStore {
 
 export const useTelemetryStore = create<TelemetryStore>(() => ({
   mode: 'OFFLINE',
-  networkStatus: { online: navigator.onLine, lastSuccessfulFetch: null, consecutiveFailures: 0 },
+  // Node 20 (CI) has no global navigator; only the browser does.
+  networkStatus: { online: typeof navigator !== 'undefined' ? navigator.onLine : true, lastSuccessfulFetch: null, consecutiveFailures: 0 },
   tleAgeHours: 0,
   confidence: 0,
   latitude: 0,
