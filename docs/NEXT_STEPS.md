@@ -91,8 +91,33 @@ can be extended. "Touches" lists the files expected to change.
    `L` / `H` / `R` shortcuts (item 2), a high-contrast HUD class.
 5. **Release routine.** Scheduled CI job running `npm run refresh:tle` that
    opens a PR when the fallback changes; a short `CHANGELOG.md`.
+6. **Faster Locate (fresh load).** Locating on a cold session waits for the
+   full high-fidelity pipeline, and the user report is that it is slower than
+   it should be. The cost chain, from code (no profiling done yet): network
+   fetch of `iss_igoal.glb` (19.6 MiB; HTTP-cached 1 h afterwards) → Draco
+   decode of ~2.67 M triangles in a worker → `prepare()` in `ISSModel.tsx`
+   uploading **73 textures one per frame** (≈73 frames ≈ 1.2–2.4 s of pure
+   yielding) → `compileAsync` → scissor prime. Locate's departure gate waits
+   for all of it (deliberate: a mid-flight model pop was rejected in
+   fd5d353/plan 001 R2 — do not reopen that without a measured reason).
+   Minimal cuts, in order:
+   a. **Batch the texture uploads** on a per-frame time budget (~6 ms/frame)
+      instead of one texture per frame — removes the single biggest pure-yield
+      cost, no visual risk. Touches: `ISSModel.tsx` `prepare()`.
+   b. **Warm the network fetch** of the GLB after boot idle (~5 s) and on
+      Locate hover/focus: a low-priority `fetch` into the HTTP cache
+      (`max-age=3600` already set), connection-gated (skip on
+      `saveData`/2G), silent failure, once per session. Deliberately use a
+      bare fetch, NOT `useGLTF.preload`: a failed preload fires the
+      `DefaultLoadingManager` error hook that maps to the terminal
+      "ISS unavailable" state. Touches: new small module +
+      `CameraCluster` hover/focus.
+   c. Only if still slow after a+b: the deep fix is decode/upload cost —
+      KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2,
+      which already covers the texture half).
 
-Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2.
+Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a is cheap
+enough to ride along with any pass).
 
 
 ## 0. Performance / optimization run — added 2026-09-29, NOT STARTED
