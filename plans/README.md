@@ -1,5 +1,9 @@
 # ISS model implementation handoff
 
+> STATUS 2026-10-08: plan 001 is COMPLETE (merged via PR #12; Phases A-F
+> landed). Only optional Phase D remains, postponed by user decision.
+> Live ledger: plans/PROGRESS.md (short) + plans/PROGRESS-history.md (archive).
+
 Read [001 — ISS model audit and repair](001-iss-model-audit-and-repair.md) in full before implementing.
 
 The user requested one consolidated implementation document after a read-only audit. No application source or model assets were changed. This directory contains the deliverable, not completed fixes.
