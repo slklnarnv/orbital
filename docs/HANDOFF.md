@@ -1,10 +1,6 @@
 # Session Handoff — ORBITAL UI
-> ## ⚠ Errata (2026-09-28, plan 001 landed): parts of these notes predate the
-> ISS model repair. The radiator silver material and the old TRRJ hinge/
-> sun-pointing descriptions are superseded — see docs/ISS_MODEL_CONTEXT.md
-> (errata block) and plans/PROGRESS.md for the current architecture
-> (ISSJointKinematics.ts, build-time radiator coating, bounded TRRJ law).
-
+> Model rig/pipeline authority: docs/ISS_MODEL_CONTEXT.md (+ docs/MODEL_AUDIT.md).
+> Front door with reading order + invariants: CLAUDE.md.
 Handoff notes for the next session working on this repo. Read this before
 touching the HUD, the geo service, or the camera system.
 
@@ -38,7 +34,7 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
    `ISSAnimations` now drives the authored SARJ/TRRJ joint nodes
    (`PORT_ALPHA_ROT`, `STBD_TRRJ_GAMMA_ROT`, …) instead of re-parenting
    arrays onto synthetic pivots (the "bent inner arrays" cause), and the
-   P1/S1 radiator subtrees get a dedicated light-silver material at mount
+   P1/S1 radiator subtrees get a dedicated light-silver coating split at build time (splitRadiatorPanels; the runtime mount override is gone)
    (source MLI assignment read near-black). `[ISS AUDIT]` logs the mounted
    asset; `scripts/iss-model-inspector.html` is the browser harness for
    model forensics (serve with the dev server and open directly).
