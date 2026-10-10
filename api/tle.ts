@@ -107,6 +107,10 @@ function parseTLEString(raw: string): TLEData | null {
     return null
   }
 
+  // 'celestrak' means "validated live network element set", regardless of
+  // which upstream won the race (CelesTrak mirrors or wheretheiss.at). It is
+  // a provenance class, not a hostname: the client keys its LIVE gate on it
+  // (TelemetryManager) and OrbitalEngine maps it to state source 'live'.
   return { line1, line2, fetchedAt: Date.now(), source: 'celestrak' }
 }
 
