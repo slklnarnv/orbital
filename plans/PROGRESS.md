@@ -21,9 +21,13 @@ the simulation:
 - **D.2 — versioned immutable assets.** `vite.config.ts` defines
   `__BUILD_ID__` (Vercel commit SHA, timestamp locally); `assetUrl()` in
   `src/utils/assetUrl.ts` appends `?v=<id>` to the three model URLs, the four
-  Earth maps and the starmap. `vercel.json` serves `/models`, `/textures` and
-  `/draco` as `public, max-age=31536000, immutable`. `vitest.config.ts`
-  defines the same constant so tests can import modules that build URLs.
+  Earth maps and the starmap. `vercel.json` serves `/models` and `/textures`
+  as `public, max-age=31536000, immutable`. `vitest.config.ts` defines the
+  same constant so tests can import modules that build URLs.
+  **`/draco` deliberately stays `max-age=3600`**: `useGLTF.setDecoderPath`
+  builds its own URLs and never carries `?v=`, so `immutable` there would pin
+  a stale decoder for a year after an upgrade. Caught in review of the
+  deployed preview and fixed in `c1bc242`.
 - **Hide-HUD toggle.** `H` toggles `.hud-hidden` on `<html>` via
   `src/hooks/useHudVisibility.ts`; CSS hides the scrim, frame, corners and
   camera cluster with `visibility` (layout stays intact). Not persisted — a
@@ -43,7 +47,14 @@ Verification: `npm run verify` exit 0 (227 tests, lint 0 warnings, build).
 Browser (production preview): assets request with `?v=`, `/robots.txt`,
 `/sitemap.xml` and `/og-image.png` all 200; `og-image.png` is 1200×630;
 `H` hides the HUD with the canvas still rendering; Locate reaches the flight
-in ~1.4 s warm.
+in ~1.4 s warm. Production baseline confirmed the old behaviour being fixed:
+`https://orbitaliss.vercel.app/models/iss_igoal.glb` answered
+`Cache-Control: public, max-age=3600, stale-while-revalidate=86400` with
+`Content-Length: 20529892`.
+
+Shipped as **PR #14** (`feat/tier0-gains`, commits `f26f72a` + `c1bc242`).
+CI green: `verify` (40 s), `Vercel`, `Vercel Preview Comments`; merge state
+CLEAN. **Open, not merged** — merging is the user's call.
 
 ### Prior state (2026-10-08, main @ `35ec297`)
 
@@ -104,15 +115,20 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 - **Model A terminal-'unavailable' path**: implemented + unit-tested, but the
   live firing of `DefaultLoadingManager.onError` was never confirmed in a
   real browser. Verify only if that state ever matters.
-- **Faster Locate on fresh load**: planned, not started — `docs/NEXT_STEPS.md`
-  roadmap C.6 (texture-upload batching + network warm; deep cut = C.2).
+- **Faster Locate on fresh load**: C.6a (texture-upload batching) LANDED in
+  PR #14. C.6b (network warm on Locate intent) not started; the deep cut is
+  KTX2/meshopt via C.2.
 - **Features/engineering roadmap**: `docs/NEXT_STEPS.md` "Roadmap" section is
   the ranked list (day/night countdown, ground track, visible passes, …).
-- **youreyesinspace comparison** (2026-10-19, docs only): borrow list D.1-D.9
-  in `docs/NEXT_STEPS.md`. Two findings change planned work: D.1 (the eclipse
-  test is binary in three places; a 63 km penumbra is the honest model) and
-  D.3 (B.2's 2 km ground-track offset z-fights above ~500 km ground distance,
-  so the track needs a depth-independent draw).
+- **youreyesinspace comparison** (2026-10-19): borrow list D.1-D.9 in
+  `docs/NEXT_STEPS.md`. Landed in PR #14: D.2, D.4, D.5, and the CSS half of
+  D.6. Still open: D.1, D.3, D.7, D.8, D.9. Two findings change planned work:
+  D.1 (the eclipse test is binary in three places; a 63 km penumbra is the
+  honest model) and D.3 (B.2's 2 km ground-track offset z-fights above
+  ~500 km ground distance, so the track needs a depth-independent draw).
+- **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
+  closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
+  and the pinned render-scale override from D.6 are still open).
 
 ## Canon decisions (do not re-litigate; full context in history)
 

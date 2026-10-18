@@ -7,16 +7,22 @@
 
 ## Current state (2026-10-19)
 
-- Tier 0 of the youreyesinspace borrow list landed (branch
-  `feat/tier0-gains`): batched texture uploads (C.6a), build-id-versioned
-  immutable asset URLs (D.2), Hide-HUD toggle on `H`, safe-area insets +
-  `viewport-fit=cover` (D.6), OG/Twitter metadata + `robots.txt` +
+- **PR #14 open** (`feat/tier0-gains`, commits `f26f72a` + `c1bc242`):
+  Tier 0 of the youreyesinspace borrow list. CI green (`verify` 40 s,
+  `Vercel`, `Vercel Preview Comments`), merge state CLEAN, not yet merged.
+  Contents: batched texture uploads (C.6a), build-id-versioned immutable
+  asset URLs (D.2), Hide-HUD toggle on `H`, safe-area insets +
+  `viewport-fit=cover` (D.6 CSS half), OG/Twitter metadata + `robots.txt` +
   `sitemap.xml` + a generated `og-image.png` (D.5), and `LICENSE` +
   `NOTICE.md` + the fonts' OFL (D.4).
 - Measured on the C.6a change: `iss_igoal.glb` carries 73 WebP textures;
   uploading them costs 178 ms of GL work on this machine (2.44 ms each).
   The old loop yielded one frame per texture (73 frames ≈ 1.2 s at 60 Hz);
   the budgeted loop finishes in 30 frames (≈0.5 s).
+- Found in review of the deployed preview and fixed in `c1bc242`: `/draco`
+  had been switched to `immutable` although `useGLTF.setDecoderPath` builds
+  its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
+  `/textures` are immutable, and both are versioned.
 - Green: `npm run verify` (227 unit tests + build), CI, Vercel deployment.
 - Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
   DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
@@ -26,9 +32,12 @@
 
 ## Next (ranked)
 
-1. Check the live deployment: console free of CSP errors; `/api/tle` 200 with
-   its cache header; `/api/tle?x=1` 404; Nauka, wing tilt and flare up close;
-   `/models/*` and `/textures/*` answering `immutable` with `?v=<build id>`.
+1. Merge PR #14, then re-check the live deployment: console free of CSP
+   errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404; Nauka,
+   wing tilt and flare up close; `/models/*` and `/textures/*` now answering
+   `immutable` with `?v=<build id>` (today they answer `max-age=3600`);
+   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200; `H` hides the
+   HUD; safe-area insets on a notched phone.
 2. **D.1 - penumbra eclipse** (comparison section below). The largest
    fidelity gap left, and it pays for B.1's countdown at the same time.
 3. Roadmap B.1-B.3: orbital day/night countdown, ground track + footprint,
@@ -120,27 +129,30 @@ can be extended. "Touches" lists the files expected to change.
    portrait HUD; fix what breaks. Add a 390×844 case to the Playwright suite.
 4. **Accessibility.** `aria-live="polite"` region announcing the place below
    (at most once per minute), a `?` shortcut-help overlay, the remaining
-   `L` / `H` / `R` shortcuts (item 2), a high-contrast HUD class.
+   `L` / `R` shortcuts (item 2; `H` shipped as the HUD toggle in PR #14),
+   a high-contrast HUD class.
 5. **Release routine.** Scheduled CI job running `npm run refresh:tle` that
    opens a PR when the fallback changes; a short `CHANGELOG.md`.
 6. **Faster Locate (fresh load).** Locating on a cold session waits for the
    full high-fidelity pipeline, and the user report is that it is slower than
-   it should be. The cost chain, from code (no profiling done yet): network
-   fetch of `iss_igoal.glb` (19.6 MiB; HTTP-cached 1 h afterwards) → Draco
+   it should be. The cost chain: network fetch of `iss_igoal.glb` (19.6 MiB;
+   after PR #14 it is cached `immutable` for a year at a versioned URL, so
+   the fetch happens once per deploy rather than once per hour) → Draco
    decode of ~2.67 M triangles in a worker → `prepare()` in `ISSModel.tsx`
-   uploading **73 textures one per frame** (≈73 frames ≈ 1.2–2.4 s of pure
-   yielding) → `compileAsync` → scissor prime. Locate's departure gate waits
-   for all of it (deliberate: a mid-flight model pop was rejected in
-   fd5d353/plan 001 R2 — do not reopen that without a measured reason).
-   Minimal cuts, in order:
+   uploading the textures → `compileAsync` → scissor prime. Locate's
+   departure gate waits for all of it (deliberate: a mid-flight model pop was
+   rejected in fd5d353/plan 001 R2 — do not reopen that without a measured
+   reason). Minimal cuts, in order:
    a. **Batch the texture uploads** on a per-frame time budget (~6 ms/frame)
       instead of one texture per frame — removes the single biggest pure-yield
       cost, no visual risk. Touches: `ISSModel.tsx` `prepare()`.
-      **LANDED 2026-10-19.** 73 textures, 178 ms of GL work measured;
-      73 frames → 30 frames.
+      **LANDED 2026-10-19 (PR #14).** Measured: 73 WebP textures, 178 ms of
+      GL work (2.44 ms each); 73 frames → 30 frames. No profiling of the
+      remaining chain was done — the next cut should start with a trace.
    b. **Warm the network fetch** of the GLB after boot idle (~5 s) and on
       Locate hover/focus: a low-priority `fetch` into the HTTP cache
-      (`max-age=3600` already set), connection-gated (skip on
+      (the URL is now versioned and `immutable`, so the warm is a one-time
+      cost per deploy, not a revalidation), connection-gated (skip on
       `saveData`/2G), silent failure, once per session. Deliberately use a
       bare fetch, NOT `useGLTF.preload`: a failed preload fires the
       `DefaultLoadingManager` error hook that maps to the terminal
@@ -150,8 +162,8 @@ can be extended. "Touches" lists the files expected to change.
       KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2,
       which already covers the texture half).
 
-Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a is cheap
-enough to ride along with any pass).
+Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a landed in
+PR #14; C.6b is still cheap enough to ride along with any pass).
 
 ## Reference comparison - berkcomba/youreyesinspace (2026-10-19)
 
@@ -190,6 +202,10 @@ access, not log integrity.
 
 ### Genuinely borrowable - ranked
 
+Status roll-up (2026-10-19): **D.2, D.4, D.5 landed; D.6 landed for the CSS
+half.** All five shipped in PR #14 together with C.6a. Still open: D.1, D.3,
+D.7, D.8, D.9, plus the coarse-pointer and render-scale halves of D.6.
+
 #### D.1 - Penumbra instead of a binary eclipse test
 
 Their `common.glsl` `sphereShadow` smoothsteps over the occluder's angular
@@ -219,11 +235,13 @@ Cost: ~1 session. No shader work, no dependency.
 
 #### D.2 - Build-id-versioned, immutable static assets - LANDED 2026-10-19
 
-`vercel.json` serves `/models/*` and `/textures/*` with
-`max-age=3600, stale-while-revalidate=86400`. The 20.5 MB `iss_igoal.glb`
-therefore revalidates every hour per user; the 4K Earth maps do too. Their
-`vite.config.ts` defines `__BUILD_ID__`, every non-content-hashed URL carries
-`?v=<id>`, and nginx sends `immutable` for a year - a deploy still busts it.
+**Problem (as of 2026-10-19, now fixed):** `vercel.json` served `/models/*`
+and `/textures/*` with `max-age=3600, stale-while-revalidate=86400`, so the
+20.5 MB `iss_igoal.glb` revalidated every hour per user; the 4K Earth maps
+did too. Confirmed against production: `/models/iss_igoal.glb` answered
+`max-age=3600` with `Content-Length: 20529892`. Their `vite.config.ts`
+defines `__BUILD_ID__`, every non-content-hashed URL carries `?v=<id>`, and
+nginx sends `immutable` for a year - a deploy still busts it.
 
 First cut: `define: { __BUILD_ID__ }` in `vite.config.ts` (env
 `VERCEL_GIT_COMMIT_SHA`, falling back to a build timestamp); append
@@ -238,6 +256,12 @@ Watch: drei's `useGLTF` caches by URL, so a new id means one re-download per
 deploy (intended). `FALLBACK_URL_PATTERN` is a substring regex and still
 matches with the query string. `check-asset-budget.mjs` reads disk paths and
 is unaffected.
+
+**Landed (PR #14).** `src/utils/assetUrl.ts` + `src/types/build.d.ts`; the
+`/draco` exception above was caught reviewing the deployed preview and fixed
+in `c1bc242`. A test importing `EarthConstants` failed until
+`vitest.config.ts` mirrored the `__BUILD_ID__` define — vitest does not read
+`vite.config.ts`.
 
 Touches: `vite.config.ts`, `ISSModel.tsx`, `EarthConstants.ts`,
 `EnvironmentLayer.tsx`, `vercel.json`, the global type declaration.
@@ -276,9 +300,9 @@ Cost: folded into B.2, not extra.
 
 #### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line pending B.7)
 
-The repo ships no LICENSE file, while `public/models/*.glb` are IGOAL/NASA
-derived, the textures are derived from NASA Blue Marble / Black Marble, and
-both shipped fonts are OFL. Their `NOTICE.md` is the right shape: one table
+**Problem (as of 2026-10-19, now fixed):** the repo shipped no LICENSE file,
+while `public/models/*.glb` are IGOAL/NASA derived, the textures are derived
+from NASA Blue Marble / Black Marble, and both shipped fonts are OFL. Their `NOTICE.md` is the right shape: one table
 per asset class with source + licence, plus a trademarks section. Also copy
 the practice of an on-screen credit while streamed imagery is visible (their
 `BodyImagery.credit` -> `UI.setImageryCredit`); we currently show none.
@@ -290,12 +314,16 @@ beside `public/fonts/*.woff2`, and a one-line credit in the About panel (B.7).
 Check: link check on the new files; no code change.
 Cost: under an hour. Legal hygiene, not a feature.
 
+**Landed (PR #14):** `LICENSE` (MIT), `NOTICE.md` (data, models, imagery,
+fonts, dependencies, trademarks), `public/fonts/OFL.txt`. The on-screen
+imagery credit still rides with the About panel (B.7).
+
 #### D.5 - Social/SEO metadata - LANDED 2026-10-19
 
-`index.html` has a description and favicons; it has no `og:*` / `twitter:*`
-tags, no `robots.txt`, no `sitemap.xml`, no share image. Theirs has the full
-set including `og:image` dimensions, locale and alt text, plus both files in
-`public/`.
+**Problem (as of 2026-10-19, now fixed):** `index.html` had a description and
+favicons but no `og:*` / `twitter:*` tags, no `robots.txt`, no `sitemap.xml`
+and no share image. Theirs has the full set including `og:image` dimensions,
+locale and alt text, plus both files in `public/`.
 
 First cut: OG/Twitter block in `index.html` (title, description, a 1200x630
 image - D.7 makes capturing one easy), `robots.txt`, `sitemap.xml`, absolute
@@ -304,11 +332,19 @@ Check: an OG debugger previews correctly; `/robots.txt` and `/sitemap.xml`
 return 200.
 Cost: under an hour.
 
+**Landed (PR #14):** OG/Twitter block in `index.html`, `robots.txt`,
+`sitemap.xml`, and `public/og-image.png` at 1200x630. The image is generated
+artwork, not a screenshot: canvas `toDataURL` returns a cleared buffer under
+`preserveDrawingBuffer: false`, so it was composed from the project's own
+palette and self-hosted fonts. The generator is a throwaway script, not
+committed - regenerate from this description if the branding changes.
+
 #### D.6 - Mobile frame: safe-area insets, coarse-pointer sizing, render scale - LANDED 2026-10-19 (CSS half; render-scale override still open)
 
-`src/index.css` has zero `env(safe-area-inset-*)` and no `(pointer: coarse)`
-branch; on a notched phone the bottom orbit tape and the top corners sit under
-the home indicator / notch. Theirs uses safe-area in every fixed panel, a
+**Problem (as of 2026-10-19, CSS half now fixed):** `src/index.css` had zero
+`env(safe-area-inset-*)` and no `(pointer: coarse)` branch; on a notched phone
+the bottom orbit tape and the top corners sat under the home indicator /
+notch. Theirs uses safe-area in every fixed panel, a
 coarse-pointer block for larger tap targets, and caps DPR at 1.5 on
 `(pointer: coarse)`.
 
@@ -321,6 +357,13 @@ Check: 390x844 emulation, portrait and landscape; tape and corners clear the
 insets; the governor does not fight the override.
 Cost: one session, CSS + one settings field. Folds into C.3.
 
+**Landed (PR #14), CSS half:** every viewport-anchored cluster pads by
+`env(safe-area-inset-*)` through `max()`, so the old spacing is the floor and
+desktop layout is byte-identical. `index.html` gained `viewport-fit=cover` -
+without it `env()` reports zero on iOS and the whole change is inert.
+Still open: the `(pointer: coarse)` hit-area block and the pinned render-scale
+override.
+
 #### D.7 - Save-frame (screenshot)
 
 No capture path exists. Their `saveScreenshot` calls
@@ -330,6 +373,12 @@ part worth copying (the flag costs memory and bandwidth on every frame).
 Ours renders in the composer's priority-1 `useFrame`; capture from a
 priority-2 `useFrame` after `composer.render()` in the same frame, filename
 from the simulation epoch.
+
+Measured 2026-10-19 while building the OG card: reading the canvas from a
+`requestAnimationFrame` callback that is NOT the render frame returned an
+all-black image (mean 0, max 0 over a 300x158 sample) - the buffer had
+already been cleared. The same-frame constraint above is load-bearing, not
+a style preference.
 
 Touches: `Postprocessing.tsx` (capture hook or a store flag), one HUD button
 + shortcut, `formatters` for the filename.
@@ -434,11 +483,12 @@ after the perf baseline.
   GPUs, plus the C.6 cuts. Original suspect list + gate constraints live in
   that history entry - still the rules for any perf change.
 - **Quick wins (old item 1).** Orbit line/terminator/glint/bloom: done
-  (2026-09-28/29). Lens flare: reworked 2026-10-04. Still open, small:
-  Branding pass (favicon/loading-screen assets exist), Hide-HUD toggle
-  (`H`), Info/About panel (doubles as roadmap B.7 "What's real").
-- **Time controls (old item 2).** DONE 2026-09-28. Remaining: `L` / `H` / `R`
-  shortcuts -> roadmap C.4.
+  (2026-09-28/29). Lens flare: reworked 2026-10-04. Hide-HUD toggle (`H`):
+  done 2026-10-19 (PR #14). Still open, small: Branding pass
+  (favicon/loading-screen assets exist), Info/About panel (doubles as
+  roadmap B.7 "What's real").
+- **Time controls (old item 2).** DONE 2026-09-28. Remaining: `L` / `R`
+  shortcuts -> roadmap C.4 (`H` is now the HUD toggle).
 - **ISS attitude (old item 3).** DONE - LVLH/TEA in `ISSGroup`, SARJ
   tracking, BGA beta tilt landed 2026-10-04, TRRJ illustrative mode.
   Optional remains: a faithful TRRJ thermal profile (P2) and Canadarm2/ERA
