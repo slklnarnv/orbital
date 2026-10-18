@@ -62,6 +62,7 @@ import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
+import { assetUrl } from '@/utils/assetUrl'
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
 
@@ -84,7 +85,7 @@ interface DetailedModelSpec {
 }
 
 const LEGACY_DETAILED: DetailedModelSpec = {
-  url: '/models/international_space_station.glb',
+  url: assetUrl('/models/international_space_station.glb'),
   // Measured on the mounted model with full vertex transforms (plan 001 O1,
   // superseding the old 31.070 × 24.200 × 75.109 comment, which was wrong):
   // native full size 111.988429 × 68.784158 × 58.626683 m, tight-bounds
@@ -96,7 +97,7 @@ const LEGACY_DETAILED: DetailedModelSpec = {
 }
 
 const IGOAL_DETAILED: DetailedModelSpec = {
-  url: '/models/iss_igoal.glb',
+  url: assetUrl('/models/iss_igoal.glb'),
   // Measured from the shipped GLB's decoded POSITION vertices (scripts/
   // build-iss-model.mjs report; docs/MODEL_AUDIT.md): bounds
   // 73.4275 × 30.6260 × 108.2926 m, center (−0.0025, −6.8026, 0.0006).
@@ -142,7 +143,7 @@ const MODEL_PRE_ROTATION: Record<IssModelQuality, THREE.Quaternion> = {
   legacy: LEGACY_PRE_ROTATION,
 }
 
-const FALLBACK_MODEL_URL = '/models/International Space Station (ISS) (A).glb'
+const FALLBACK_MODEL_URL = assetUrl('/models/International Space Station (ISS) (A).glb')
 
 /** Render-scale ISS wingspan in Three.js world units (km).
  * The ISS is intentionally rendered ~1,000× oversize for orbital-scale readability.
@@ -189,6 +190,13 @@ const GLINT_SCREEN_PX = 22
 /** LOD hysteresis bands to prevent boundary thrashing (km) */
 const LOD_ENTER_NEAR_KM = 2800
 const LOD_EXIT_NEAR_KM = 3200
+
+/**
+ * Wall-time budget per frame while uploading the detailed model's textures.
+ * `initTexture` is a GL call, not a render — 6 ms leaves headroom inside a
+ * 16.7 ms frame for the scene that is still rendering behind the preparation.
+ */
+const TEXTURE_UPLOAD_BUDGET_MS = 6
 
 const _sunDirVec = new THREE.Vector3()
 
@@ -333,13 +341,24 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         }
       })
 
-      // Spread uploads across frames while the camera stays put. A resolved GLTF
-      // alone is not ready: lazy texture uploads and shader linking otherwise hitch
-      // the first close-up frame. Compile against the actual scene's lighting.
+      // Upload textures in time-budgeted batches while the camera stays put. A
+      // resolved GLTF alone is not ready: lazy texture uploads and shader linking
+      // otherwise hitch the first close-up frame. Compile against the actual
+      // scene's lighting.
+      //
+      // The old loop yielded one frame per texture (73 textures ≈ 73 frames ≈
+      // 1.2 s at 60 Hz, 2.4 s at 30 Hz) — pure yielding, since each initTexture
+      // is a sub-millisecond GL call. Uploading until a frame's budget is spent
+      // keeps the GPU work identical while cutting the wait by ~90%.
+      let budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
       for (const texture of textures) {
-        await nextFrame()
         if (cancelled) return
         gl.initTexture(texture)
+        if (performance.now() >= budgetEnd) {
+          await nextFrame()
+          if (cancelled) return
+          budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
+        }
       }
       await nextFrame()
       if (cancelled) return

@@ -230,8 +230,8 @@ body,
      above any z-index reachable from inside the corner cluster, so the panel
      pins itself to the root layer directly under the gear. */
   position: fixed;
-  top: 48px;
-  right: 22px;
+  top: calc(48px + env(safe-area-inset-top));
+  right: max(22px, env(safe-area-inset-right));
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -347,8 +347,8 @@ body,
 
 .hud-camera {
   position: fixed;
-  top: 46px;
-  right: 22px;
+  top: calc(46px + env(safe-area-inset-top));
+  right: max(22px, env(safe-area-inset-right));
   z-index: 10;
   display: flex;
   align-items: center;
@@ -724,7 +724,29 @@ body,
   outline-offset: 3px;
 }
 
+/* ─── HUD visibility (H) ───────────────────────────────────────────────── */
+/*
+ * `useHudVisibility` toggles this class on <html>. Only the overlay layers
+ * are hidden: the canvas keeps rendering and the simulation keeps running,
+ * so a screenshot or a presentation shows the scene alone. `visibility`
+ * rather than `display` keeps the layout stable for the popovers that
+ * measure themselves on open.
+ */
+.hud-hidden .hud-scrim,
+.hud-hidden .hud-frame,
+.hud-hidden .hud-corner,
+.hud-hidden .hud-camera {
+  visibility: hidden;
+}
+
 /* ─── Responsive frame ─────────────────────────────────────────────────── */
+/*
+ * Every viewport-anchored cluster offsets by the notch/home-indicator insets.
+ * `max()` keeps the existing desktop spacing as the floor, so the layout is
+ * unchanged on hardware where the insets are 0 (every desktop browser), and
+ * the HUD clears the hardware chrome on a notched phone. `viewport-fit=cover`
+ * in index.html is what makes `env()` report non-zero at all.
+ */
 
 .hud-corner {
   position: absolute;
@@ -735,13 +757,13 @@ body,
 }
 
 .hud-corner--tl {
-  top: 18px;
-  left: 22px;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(22px, env(safe-area-inset-left));
 }
 
 .hud-corner--tr {
-  top: 18px;
-  right: 22px;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(22px, env(safe-area-inset-right));
   /* Above .hud-camera (fixed, z-10, later in DOM) so the settings popover
      opened from this corner paints over the camera reticle. */
   z-index: 20;
@@ -749,8 +771,8 @@ body,
 
 .hud-bottom-left {
   position: absolute;
-  left: 26px;
-  bottom: 48px;
+  left: max(26px, env(safe-area-inset-left));
+  bottom: max(48px, env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
   align-items: flex-end;
@@ -760,7 +782,7 @@ body,
 .hud-bottom-center {
   position: absolute;
   left: 50%;
-  bottom: 44px;
+  bottom: max(44px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 10;
   display: flex;
@@ -770,8 +792,8 @@ body,
 
 .hud-bottom-right {
   position: absolute;
-  right: 26px;
-  bottom: 48px;
+  right: max(26px, env(safe-area-inset-right));
+  bottom: max(48px, env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
   align-items: flex-end;
@@ -786,13 +808,13 @@ body,
 
 @media (max-width: 639px) {
   .hud-corner--tl {
-    top: 14px;
-    left: 14px;
+    top: max(14px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left));
   }
 
   .hud-corner--tr {
-    top: 14px;
-    right: 14px;
+    top: max(14px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
   }
 
   /* Compact identity corner: wordmark + link state only */
@@ -814,7 +836,8 @@ body,
     grid-template-columns: 1fr auto;
     align-items: end;
     row-gap: 12px;
-    padding: 0 14px 16px;
+    padding: 0 max(14px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   }
 
   .hud-frame .hud-bottom-center {
@@ -851,8 +874,8 @@ body,
 
   /* Camera control parks alone in the top-right on small screens */
   .hud-camera {
-    top: 14px;
-    right: 14px;
+    top: calc(14px + env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
     gap: 8px;
   }
 

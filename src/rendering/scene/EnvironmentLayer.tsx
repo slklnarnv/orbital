@@ -5,12 +5,13 @@ import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
+import { assetUrl } from '@/utils/assetUrl'
 import billboardVert from '../shaders/billboard.vert'
 import sunFrag from '../shaders/sun.frag'
 
 // ─── Preload Starmap Texture at Module Scope ─────────────────────────────────
 // Pre-warms the new high-quality starmap immediately on page startup
-const STARMAP_URL = '/textures/starmap-4k.webp'
+const STARMAP_URL = assetUrl('/textures/starmap-4k.webp')
 useTexture.preload(STARMAP_URL)
 
 // ─── Hoisted Static Vectors for Zero-GC Frame Loop ───────────────────────────

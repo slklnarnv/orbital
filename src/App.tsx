@@ -5,6 +5,7 @@ import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
+import { useHudVisibility } from '@/hooks/useHudVisibility'
 import { TopBar } from '@/ui/layout/TopBar'
 import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
 import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
@@ -48,6 +49,8 @@ function checkWebGLSupport(): boolean {
  * container never re-renders.
  */
 const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
+  useHudVisibility()
+
   return (
     <>
       {/* Edge scrims: legibility gradients, never interactive */}

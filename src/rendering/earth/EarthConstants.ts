@@ -1,4 +1,5 @@
 import { EARTH_RADIUS_KM, ATMOSPHERE_RADIUS_FACTOR, CLOUD_RADIUS_FACTOR } from '@/utils/constants'
+import { assetUrl } from '@/utils/assetUrl'
 
 // ─── Earth Dimensions (km) ───────────────────────────────────────────────────
 export const EARTH_RADIUS = EARTH_RADIUS_KM // 6371.0 km (1 world unit = 1 km)
@@ -17,8 +18,8 @@ export const EARTH_SPHERE_SEGMENTS = 128
 //   3. Ensure deterministic asset availability offline
 //
 export const EARTH_TEXTURES = {
-  dayMap: '/textures/earth-day-4k.webp',
-  nightMap: '/textures/earth-night-4k.webp',
-  cloudMap: '/textures/earth-clouds-4k.webp',
-  specularMap: '/textures/earth-specular-4k.webp',
+  dayMap: assetUrl('/textures/earth-day-4k.webp'),
+  nightMap: assetUrl('/textures/earth-night-4k.webp'),
+  cloudMap: assetUrl('/textures/earth-clouds-4k.webp'),
+  specularMap: assetUrl('/textures/earth-specular-4k.webp'),
 } as const

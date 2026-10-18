@@ -6,7 +6,46 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Current state (2026-10-08, main @ `35ec297`)
+## Current state (2026-10-19, branch `feat/tier0-gains`)
+
+### Tier 0 pass (2026-10-19)
+
+Five borrow items from the youreyesinspace comparison, no behaviour change to
+the simulation:
+
+- **C.6a — batched texture uploads.** `ISSModel.prepare()` now uploads until a
+  6 ms per-frame budget is spent instead of yielding one frame per texture.
+  Measured on this machine: 73 WebP textures, 178 ms of GL work (2.44 ms
+  each); 73 frames → 30 frames. The GPU work is unchanged; only the yielding
+  is removed. `TEXTURE_UPLOAD_BUDGET_MS` documents the budget.
+- **D.2 — versioned immutable assets.** `vite.config.ts` defines
+  `__BUILD_ID__` (Vercel commit SHA, timestamp locally); `assetUrl()` in
+  `src/utils/assetUrl.ts` appends `?v=<id>` to the three model URLs, the four
+  Earth maps and the starmap. `vercel.json` serves `/models`, `/textures` and
+  `/draco` as `public, max-age=31536000, immutable`. `vitest.config.ts`
+  defines the same constant so tests can import modules that build URLs.
+- **Hide-HUD toggle.** `H` toggles `.hud-hidden` on `<html>` via
+  `src/hooks/useHudVisibility.ts`; CSS hides the scrim, frame, corners and
+  camera cluster with `visibility` (layout stays intact). Not persisted — a
+  reload restores the HUD. Typing contexts keep the letter.
+- **D.6 (CSS half) — safe-area insets.** Every viewport-anchored cluster pads
+  by `env(safe-area-inset-*)` through `max()`, so desktop spacing is the
+  floor and a notched phone clears the hardware chrome. `index.html` gains
+  `viewport-fit=cover` (without it `env()` reports zero on iOS).
+- **D.5 — link metadata.** OG/Twitter tags in `index.html`, `robots.txt`,
+  `sitemap.xml`, and a generated 1200×630 `public/og-image.png` (built from
+  the project's own palette and fonts; no third-party artwork).
+- **D.4 — licensing.** `LICENSE` (MIT), `NOTICE.md` (data, models, imagery,
+  fonts, dependencies, trademarks) and `public/fonts/OFL.txt` for the two
+  self-hosted OFL families.
+
+Verification: `npm run verify` exit 0 (227 tests, lint 0 warnings, build).
+Browser (production preview): assets request with `?v=`, `/robots.txt`,
+`/sitemap.xml` and `/og-image.png` all 200; `og-image.png` is 1200×630;
+`H` hides the HUD with the canvas still rendering; Locate reaches the flight
+in ~1.4 s warm.
+
+### Prior state (2026-10-08, main @ `35ec297`)
 
 Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 
@@ -69,6 +108,11 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
   roadmap C.6 (texture-upload batching + network warm; deep cut = C.2).
 - **Features/engineering roadmap**: `docs/NEXT_STEPS.md` "Roadmap" section is
   the ranked list (day/night countdown, ground track, visible passes, …).
+- **youreyesinspace comparison** (2026-10-19, docs only): borrow list D.1-D.9
+  in `docs/NEXT_STEPS.md`. Two findings change planned work: D.1 (the eclipse
+  test is binary in three places; a 63 km penumbra is the honest model) and
+  D.3 (B.2's 2 km ground-track offset z-fights above ~500 km ground distance,
+  so the track needs a depth-independent draw).
 
 ## Canon decisions (do not re-litigate; full context in history)
 
