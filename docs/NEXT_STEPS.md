@@ -229,7 +229,10 @@ First cut: `define: { __BUILD_ID__ }` in `vite.config.ts` (env
 `VERCEL_GIT_COMMIT_SHA`, falling back to a build timestamp); append
 `?v=${__BUILD_ID__}` to the three model URLs in `ISSModel.tsx` and the four
 Earth maps + starmap in `EarthConstants.ts` / `EnvironmentLayer.tsx`; flip
-`/models`, `/textures`, `/draco` to `public, max-age=31536000, immutable`.
+`/models` and `/textures` to `public, max-age=31536000, immutable`.
+**Do NOT flip `/draco`**: `useGLTF.setDecoderPath('/draco/')` builds its own
+URLs and never carries `?v=`, so `immutable` there would pin a stale decoder
+for a year after any upgrade. It stays `max-age=3600`.
 
 Watch: drei's `useGLTF` caches by URL, so a new id means one re-download per
 deploy (intended). `FALLBACK_URL_PATTERN` is a substring regex and still
