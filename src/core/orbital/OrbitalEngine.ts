@@ -61,6 +61,20 @@ export class OrbitalEngine {
     return this._tle
   }
 
+  /**
+   * One revolution in minutes, from the loaded element set's mean motion.
+   *
+   * The orbit path must close on itself: propagating ±half a period around
+   * "now" only meets at the seam if the span IS this period. The packaged
+   * `ISS_ORBITAL_PERIOD_MIN` constant (92.68) is a nominal figure and is
+   * ~0.3 min short of the current element set (92.98), which left a ~214 km
+   * gap in the rendered arc. Returns null when no TLE is loaded.
+   */
+  get periodMinutes(): number | null {
+    if (!this._satrec || !this._satrec.no) return null
+    return (2 * Math.PI) / this._satrec.no
+  }
+
   // ── Propagation ────────────────────────────────────────────────────────────
 
   /**

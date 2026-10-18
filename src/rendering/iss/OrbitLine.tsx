@@ -49,15 +49,12 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { issEntity } from '@/core/entities/ISSEntity'
-import { generateOrbitPath } from '@/core/orbital/OrbitPredictor'
+import { generateOrbitPath, MAX_ORBIT_POINTS, type OrbitPathPoint } from '@/core/orbital/OrbitPredictor'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ORBIT_PATH_REFRESH_MS } from '@/utils/constants'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Maximum number of points in the prediction arc (185 at a 30 s step). */
-const MAX_ORBIT_POINTS = 220
 
 /** Wall-time floor between path regenerations (sim-throttle complement). */
 const ORBIT_PATH_MIN_WALL_MS = 250
@@ -106,6 +103,18 @@ export function OrbitLine(): JSX.Element {
   const lastWallRefreshRef = useRef<number>(-Infinity)
   /** Cumulative arc length of the live polyline, in km (set by refreshPath). */
   const totalArcRef = useRef(0)
+  /**
+   * Epoch the dash pattern is phased from, fixed for the session. `null` until
+   * the first refresh. Kept in inertial terms (see the dash-phase note in
+   * `refreshPath`) so the pattern stays put on the ring across refreshes.
+   */
+  const dashOriginRef = useRef<number | null>(null)
+  /**
+   * Absolute arc position of the arc's trailing edge since the dash origin,
+   * in km. Written by `refreshPath`, wrapped to one dash pitch and uploaded in
+   * the frame loop.
+   */
+  const absolutePhaseRef = useRef(0)
 
   // ── Geometry — allocated ONCE at max size, then mutated in place ───────────
   const geometry = useMemo(() => {
@@ -208,7 +217,7 @@ export function OrbitLine(): JSX.Element {
   }, [geometry, material])
 
   // ── Refresh — rewrite the live span of the fat-line buffers ───────────────
-  const refreshPath = (path: Array<{ x: number; y: number; z: number; alpha: number }>): void => {
+  const refreshPath = (path: OrbitPathPoint[]): void => {
     const count = Math.min(path.length, MAX_ORBIT_POINTS)
     const segmentCount = Math.max(0, count - 1)
 
@@ -252,6 +261,32 @@ export function OrbitLine(): JSX.Element {
     distances.needsUpdate = true
     // The dash sizing reads this total every frame.
     totalArcRef.current = arc
+
+    // ── Dash phase, anchored to the ORBIT rather than to the arc's edge ─────
+    //
+    // `instanceDistance` is measured from the arc's trailing edge, and that
+    // edge slides along the orbit at the station's own speed (the arc is
+    // regenerated every ORBIT_PATH_REFRESH_MS, centred on the station). Keyed
+    // to it, the dash pattern shifted ~1.8 pitches per refresh at 1x — a
+    // visible shimmer over the whole ring.
+    //
+    // The arc's trailing edge sits at absolute arc position phi(t) = the
+    // station's own travel since a fixed origin, and `instanceDistance` is
+    // measured from there — so a point fixed on the ring is at
+    // phi(t) + instanceDistance. For the pattern to stay put, `phi + dashOffset`
+    // must be constant, hence dashOffset = -phi(t). Computed from the clock
+    // rather than accumulated, so it cannot drift and a seek cannot corrupt it.
+    //
+    // Stored absolute in double precision and uploaded raw: reducing it modulo
+    // the pitch is wrong because the pitch itself changes every frame with the
+    // camera (measured: ~17 km of pattern slide for a 0.3 km pitch change).
+    const periodMs = count > 1 ? path[count - 1].epochMs - path[0].epochMs : 0
+    if (periodMs > 0) {
+      const centerEpoch = path[Math.round((count - 1) / 2)].epochMs
+      const origin = dashOriginRef.current ?? centerEpoch
+      dashOriginRef.current = origin
+      absolutePhaseRef.current = ((centerEpoch - origin) / periodMs) * arc
+    }
     // Draw only the live segments — the GL buffers stay at their max-size
     // allocation, so their identity (and three's WebGLAttributes entry) never
     // changes and nothing is orphaned.
@@ -305,13 +340,17 @@ export function OrbitLine(): JSX.Element {
       (2 * Math.tan(halfFovRad) * referenceDepthKm) / Math.max(1, state.size.height)
 
     if (orbitLineStyle === 'dashed') {
-      material.uniforms.dashSize.value = DASH_SCREEN_PX * worldPerPx
-      material.uniforms.gapSize.value = GAP_SCREEN_PX * worldPerPx
+      const dash = DASH_SCREEN_PX * worldPerPx
+      const gap = GAP_SCREEN_PX * worldPerPx
+      material.uniforms.dashSize.value = dash
+      material.uniforms.gapSize.value = gap
+      material.uniforms.dashOffset.value = absolutePhaseRef.current
     } else {
       // One dash covering the whole arc: mod(vLineDistance, dash + gap) can
       // never leave [0, totalArc), so every fragment survives the dash test.
       material.uniforms.dashSize.value = totalArc
       material.uniforms.gapSize.value = 0
+      material.uniforms.dashOffset.value = 0
     }
   })
 
