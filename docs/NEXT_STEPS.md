@@ -36,7 +36,7 @@
   had been switched to `immutable` although `useGLTF.setDecoderPath` builds
   its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
   `/textures` are immutable, and both are versioned.
-- Green on merged main: `npm run verify` (243 unit tests + build) and CI on
+- Green on merged main: `npm run verify` (246 unit tests + build) and CI on
   the merge commits.
 - Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
   DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
@@ -259,11 +259,11 @@ defines `__BUILD_ID__`, every non-content-hashed URL carries `?v=<id>`, and
 nginx sends `immutable` for a year - a deploy still busts it.
 
 First cut: `define: { __BUILD_ID__ }` in `vite.config.ts` (a content hash of
-`/models` + `/textures`, falling back to the commit SHA/timestamp if the tree
-cannot be read); append `?v=${__BUILD_ID__}` to the model URLs in
-`ISSModel.tsx` / `modelUrls.ts` and the four Earth maps + starmap in
-`EarthConstants.ts` / `EnvironmentLayer.tsx`; flip `/models` and `/textures`
-to `public, max-age=31536000, immutable`. **Do NOT flip `/draco`**:
+the versioned `.glb`/`.webp` files under `/models` + `/textures`, falling back
+to the commit SHA/timestamp if the tree cannot be read); append
+`?v=${__BUILD_ID__}` to the model URLs in `ISSModel.tsx` / `modelUrls.ts` and
+the four Earth maps + starmap in `EarthConstants.ts` / `EnvironmentLayer.tsx`;
+flip `/models` and `/textures` to `public, max-age=31536000, immutable`. **Do NOT flip `/draco`**:
 `useGLTF.setDecoderPath('/draco/')` builds its own URLs and never carries
 `?v=`, so `immutable` there would pin a stale decoder for a year after any
 upgrade. It stays `max-age=3600`.
