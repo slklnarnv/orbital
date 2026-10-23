@@ -111,8 +111,10 @@ export function OrbitLine(): JSX.Element {
   const dashOriginRef = useRef<number | null>(null)
   /**
    * Absolute arc position of the arc's trailing edge since the dash origin,
-   * in km. Written by `refreshPath`, wrapped to one dash pitch and uploaded in
-   * the frame loop.
+   * in km. Written by `refreshPath` and uploaded raw in the frame loop.
+   * Deliberately NOT wrapped to one dash pitch: the pitch changes every frame
+   * with the camera, and a remainder against a moving divisor slides the
+   * pattern (see the dash-phase note in `refreshPath`).
    */
   const absolutePhaseRef = useRef(0)
 

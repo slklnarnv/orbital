@@ -21,10 +21,10 @@ npm run verify     # asset budget + shader ramps + tsc + unit tests + build
 
 All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
 
-## Session log — 2026-10-19 (two open PRs)
+## Session log — 2026-10-19 (PRs #14/#15, merged 2026-10-23)
 
 Read this block before the older chronological list below; it is the current
-state. Nothing here is merged yet.
+state. Both PRs merged 2026-10-23, #14 first, then the stacked #15.
 
 **PR #14 `feat/tier0-gains`** — five borrow items from the youreyesinspace
 comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
@@ -56,11 +56,11 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
   `(phase/pitch)·Δpitch` (~17 km for a 0.3 km change; this was the first
   implementation and the browser check caught it).
 
-**Merge order matters: #15 is stacked on #14.** `fix/orbit-line-dashes` was
-branched from `feat/tier0-gains`, so its diff against `main` carries all 25
-files of #14 plus the orbit-line changes. Merge #14 first — #15's base then
-retargets to `main` automatically. Merging #15 alone would land #14's work
-through the wrong PR.
+**Merge order mattered: #15 was stacked on #14.** `fix/orbit-line-dashes` was
+branched from `feat/tier0-gains`, so its diff against `main` carried all 25
+files of #14 plus the orbit-line changes. They were merged in that order —
+#14 first (merge commit `4d45d64`), then #15 (`b314bac`) — so each change
+landed through its own PR.
 
 ## What this session changed (chronological)
 
@@ -328,12 +328,13 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 ## Next steps
 
 `docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
-it next. As of 2026-10-19 the top of that list is:
+it next. As of 2026-10-23 the top of that list is:
 
-1. Merge #14 and #15, then re-check the live deployment: `/models/*` and
+1. Re-check the live deployment now that #14/#15 are merged: `/models/*` and
    `/textures/*` should now answer `immutable` with `?v=`; `/robots.txt`,
    `/sitemap.xml`, `/og-image.png` 200; `H` hides the HUD; safe-area insets
-   on a notched phone; the orbit ring closed at the station's antipode.
+   on a notched phone; the orbit ring closed at the station's antipode and
+   the dashes holding across refreshes.
 2. **D.1 — penumbra eclipse.** The largest fidelity gap left, and it also
    supplies B.1's day/night countdown. The shadow test is binary in three
    places (`ISSModel`, `ISSAnimations`, `ISSJointKinematics`' `sunlit`); the

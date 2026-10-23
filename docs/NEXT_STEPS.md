@@ -5,16 +5,20 @@
 > (see CLAUDE.md). Keep the Current state section fresh in the same commit as
 > behavior changes - never ship an errata banner, fix the stale text instead.
 
-## Current state (2026-10-19)
+## Current state (2026-10-23)
 
-- **PR #14 open** (`feat/tier0-gains`, commits `f26f72a` + `c1bc242`):
-  Tier 0 of the youreyesinspace borrow list. CI green (`verify` 40 s,
-  `Vercel`, `Vercel Preview Comments`), merge state CLEAN, not yet merged.
-  Contents: batched texture uploads (C.6a), build-id-versioned immutable
-  asset URLs (D.2), Hide-HUD toggle on `H`, safe-area insets +
-  `viewport-fit=cover` (D.6 CSS half), OG/Twitter metadata + `robots.txt` +
-  `sitemap.xml` + a generated `og-image.png` (D.5), and `LICENSE` +
-  `NOTICE.md` + the fonts' OFL (D.4).
+- **PRs #14 and #15 merged 2026-10-23**, in that order (#15 was stacked on
+  #14). Merge commits `4d45d64` and `b314bac`; `verify` and `npm audit` are
+  green on both. The live deployment still needs the post-merge check below.
+- **#14 `feat/tier0-gains`** (`f26f72a`, `c1bc242`, `013331e`): batched
+  texture uploads (C.6a), build-id-versioned immutable asset URLs (D.2),
+  Hide-HUD toggle on `H`, safe-area insets + `viewport-fit=cover` (D.6 CSS
+  half), OG/Twitter metadata + `robots.txt` + `sitemap.xml` + a generated
+  `og-image.png` (D.5), and `LICENSE` + `NOTICE.md` + the fonts' OFL (D.4).
+- **#15 `fix/orbit-line-dashes`** (`a75f8fe`, `4e5a335`): the orbit ring now
+  spans the live period (the 214 km seam is down to the 11–16 km SGP4
+  residual) and the dash pattern is phased from the clock instead of the
+  moving arc edge; 5 new predictor tests.
 - Measured on the C.6a change: `iss_igoal.glb` carries 73 WebP textures;
   uploading them costs 178 ms of GL work on this machine (2.44 ms each).
   The old loop yielded one frame per texture (73 frames ≈ 1.2 s at 60 Hz);
@@ -23,7 +27,8 @@
   had been switched to `immutable` although `useGLTF.setDecoderPath` builds
   its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
   `/textures` are immutable, and both are versioned.
-- Green: `npm run verify` (227 unit tests + build), CI, Vercel deployment.
+- Green on merged main: `npm run verify` (232 unit tests + build) and CI on
+  both merge commits.
 - Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
   DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
   `plans/PROGRESS.md`.
@@ -32,12 +37,14 @@
 
 ## Next (ranked)
 
-1. Merge PR #14, then re-check the live deployment: console free of CSP
+1. Re-check the live deployment after the #14/#15 merges: console free of CSP
    errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404; Nauka,
    wing tilt and flare up close; `/models/*` and `/textures/*` now answering
-   `immutable` with `?v=<build id>` (today they answer `max-age=3600`);
-   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200; `H` hides the
-   HUD; safe-area insets on a notched phone.
+   `immutable` with `?v=<build id>` (before these PRs they answered
+   `max-age=3600`); `/robots.txt`, `/sitemap.xml` and `/og-image.png` all
+   200; `H` hides the HUD; safe-area insets on a notched phone; the orbit
+   ring closes at the station's antipode and the dashes hold across
+   refreshes.
 2. **D.1 - penumbra eclipse** (comparison section below). The largest
    fidelity gap left, and it pays for B.1's countdown at the same time.
 3. Roadmap B.1-B.3: orbital day/night countdown, ground track + footprint,

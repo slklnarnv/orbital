@@ -6,21 +6,21 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Current state (2026-10-19)
+## Current state (2026-10-23)
 
-Two open PRs, both CI green and CLEAN, neither merged:
+Both PRs are **merged**, in the required order (#14 then #15), with `verify`
+and `npm audit` green on both merge commits:
 
 | PR | Branch | Commits | Contents |
 |---|---|---|---|
-| [#14](https://github.com/slklnarnv/orbital/pull/14) | `feat/tier0-gains` | `f26f72a`, `c1bc242`, `013331e` | Tier 0 borrow pass (below) |
-| [#15](https://github.com/slklnarnv/orbital/pull/15) | `fix/orbit-line-dashes` | `a75f8fe` | Orbit ring closure + dash phase (below) |
+| [#14](https://github.com/slklnarnv/orbital/pull/14) | `feat/tier0-gains` | `f26f72a`, `c1bc242`, `013331e` | Tier 0 borrow pass (below) — merged `4d45d64` |
+| [#15](https://github.com/slklnarnv/orbital/pull/15) | `fix/orbit-line-dashes` | `a75f8fe`, `4e5a335` | Orbit ring closure + dash phase (below) — merged `b314bac` |
 
-**#15 is STACKED on #14, not independent.** It was branched from
-`feat/tier0-gains`, so its diff against `main` carries all 25 files of #14
-plus the three orbit-line files. Merge #14 first; #15's base then retargets
-automatically (GitHub flips it to `main` once its parent merges). Do not
-merge #15 alone — that would land #14's contents through the wrong PR and
-leave #14 empty.
+**#15 was STACKED on #14.** It was branched from `feat/tier0-gains`, so its
+diff against `main` carried all 25 files of #14 plus the orbit-line changes.
+Merging in the order above landed each change through its own PR; merging
+#15 alone would have landed #14's contents through the wrong one. That risk
+is closed.
 
 ### Orbit line repair (2026-10-19, PR #15)
 
@@ -102,9 +102,10 @@ in ~1.4 s warm. Production baseline confirmed the old behaviour being fixed:
 `Cache-Control: public, max-age=3600, stale-while-revalidate=86400` with
 `Content-Length: 20529892`.
 
-Shipped as **PR #14** (`feat/tier0-gains`, commits `f26f72a` + `c1bc242`).
-CI green: `verify` (40 s), `Vercel`, `Vercel Preview Comments`; merge state
-CLEAN. **Open, not merged** — merging is the user's call.
+Shipped as **PR #14** (`feat/tier0-gains`, commits `f26f72a` + `c1bc242` +
+`013331e`). CI green: `verify` (40 s), `Vercel`, `Vercel Preview Comments`;
+merge state CLEAN. **Merged 2026-10-23** as merge commit `4d45d64`, followed
+immediately by the stacked #15 (`b314bac`).
 
 ### Prior state (2026-10-08, main @ `35ec297`)
 
@@ -143,7 +144,7 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 ## Verification snapshot
 
 - `npm run verify` green end-to-end: asset budget → shader ramps → typecheck
-  (tests + scripts + configs) → lint (0 warnings) → 227 unit tests → build.
+  (tests + scripts + configs) → lint (0 warnings) → 232 unit tests → build.
 - CI green on PR #12 (ubuntu, Node 20) after guarding module-scope
   `navigator` reads (Node 20 has no global `navigator` — platform trap).
 - Browser (dev server, built-in Chromium): 300× joint motion ≤0.36°/frame;

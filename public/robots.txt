@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
 
-# No crawlable routes: the app is a single page whose state lives in the URL
-# hash and localStorage. Only the shell and its static assets exist.
+# No crawlable routes: a single-page app; only the shell and its static
+# assets exist.
 Sitemap: https://orbitaliss.vercel.app/sitemap.xml
