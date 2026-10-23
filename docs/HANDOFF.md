@@ -48,7 +48,7 @@ LOD failure demotes to legacy.
 - Caching: `__BUILD_ID__` is now the versioned `.glb`/`.webp` content hash, so
   docs/code deploys keep the model cache. A 5 s boot-idle, connection-gated
   bare fetch warms the LOD; the full asset is not prefetched.
-- Verified: `npm run verify` exit 0 (243 tests), LOD passes
+- Verified: `npm run verify` exit 0 (246 tests), LOD passes
   `iss-model-manifest --check-only`, high asset unchanged. **Browser checks
   still owed**: throttled cold Locate, the LOD→high swap at 200 km, and the
   high model's first-draw hitch at Inspect.

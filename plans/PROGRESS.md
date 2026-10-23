@@ -51,8 +51,8 @@ removed ~14% on this CAD-style mesh, so the fix is a derived Locate tier:
   versioned `.glb`/`.webp` bytes, so docs/code deploys no longer invalidate the
   model cache. A prepared-URL set skips re-preparing a URL on its committed
   remount.
-- **Tests**: 243 total (14 lifecycle/gate cases, 5 LOD build/contract cases).
-  `npm run verify` exit 0. The LOD passes
+- **Tests**: 246 total (14 lifecycle/gate, 5 LOD build/contract, 3 build-id
+  determinism). `npm run verify` exit 0. The LOD passes
   `iss-model-manifest --check-only`; the high asset is unchanged.
 - **Not yet browser-verified**: the two-tier swap, the high-tier hitch at
   Inspect, and throttled-network Locate need a real browser pass. KTX2/meshopt
@@ -182,7 +182,7 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 ## Verification snapshot
 
 - `npm run verify` green end-to-end: asset budget → shader ramps → typecheck
-  (tests + scripts + configs) → lint (0 warnings) → 243 unit tests → build.
+  (tests + scripts + configs) → lint (0 warnings) → 246 unit tests → build.
 - CI green on PR #12 (ubuntu, Node 20) after guarding module-scope
   `navigator` reads (Node 20 has no global `navigator` — platform trap).
 - Browser (dev server, built-in Chromium): 300× joint motion ≤0.36°/frame;

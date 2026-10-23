@@ -36,7 +36,7 @@
   had been switched to `immutable` although `useGLTF.setDecoderPath` builds
   its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
   `/textures` are immutable, and both are versioned.
-- Green on merged main: `npm run verify` (243 unit tests + build) and CI on
+- Green on merged main: `npm run verify` (246 unit tests + build) and CI on
   the merge commits.
 - Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
   DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
