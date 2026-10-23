@@ -15,7 +15,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { useLoadingStore } from '@/stores/loadingStore'
+import { useLoadingStore, hasCommittedDetail, shouldAwaitDetail } from '@/stores/loadingStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 afterEach(() => {
@@ -103,6 +103,87 @@ describe('selection nonce (R3)', () => {
     expect(useSettingsStore.getState().selectionNonce).toBe(before + 2)
     // The selection itself still round-trips.
     expect(useSettingsStore.getState().issModelQuality).toBe('high')
+  })
+})
+
+describe('two-tier high detail (Locate LOD -> full high)', () => {
+  it('commits the Locate LOD first, then the full high model on Inspect', () => {
+    const locateAttempt = useLoadingStore.getState().beginISSDetailAttempt('locate')
+    useLoadingStore.getState().setIssDetailPreparing(locateAttempt)
+    useLoadingStore.getState().commitISSDetailReady(locateAttempt)
+    expect(useLoadingStore.getState().issDetail).toMatchObject({
+      status: 'ready',
+      quality: 'locate',
+      activeQuality: 'locate',
+    })
+
+    const highAttempt = useLoadingStore.getState().beginISSDetailAttempt('high')
+    // The committed LOD stays the displayed model while the full asset loads.
+    expect(useLoadingStore.getState().issDetail).toMatchObject({
+      status: 'loading',
+      quality: 'high',
+      activeQuality: 'locate',
+    })
+    useLoadingStore.getState().commitISSDetailReady(highAttempt)
+    expect(useLoadingStore.getState().issDetail).toMatchObject({
+      status: 'ready',
+      quality: 'high',
+      activeQuality: 'high',
+    })
+  })
+
+  it('keeps the committed Locate LOD when the full high attempt fails', () => {
+    const locateAttempt = useLoadingStore.getState().beginISSDetailAttempt('locate')
+    useLoadingStore.getState().commitISSDetailReady(locateAttempt)
+    const highAttempt = useLoadingStore.getState().beginISSDetailAttempt('high')
+    useLoadingStore.getState().failISSDetailAttempt(highAttempt)
+    expect(useLoadingStore.getState().issDetail).toMatchObject({
+      status: 'failed',
+      quality: 'high',
+      activeQuality: 'locate',
+    })
+  })
+
+  it('a hover/Locate-intent request cannot start a higher tier once a detail is committed', () => {
+    const locateAttempt = useLoadingStore.getState().beginISSDetailAttempt('locate')
+    useLoadingStore.getState().commitISSDetailReady(locateAttempt)
+    const before = useLoadingStore.getState().issDetail
+    useLoadingStore.getState().requestISSDetail()
+    expect(useLoadingStore.getState().issDetail).toEqual(before)
+  })
+})
+
+describe('Locate departure gate', () => {
+  const base = { quality: null, activeQuality: null, attempt: 0 } as const
+
+  it('waits for the first usable tier while no detailed model is committed', () => {
+    for (const status of ['idle', 'loading', 'preparing'] as const) {
+      const detail = { ...base, status }
+      expect(hasCommittedDetail(detail)).toBe(false)
+      expect(shouldAwaitDetail(detail)).toBe(true)
+    }
+  })
+
+  it('departs on any committed tier, even while a higher tier is loading', () => {
+    const loadingHigh = {
+      status: 'loading' as const,
+      quality: 'high' as const,
+      activeQuality: 'locate' as const,
+      attempt: 3,
+    }
+    expect(hasCommittedDetail(loadingHigh)).toBe(true)
+    expect(shouldAwaitDetail(loadingHigh)).toBe(false)
+
+    for (const activeQuality of ['locate', 'high', 'legacy'] as const) {
+      expect(shouldAwaitDetail({
+        status: 'ready', quality: activeQuality, activeQuality, attempt: 1,
+      })).toBe(false)
+    }
+  })
+
+  it('does not wait after a failed first tier or a terminal ISS failure', () => {
+    expect(shouldAwaitDetail({ ...base, status: 'failed' })).toBe(false)
+    expect(shouldAwaitDetail({ ...base, status: 'unavailable' })).toBe(false)
   })
 })
 

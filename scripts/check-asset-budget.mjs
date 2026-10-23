@@ -26,6 +26,7 @@ const runtimeImages = initialAssets.filter((asset) => asset.endsWith('.webp'))
 // from the GPU-RAM analysis, not network speed).
 const deferredAssets = [
   { path: 'public/models/international_space_station.glb', maxBytes: 7 * MiB },
+  { path: 'public/models/iss_igoal_locate.glb', maxBytes: 10 * MiB },
   { path: 'public/models/iss_igoal.glb', maxBytes: 35 * MiB },
 ]
 const INITIAL_ASSET_BUDGET = 5 * MiB

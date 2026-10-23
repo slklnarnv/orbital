@@ -13,7 +13,7 @@ import { FlightHorizon } from './FlightHorizon'
 import { FreeOrbitControls } from './FreeOrbitControls'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
-import { useLoadingStore } from '@/stores/loadingStore'
+import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
 import { easeInOutCubic } from '@/utils/math'
 import type { CameraTransitionState } from '@/types/camera'
 
@@ -311,7 +311,9 @@ export const CameraController = React.memo(function CameraController({
       if (!state || !renderedISS) return
 
       // Departure gate (plan 001 R2/E.5): a Locate waits ONCE, here at flight
-      // acquisition, for the deferred detail candidate to finish preparing.
+      // acquisition, for the FIRST usable detailed tier to commit. For the
+      // 'high' setting that tier is the fast Locate LOD; the full high model
+      // may still be loading for Inspect and must not stall a Locate.
       // After departure the gate is never re-checked — a selection change
       // mid-flight swaps the model in the background while the captured path
       // and horizon continue, so the flight can no longer stall.
@@ -320,8 +322,8 @@ export const CameraController = React.memo(function CameraController({
       // forever. Past the bound the flight departs on whatever model is
       // committed; the detail swap still happens whenever it finishes.
       if (transition.toMode === 'FOLLOW' && flightRef.current?.transition !== transition) {
-        const { status } = useLoadingStore.getState().issDetail
-        if (status !== 'ready' && status !== 'failed' && status !== 'unavailable') {
+        const detail = useLoadingStore.getState().issDetail
+        if (shouldAwaitDetail(detail)) {
           const nowMs = performance.now()
           if (departureWaitRef.current?.transition !== transition) {
             departureWaitRef.current = { transition, sinceMs: nowMs }

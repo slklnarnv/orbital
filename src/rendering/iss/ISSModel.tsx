@@ -57,12 +57,17 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { useLoadingStore } from '@/stores/loadingStore'
+import { useLoadingStore, type DetailQuality } from '@/stores/loadingStore'
 import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
-import { assetUrl } from '@/utils/assetUrl'
+import {
+  FALLBACK_MODEL_URL,
+  HIGH_MODEL_URL,
+  LEGACY_MODEL_URL,
+  LOCATE_MODEL_URL,
+} from './modelUrls'
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
 
@@ -85,7 +90,7 @@ interface DetailedModelSpec {
 }
 
 const LEGACY_DETAILED: DetailedModelSpec = {
-  url: assetUrl('/models/international_space_station.glb'),
+  url: LEGACY_MODEL_URL,
   // Measured on the mounted model with full vertex transforms (plan 001 O1,
   // superseding the old 31.070 × 24.200 × 75.109 comment, which was wrong):
   // native full size 111.988429 × 68.784158 × 58.626683 m, tight-bounds
@@ -97,7 +102,7 @@ const LEGACY_DETAILED: DetailedModelSpec = {
 }
 
 const IGOAL_DETAILED: DetailedModelSpec = {
-  url: assetUrl('/models/iss_igoal.glb'),
+  url: HIGH_MODEL_URL,
   // Measured from the shipped GLB's decoded POSITION vertices (scripts/
   // build-iss-model.mjs report; docs/MODEL_AUDIT.md): bounds
   // 73.4275 × 30.6260 × 108.2926 m, center (−0.0025, −6.8026, 0.0006).
@@ -109,7 +114,22 @@ const IGOAL_DETAILED: DetailedModelSpec = {
   pivotOffset: [0.0025, 6.8026, -0.0006],
 }
 
-const MODEL_SPECS: Record<IssModelQuality, DetailedModelSpec> = {
+/**
+ * Locate/Follow tier: a derived IGOAL LOD (scripts/build-iss-locate-lod.mjs).
+ * Same asset frame, node hierarchy and rig extras as the high model; the
+ * normalization constants are deliberately shared. ~5.3 MiB / 784k triangles
+ * vs the high 20.5 MiB / 2.665M — it fits the 8 s Locate gate on ordinary
+ * slow connections, while the full model loads only for Inspect.
+ */
+const IGOAL_LOCATE: DetailedModelSpec = {
+  url: LOCATE_MODEL_URL,
+  wingspanM: 108.293,
+  wingspanAxis: 'z',
+  pivotOffset: [0.0025, 6.8026, -0.0006],
+}
+
+const MODEL_SPECS: Record<DetailQuality, DetailedModelSpec> = {
+  locate: IGOAL_LOCATE,
   high: IGOAL_DETAILED,
   legacy: LEGACY_DETAILED,
 }
@@ -138,12 +158,11 @@ const LEGACY_PRE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
     new THREE.Vector3(1, 0, 0), // native +Z → body +X (forward)
   ),
 )
-const MODEL_PRE_ROTATION: Record<IssModelQuality, THREE.Quaternion> = {
+const MODEL_PRE_ROTATION: Record<DetailQuality, THREE.Quaternion> = {
+  locate: HIGH_PRE_ROTATION,
   high: HIGH_PRE_ROTATION,
   legacy: LEGACY_PRE_ROTATION,
 }
-
-const FALLBACK_MODEL_URL = assetUrl('/models/International Space Station (ISS) (A).glb')
 
 /** Render-scale ISS wingspan in Three.js world units (km).
  * The ISS is intentionally rendered ~1,000× oversize for orbital-scale readability.
@@ -191,12 +210,26 @@ const GLINT_SCREEN_PX = 22
 const LOD_ENTER_NEAR_KM = 2800
 const LOD_EXIT_NEAR_KM = 3200
 
+/** Full-detail hysteresis: mirrors INSPECT's 200/220 km bands so a close FREE
+ *  view also gets the full asset, not only the tracked INSPECT mode. */
+const FULL_DETAIL_ENTER_KM = 200
+const FULL_DETAIL_EXIT_KM = 220
+
 /**
  * Wall-time budget per frame while uploading the detailed model's textures.
  * `initTexture` is a GL call, not a render — 6 ms leaves headroom inside a
  * 16.7 ms frame for the scene that is still rendering behind the preparation.
  */
 const TEXTURE_UPLOAD_BUDGET_MS = 6
+
+/**
+ * URLs whose GPU preparation has completed for the current WebGL context.
+ * A committed/candidate remount of the same asset shares the cached GLTF's
+ * geometries and textures, so repeating `prepare()` would only re-upload and
+ * hitch. Cleared when the context is restored, because the GPU resources are
+ * recreated at that point.
+ */
+const preparedModelUrls = new Set<string>()
 
 const _sunDirVec = new THREE.Vector3()
 
@@ -289,7 +322,7 @@ THREE.DefaultLoadingManager.onError = (url: string) => {
 
 interface DetailedISSModelProps {
   spec: DetailedModelSpec
-  quality: IssModelQuality
+  quality: DetailQuality
   /** Attempt identity this instance loads for; carried on every callback so
    *  an obsolete preparation can never publish another attempt's result. */
   attempt: number
@@ -327,6 +360,14 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
     async function prepare(): Promise<void> {
       // Forensic breadcrumb: which detailed asset actually mounted.
       console.log('[ISS AUDIT]', { quality, url: spec.url, attempt })
+      // The same URL may remount when a candidate becomes the committed model
+      // (e.g. the Locate LOD while the full asset loads). Its GPU resources
+      // were already prepared; skipping is safe and avoids a visible hitch.
+      if (preparedModelUrls.has(spec.url)) {
+        await nextFrame()
+        if (!cancelled) onReady(attempt)
+        return
+      }
       useLoadingStore.getState().setIssDetailPreparing(attempt)
       const textures = new Set<THREE.Texture>()
       const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
@@ -385,7 +426,10 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
       }
       await nextFrame()
-      if (!cancelled) onReady(attempt)
+      if (!cancelled) {
+        preparedModelUrls.add(spec.url)
+        onReady(attempt)
+      }
     }
 
     void prepare().catch((error: unknown) => {
@@ -395,6 +439,14 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
     })
     return () => { cancelled = true }
   }, [detailedScene, gl, camera, scene, onReady, onError, attempt, quality, spec.url])
+
+  // A restored context recreates textures/buffers; allow prepare() to run again.
+  useEffect(() => {
+    const canvas = gl.domElement
+    const clear = (): void => { preparedModelUrls.clear() }
+    canvas.addEventListener('webglcontextrestored', clear)
+    return () => canvas.removeEventListener('webglcontextrestored', clear)
+  }, [gl])
 
   const normalizationScale = RENDER_ISS_WINGSPAN_UNITS / spec.wingspanM
 
@@ -428,22 +480,29 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const isNearRef = useRef(false)
   const worldPos = useRef(new THREE.Vector3())
   const [isNear, setIsNear] = useState(false)
+  const isCloseRef = useRef(false)
+  const [isClose, setIsClose] = useState(false)
   // Single lifecycle authority for the detail candidate (plan 001 phase E):
   // status + attempt identity + the committed (active) quality.
   const issDetail = useLoadingStore((state) => state.issDetail)
   // During a Locate flight the detail model is shown from departure, not at
-  // the 2,800 km LOD boundary — the load/GPU preparation already finished
-  // before departure, so the swap would otherwise be visible mid-flight.
+  // the 2,800 km LOD boundary — the first tier has finished preparing before
+  // departure, so the swap would otherwise be visible mid-flight.
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
 
   // ─── Detailed model selection with reliability ladder ───
-  // 'high' (IGOAL) is the default; if it fails to load, the ladder demotes to
-  // the proven legacy detailed model before falling all the way to Model A.
+  // 'high' (IGOAL) is the default and is loaded in two tiers: the Locate LOD
+  // for Locate/Follow, then the full asset for Inspect. Failures demote the
+  // requested path to the legacy detailed model before Model A.
   const settingQuality = useSettingsStore((state) => state.issModelQuality)
   const selectionNonce = useSettingsStore((state) => state.selectionNonce)
   const [demotedQuality, setDemotedQuality] = useState<IssModelQuality | null>(null)
-  const quality = demotedQuality ?? settingQuality
-  const spec = MODEL_SPECS[quality]
+  const requestedQuality = demotedQuality ?? settingQuality
+  /** First asset loaded for the requested quality: the fast LOD for 'high',
+   *  the legacy detailed model for 'legacy'. */
+  const firstTier: DetailQuality = requestedQuality === 'high' ? 'locate' : 'legacy'
+  const candidateQuality = issDetail.quality
+  const candidateSpec = candidateQuality ? MODEL_SPECS[candidateQuality] : null
   const showDetail = isNear || isTransitioning
 
   // Selection orchestration: records the requested quality on mount (without
@@ -451,21 +510,50 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // at startup), then begins a fresh candidate attempt whenever the explicit
   // selection changes or the demotion ladder moves the request. An explicit
   // re-selection (nonce) clears an active demotion; an automatic demotion
-  // changes `quality` without the nonce and survives.
+  // changes `requestedQuality` without the nonce and survives.
   const seenSelection = useRef<{ quality: IssModelQuality | null; nonce: number } | null>(null)
   useEffect(() => {
     const store = useLoadingStore.getState()
     if (seenSelection.current === null) {
-      seenSelection.current = { quality, nonce: selectionNonce }
-      store.identifyISSDetail(quality)
+      seenSelection.current = { quality: requestedQuality, nonce: selectionNonce }
+      store.identifyISSDetail(firstTier)
       return
     }
     const nonceChanged = seenSelection.current.nonce !== selectionNonce
-    const qualityChanged = seenSelection.current.quality !== quality
-    seenSelection.current = { quality, nonce: selectionNonce }
+    const qualityChanged = seenSelection.current.quality !== requestedQuality
+    seenSelection.current = { quality: requestedQuality, nonce: selectionNonce }
     if (nonceChanged) setDemotedQuality(null)
-    if (nonceChanged || qualityChanged) store.beginISSDetailAttempt(quality)
-  }, [quality, selectionNonce])
+    if (!nonceChanged && !qualityChanged) return
+
+    const detail = store.issDetail
+    if (requestedQuality === 'legacy') {
+      if (detail.activeQuality !== 'legacy') store.beginISSDetailAttempt('legacy')
+      return
+    }
+    // Requested high. If the full asset is already committed, an explicit
+    // reselect has nothing better to load (the nonce only cleared a demotion).
+    if (detail.activeQuality === 'high') return
+    // With the fast LOD committed, an explicit/quality change asks for the
+    // full model directly (this is also the retry path after a high failure).
+    if (detail.activeQuality === 'locate') {
+      store.beginISSDetailAttempt('high')
+      return
+    }
+    store.beginISSDetailAttempt('locate')
+  }, [requestedQuality, firstTier, selectionNonce])
+
+  // Full-detail tier: only within the INSPECT band (<200 km, 220 km exit; a
+  // close FREE view counts too). At Follow the LOD is visually
+  // indistinguishable; loading 20.5 MB there would defeat the point of the
+  // fast tier. A failed high attempt is not retried automatically — an
+  // explicit reselect starts a fresh attempt.
+  useEffect(() => {
+    if (!isClose || requestedQuality !== 'high') return
+    const detail = useLoadingStore.getState().issDetail
+    if (detail.status === 'ready' && detail.activeQuality === 'locate') {
+      useLoadingStore.getState().beginISSDetailAttempt('high')
+    }
+  }, [isClose, requestedQuality, issDetail.status, issDetail.activeQuality])
 
   useEffect(() => () => {
     useLoadingStore.getState().resetIssDetail()
@@ -482,23 +570,39 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     useLoadingStore.getState().commitISSDetailReady(attempt)
   }, [])
 
+  // Stable no-ops for the already-committed layer: inline callbacks would
+  // change identity every render and re-run its preparation effect.
+  const handleCommittedNoop = useCallback(() => {}, [])
+
   const handleDetailError = useCallback((attempt: number) => {
     const store = useLoadingStore.getState()
+    const detail = store.issDetail
+    // A late failure from a superseded attempt must not demote or clear the
+    // current candidate.
+    if (detail.attempt !== attempt) return
+    const failedQuality = detail.quality
     store.failISSDetailAttempt(attempt)
     console.warn('[ISSModel] detail attempt failed', {
-      attempt, status: store.issDetail.status, quality: store.issDetail.quality,
+      attempt, status: store.issDetail.status, quality: failedQuality,
     })
     // Drei caches rejected loader promises as well as successful assets. Clear the
-    // failed entry so leaving and re-entering near range can retry a transient error.
-    useGLTF.clear(MODEL_SPECS[store.issDetail.quality ?? quality].url)
-    // Reliability ladder: a failed 'high' attempt demotes to the proven legacy
-    // detailed model for the rest of the session (until explicitly re-selected);
-    // the quality change re-enters the selection effect and starts that load.
-    if (store.issDetail.quality === 'high') {
+    // failed entry so a later selection can retry a transient error.
+    if (failedQuality) {
+      preparedModelUrls.delete(MODEL_SPECS[failedQuality].url)
+      useGLTF.clear(MODEL_SPECS[failedQuality].url)
+    }
+    if (failedQuality === 'locate' && store.issDetail.activeQuality !== 'high') {
+      // The fast tier is the first asset for 'high'; a failure here is the
+      // whole high path failing, so demote to the proven legacy model.
+      console.warn('[ISSModel] demoting high -> legacy (Locate LOD failed)')
+      setDemotedQuality('legacy')
+    } else if (failedQuality === 'high' && store.issDetail.activeQuality !== 'locate') {
       console.warn('[ISSModel] demoting high -> legacy')
       setDemotedQuality('legacy')
     }
-  }, [quality])
+    // A high failure with a committed Locate LOD keeps the LOD: it is a valid
+    // detailed model, and demoting to legacy would be a visual downgrade.
+  }, [])
 
   const handleFallbackError = useCallback(() => {
     // Model A itself failed: terminal for the session. Earth/UI stay alive,
@@ -509,10 +613,11 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // ─── Visibility ownership (E.4: swap-once-prepared) ───
   // committed = the last quality that reached 'ready'. It stays mounted while
   // a different candidate loads/prepares and remains the displayed model until
-  // that candidate commits, so a selection change never flashes Model A.
+  // that candidate commits, so a tier swap never flashes Model A.
   const committedQuality = issDetail.activeQuality
+  const committedSpec = committedQuality ? MODEL_SPECS[committedQuality] : null
   const committedMounted = committedQuality !== null
-    && !(issDetail.status === 'ready' && committedQuality === quality)
+    && !(issDetail.status === 'ready' && committedQuality === candidateQuality)
     && issDetail.status !== 'unavailable'
   const committedShown = committedMounted && showDetail && issDetail.status !== 'ready'
   const modelAVisible = !showDetail || (issDetail.status !== 'ready' && !committedShown)
@@ -561,6 +666,18 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       if (nextIsNear && !useCameraStore.getState().isTransitioning) {
         useLoadingStore.getState().requestISSDetail()
       }
+    }
+
+    // Full-detail band (INSPECT 200/220 km, also covers a close FREE view).
+    let nextIsClose = isCloseRef.current
+    if (nextIsClose) {
+      if (distanceKm > FULL_DETAIL_EXIT_KM) nextIsClose = false
+    } else if (distanceKm < FULL_DETAIL_ENTER_KM) {
+      nextIsClose = true
+    }
+    if (nextIsClose !== isCloseRef.current) {
+      isCloseRef.current = nextIsClose
+      setIsClose(nextIsClose)
     }
 
     // 3. Compute the tracking glint's opacity.
@@ -663,13 +780,14 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       {/* The requested candidate. It mounts with its own attempt identity and
           shows only once ITS preparation commits; the committed model below
           keeps rendering until that moment (swap-once-prepared, plan E.4). */}
-      {(issDetail.status === 'loading' || issDetail.status === 'preparing' || issDetail.status === 'ready') && (
-        <DetailModelErrorBoundary key={`${spec.url}:${issDetail.attempt}`} onError={() => handleDetailError(issDetail.attempt)}>
+      {(issDetail.status === 'loading' || issDetail.status === 'preparing' || issDetail.status === 'ready')
+        && candidateSpec !== null && candidateQuality !== null && (
+        <DetailModelErrorBoundary key={`${candidateSpec.url}:${issDetail.attempt}`} onError={() => handleDetailError(issDetail.attempt)}>
           <Suspense fallback={null}>
             <DetailedISSModel
-              key={spec.url}
-              spec={spec}
-              quality={quality}
+              key={candidateSpec.url}
+              spec={candidateSpec}
+              quality={candidateQuality}
               attempt={issDetail.attempt}
               visible={issDetail.status === 'ready' && showDetail}
               onReady={handleDetailReady}
@@ -681,18 +799,18 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
 
       {/* ─── Committed detailed model ─── */}
       {/* The last committed quality stays mounted (and visible) while a
-          DIFFERENT candidate loads/prepares, so a selection change never
-          flashes the far-range schematic mid-session. */}
-      {committedMounted && (
+          DIFFERENT candidate loads/prepares, so a tier swap never flashes
+          the far-range schematic mid-session. */}
+      {committedMounted && committedSpec !== null && committedQuality !== null && (
         <Suspense fallback={null}>
           <DetailedISSModel
-            key={MODEL_SPECS[committedQuality].url}
-            spec={MODEL_SPECS[committedQuality]}
+            key={committedSpec.url}
+            spec={committedSpec}
             quality={committedQuality}
             attempt={-1}
             visible={committedShown}
-            onReady={() => { /* already committed */ }}
-            onError={() => { /* already committed; its failures are inert */ }}
+            onReady={handleCommittedNoop}
+            onError={handleCommittedNoop}
           />
         </Suspense>
       )}

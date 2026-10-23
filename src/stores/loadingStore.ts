@@ -7,7 +7,10 @@ import type { IssModelQuality } from './settingsStore'
 // The store describes ONE thing: the lifecycle of the deferred detail-model
 // candidate. Every field is explicit so ownership is enforceable:
 //   status        — where the candidate attempt is in its lifecycle
-//   quality       — which asset the CURRENT attempt loads
+//   quality       — which asset the CURRENT attempt loads. The high setting is
+//                   loaded in two tiers: 'locate' (a fast, silhouetted IGOAL
+//                   LOD) first, then 'high' (the full asset) when the camera
+//                   enters Inspect. 'legacy' is the fallback detailed model.
 //   attempt       — monotonic attempt identity; every completing callback
 //                   carries the attempt it belongs to, and transitions from a
 //                   stale attempt are ignored (obsolete preparations can never
@@ -31,11 +34,30 @@ export type IssDetailStatus =
   | 'failed'
   | 'unavailable'
 
+/** Detailed-model tiers. `locate` is the fast IGOAL LOD (Locate/Follow);
+ *  `high` is the full asset (Inspect); `legacy` is the fallback detailed
+ *  model. The user-facing setting remains `IssModelQuality` (high | legacy). */
+export type DetailQuality = IssModelQuality | 'locate'
+
 export interface IssDetailState {
   status: IssDetailStatus
-  quality: IssModelQuality | null
-  activeQuality: IssModelQuality | null
+  quality: DetailQuality | null
+  activeQuality: DetailQuality | null
   attempt: number
+}
+
+/** A committed detailed tier (locate, high or legacy) is enough for Locate to
+ *  depart; a pending higher tier must not stall the flight. */
+export function hasCommittedDetail(detail: IssDetailState): boolean {
+  return detail.activeQuality !== null
+}
+
+/** True only while a Locate must wait for the FIRST usable detailed tier. */
+export function shouldAwaitDetail(detail: IssDetailState): boolean {
+  return !hasCommittedDetail(detail)
+    && detail.status !== 'ready'
+    && detail.status !== 'failed'
+    && detail.status !== 'unavailable'
 }
 
 interface LoadingStore {
@@ -43,9 +65,9 @@ interface LoadingStore {
   /** Prewarm / Locate intent: starts a load if none is running. */
   requestISSDetail: () => void
   /** Record a new candidate attempt for `quality` (bumps the attempt). */
-  beginISSDetailAttempt: (quality: IssModelQuality) => number
+  beginISSDetailAttempt: (quality: DetailQuality) => number
   /** Record the requested identity without loading (mount-time disclosure). */
-  identifyISSDetail: (quality: IssModelQuality) => void
+  identifyISSDetail: (quality: DetailQuality) => void
   /** Attempt-guarded transitions; stale attempts are ignored. */
   setIssDetailPreparing: (attempt: number) => void
   commitISSDetailReady: (attempt: number) => void
@@ -59,11 +81,16 @@ interface LoadingStore {
 export const useLoadingStore = create<LoadingStore>((set) => ({
   issDetail: { status: 'idle', quality: null, activeQuality: null, attempt: 0 },
 
-  requestISSDetail: () => set((state) => (
-    state.issDetail.status === 'idle' || state.issDetail.status === 'failed'
+  requestISSDetail: () => set((state) => {
+    // A usable detailed tier is already committed: hover/focus must not start
+    // a higher-tier download. Tier upgrades are explicit (Inspect entry or an
+    // explicit reselect), so a failed full-high attempt cannot be retried by
+    // merely hovering Locate at Follow.
+    if (state.issDetail.activeQuality !== null) return state
+    return state.issDetail.status === 'idle' || state.issDetail.status === 'failed'
       ? { issDetail: { ...state.issDetail, status: 'loading' } }
       : state
-  )),
+  }),
 
   beginISSDetailAttempt: (quality) => {
     let attempt = 0

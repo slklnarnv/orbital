@@ -17,7 +17,7 @@ Orbital propagates public Two-Line Element sets with SGP4 and renders the result
 - Multi modal camera system with distance aware sensitivity and ISS tracking
 - Animated ISS parts (sun-tracking arrays, radiators, cameras) on the authored joint hierarchy
 - Ground context with place, local time, and weather
-- LOD ISS rendering to improve load time performance
+- LOD ISS rendering: a fast Locate/Follow tier and the full model for close inspection
 - WebGL capability checks and context loss recovery
 
 ## Architecture
@@ -68,18 +68,19 @@ The clock can be paused, accelerated up to 300×, or returned to the wall clock 
 
 Orbital is a visualization, not a navigation or conjunction-analysis tool. Positions are SGP4 estimates derived from public TLEs rather than spacecraft telemetry, and accuracy degrades as an element set ages.
 
-The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Its detailed model loads on Locate hover/focus, a Locate request, or close-range entry; it is not part of the initial download. Locate waits for model decoding, GPU uploads, and shader preparation before departure, for at most 8 seconds — a stalled download departs on the committed model and the detail swap happens whenever it finishes. Every Locate flight is a single great-circle sweep onto the station with no pullback detour; its duration scales with the sweep angle (350 ms/rad) plus up to two extra seconds for departures far beyond the 20,000 km overview, so distant approaches take longer without compressing into a blink. Failed detail loads retain the low-poly model and can be retried with Locate. The visualization propagates position, not spacecraft attitude.
+The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Close-range detail is two-tier: a derived ~5 MiB Locate LOD (`public/models/iss_igoal_locate.glb`, 784k triangles) loads on Locate hover/focus, a Locate request, or near-range entry and covers Follow; the full 20.5 MiB IGOAL model (2.67M triangles) loads only when the camera enters Inspect (below about 200 km). Neither is part of the initial download. Locate waits for the fast tier's decoding, GPU uploads, and shader preparation before departure, for at most 8 seconds — a stalled download departs on the committed model and the tier swap happens whenever it finishes. Every Locate flight is a single great-circle sweep onto the station with no pullback detour; its duration scales with the sweep angle (350 ms/rad) plus up to two extra seconds for departures far beyond the 20,000 km overview, so distant approaches take longer without compressing into a blink. Failed full-detail loads keep the committed detailed tier; a failed first tier retains the fallback and can be retried with Locate. The visualization propagates position, not spacecraft attitude.
 
 ## ISS model
 
-The model is the IGOAL-derived asset (`public/models/iss_igoal.glb`) with the station's real part hierarchy. The **Render Settings** switches between animated high fidelity and the static legacy fallback models. Beyond about 150 km the station is marked by a light-blue screen-space glint.
+The model is the IGOAL-derived asset (`public/models/iss_igoal.glb`) with the station's real part hierarchy. Close range is two-tier: `iss_igoal_locate.glb` (derived LOD, ~5 MiB, 784k triangles, 512 px textures) drives Locate/Follow, and the full `iss_igoal.glb` (2.67M triangles) loads inside about 200 km. Both keep the authored part hierarchy, the 12-joint rig and the animations, so the swap does not change the station's pose. The **Render Settings** switches between animated high fidelity and the static legacy fallback models. Beyond about 150 km the station is marked by a light-blue screen-space glint.
 
 Solar arrays track the Sun and the thermal radiators run a bounded demo motion, all driven through the asset's authored joint hierarchy. The animation details live in `src/rendering/iss/ISSJointKinematics.ts`.
 
-Rebuilding the asset requires the source FBX (not in the repo, obtained from NASA):
+Rebuilding the assets requires the source FBX (not in the repo, obtained from NASA) for the high model; the Locate LOD is then derived from the published high asset:
 
 ```bash
 node scripts/build-iss-model.mjs "path/to/ISS.fbx"
+npm run build:iss-lod
 ```
 
 ## Render settings

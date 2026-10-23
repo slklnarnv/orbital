@@ -123,10 +123,36 @@ but that also means a silently changed hierarchy would only show at runtime).
 - `public/models/International Space Station (ISS) (A).glb` — "Model A",
   37 KB always-mounted far-range schematic, single merged mesh.
 
+### 1.2 Locate-tier LOD (2026-10-23)
+
+`public/models/iss_igoal_locate.glb` is derived from the published high asset
+by `scripts/build-iss-locate-lod.mjs` — do not hand-edit it. Measured: **5.27
+MiB, 784k triangles, ~1.75M vertices, 240 mesh instances / 234 stored meshes,
+73 WebP textures at 512 px, 703 nodes** (the full rig). It keeps the 12 joints,
+8 oscillators, six protected attachment frames and `extras.orbitalRig`, and its
+decoded truss span is **108.294 m** (high: 108.293), so `IGOAL_LOCATE` shares
+the high model's normalization/pivot constants.
+
+Derivation: strip detail/handrail meshes except the silhouette keep-list in
+`build-iss-locate-lod.mjs` (76% of the high model's 2.665M triangles are
+`Details_*`), simplify the kept geometry at 0.3 ratio / 0.03 error, resize
+textures to 512, then Draco (position 12 / normal 8 / UV 10). Uniform
+simplification alone only removes ~14% on this CAD-style mesh; stripping the
+detail meshes is the effective lever. The build writes a candidate, validates
+the full rig/WebP/geometry/budget contract, then publishes.
+
+Runtime: the `high` setting loads this LOD first and uses it for Locate/Follow.
+The full `iss_igoal.glb` is requested only inside the 200/220 km Inspect band
+(the `isClose` hysteresis in `ISSModel.tsx`; a close FREE view counts too). A
+high-tier failure keeps the LOD; a LOD failure demotes the requested path to
+legacy. Rebuild after any high-asset rebuild with `npm run build:iss-lod`.
+
 **Selection**: `src/stores/settingsStore.ts` (`issModelQuality: 'high' |
-'legacy'`, default `'high'`, persisted). `'high'` → `iss_igoal.glb`. On load
-failure a ladder demotes high → legacy → Model A. At runtime the mounted
-asset is logged: `[ISS AUDIT] { quality, url }` (console).
+'legacy'`, default `'high'`, persisted). `'high'` → `iss_igoal_locate.glb`
+first, then `iss_igoal.glb` inside 200 km. On first-tier failure a ladder
+demotes high → legacy → Model A; a full-high failure with a committed LOD keeps
+the LOD. At runtime the mounted asset is logged:
+`[ISS AUDIT] { quality, url }` (console).
 
 **Key files**:
 
@@ -136,6 +162,7 @@ asset is logged: `[ISS AUDIT] { quality, url }` (console).
 | `src/rendering/iss/ISSAnimations.tsx` | SARJ/TRRJ joint animation + camera oscillators (all part motion) |
 | `src/rendering/iss/ISSGroup.tsx` | LVLH/TEA flight attitude + inertial position (do not touch for model work) |
 | `scripts/build-iss-model.mjs` | FBX → optimized runtime GLB (needs the FBX argument) |
+| `scripts/build-iss-locate-lod.mjs` | Derives the Locate LOD from the published high GLB (candidate → validate → publish) |
 | `scripts/iss-model-manifest.mjs` | Forensic per-node manifest of a GLB (REPAIRED — see §6.1) |
 | `scripts/iss-model-inspector.html` | Browser harness: loads the GLB standalone, logs Box3 measurements, `window.__setView` / `__cam` / `__isolate` / `__restore` hooks |
 | `.tmp-iss-build/audit-igoal-fixed/` | Current manifest + tree + exported textures for the shipped GLB |
