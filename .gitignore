@@ -37,5 +37,8 @@ pnpm-debug.log*
 # ISS asset build workspace (raw GLB intermediates, backups, audit dumps)
 .tmp-iss-build/
 
+# Throwaway card/render workspaces
+.tmp-og/
+
 # ZCode assistant session state
 .zcode/

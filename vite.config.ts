@@ -36,7 +36,18 @@ function devApiTle(): Plugin {
   }
 }
 
+/**
+ * Build id stamped onto the non-content-hashed static assets (/models,
+ * /textures, /draco). Those routes are served `immutable` for a year, so a
+ * deploy has to change the URL to bust the cache: `?v=<id>`. Vercel exposes
+ * the commit SHA; local and preview builds fall back to a timestamp.
+ */
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? Date.now().toString(36)
+
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   plugins: [
     react(),
     devApiTle(),

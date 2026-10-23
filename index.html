@@ -2,9 +2,28 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) report the
+         notch / home-indicator insets the HUD now pads against. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Real-time ISS orbital visualization platform — track the International Space Station live with cinematic Earth rendering and orbital mechanics." />
     <title>Orbital — ISS Visualization Platform</title>
+
+    <!-- Link previews -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Orbital" />
+    <meta property="og:title" content="Orbital — ISS Visualization Platform" />
+    <meta property="og:description" content="Track the International Space Station live: SGP4 propagation of public TLEs, rendered in a kilometre-scale Earth scene with the station's real articulated hardware." />
+    <meta property="og:url" content="https://orbitaliss.vercel.app/" />
+    <meta property="og:image" content="https://orbitaliss.vercel.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The International Space Station above a sunlit Earth, rendered in Orbital" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Orbital — ISS Visualization Platform" />
+    <meta name="twitter:description" content="Track the International Space Station live: SGP4 propagation of public TLEs, rendered in a kilometre-scale Earth scene." />
+    <meta name="twitter:image" content="https://orbitaliss.vercel.app/og-image.png" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="preload" href="/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
