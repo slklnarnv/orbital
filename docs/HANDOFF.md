@@ -45,7 +45,7 @@ LOD failure demotes to legacy.
   first committed tier; `isClose` (200/220 km) starts the full asset. A
   prepared-URL set skips re-preparing the LOD when it becomes the committed
   model, avoiding a remount hitch.
-- Caching: `__BUILD_ID__` is now the `/models` + `/textures` content hash, so
+- Caching: `__BUILD_ID__` is now the versioned `.glb`/`.webp` content hash, so
   docs/code deploys keep the model cache. A 5 s boot-idle, connection-gated
   bare fetch warms the LOD; the full asset is not prefetched.
 - Verified: `npm run verify` exit 0 (243 tests), LOD passes

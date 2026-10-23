@@ -48,7 +48,7 @@ removed ~14% on this CAD-style mesh, so the fix is a derived Locate tier:
   legacy. The committed LOD stays visible while high prepares.
 - **Prefetch + caching**: a 5 s boot-idle, connection-gated bare `fetch` warms
   the LOD (not `useGLTF.preload`); `__BUILD_ID__` is now a hash of the
-  `/models` + `/textures` bytes, so docs/code deploys no longer invalidate the
+  versioned `.glb`/`.webp` bytes, so docs/code deploys no longer invalidate the
   model cache. A prepared-URL set skips re-preparing a URL on its committed
   remount.
 - **Tests**: 243 total (14 lifecycle/gate cases, 5 LOD build/contract cases).
