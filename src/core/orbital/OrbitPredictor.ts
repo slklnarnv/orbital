@@ -12,40 +12,65 @@ export interface OrbitPathPoint {
   epochMs: number
 }
 
+/**
+ * Point budget for one revolution. The fat-line buffers in `OrbitLine` are
+ * allocated at this size, so the predictor must never exceed it — and must
+ * never truncate to reach it either (see the closure note below).
+ */
+export const MAX_ORBIT_POINTS = 220
+
 // ─── Orbit Predictor ──────────────────────────────────────────────────────────
 /**
- * Generates an array of world-space orbit path points by propagating
- * the orbital engine over one full period forward.
+ * Generates the world-space arc for one revolution, from half a period before
+ * `centerEpochMs` to half a period after.
  *
- * Points are spaced ORBIT_PATH_STEP_S seconds apart.
- * Alpha fades from 0 (trail) to 1 (future prediction) — for visual styling.
+ * **Closure.** The first and last points are one full period apart, so they
+ * must land on the same orbital position: the arc is a closed ring whose two
+ * ends meet at the point opposite the station. Two things are required for
+ * that, and the original version had neither:
+ *
+ *  1. The span must be the LIVE period. `ISS_ORBITAL_PERIOD_MIN` is a nominal
+ *     92.68 min, while the current element set runs 92.98 min; a 0.3 min
+ *     shortfall is ~130 km of missing arc.
+ *  2. The last sample must land exactly on `start + period`. Stepping a fixed
+ *     30 s and stopping at `t <= end` leaves the final partial step unpainted.
+ *
+ * Together those left a measured 214 km gap (~11 px at the home view) in the
+ * ring at the station's antipode. Closing it exactly leaves the SGP4 residual
+ * alone — ~31 km, because an SGP4 orbit does not repeat bit-exactly.
+ *
+ * The step is nudged to divide the period evenly rather than being truncated,
+ * so a longer period (a reboost, or another vehicle) cannot silently drop the
+ * tail and reopen the seam.
  */
 export function generateOrbitPath(
   engine: OrbitalEngine,
   centerEpochMs: number,
-  periodMinutes = ISS_ORBITAL_PERIOD_MIN
+  periodMinutes = engine.periodMinutes ?? ISS_ORBITAL_PERIOD_MIN,
 ): OrbitPathPoint[] {
   const periodMs = periodMinutes * 60 * 1000
-  const stepMs = ORBIT_PATH_STEP_S * 1000
   const halfPeriod = periodMs / 2
-
-  // Generate from -halfPeriod to +halfPeriod around current time
-  const points: OrbitPathPoint[] = []
   const startMs = centerEpochMs - halfPeriod
   const endMs = centerEpochMs + halfPeriod
 
-  let t = startMs
-  while (t <= endMs) {
+  // Round to the nearest whole step so the sampling density stays at ~30 s,
+  // then clamp to the buffer budget. `steps` segments means `steps + 1` points.
+  const steps = Math.max(
+    1,
+    Math.min(Math.round(periodMs / (ORBIT_PATH_STEP_S * 1000)), MAX_ORBIT_POINTS - 1),
+  )
+
+  const points: OrbitPathPoint[] = []
+  for (let i = 0; i <= steps; i++) {
+    const t = startMs + (periodMs * i) / steps
     const posTEME = engine.propagateAt(t)
-
-    if (posTEME) {
-      const worldPos = temeToWorld(posTEME)
-      // Alpha: 0 at trail start, 1 at future end
-      const alpha = (t - startMs) / (endMs - startMs)
-      points.push({ ...worldPos, alpha, epochMs: t })
-    }
-
-    t += stepMs
+    if (!posTEME) continue
+    points.push({
+      ...temeToWorld(posTEME),
+      // Alpha: 0 at the trailing edge, 1 at the leading edge.
+      alpha: (t - startMs) / (endMs - startMs),
+      epochMs: t,
+    })
   }
 
   return points

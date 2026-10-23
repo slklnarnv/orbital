@@ -21,6 +21,47 @@ npm run verify     # asset budget + shader ramps + tsc + unit tests + build
 
 All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
 
+## Session log — 2026-10-19 (two open PRs)
+
+Read this block before the older chronological list below; it is the current
+state. Nothing here is merged yet.
+
+**PR #14 `feat/tier0-gains`** — five borrow items from the youreyesinspace
+comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
+
+- `ISSModel.prepare()` uploads textures on a 6 ms per-frame budget instead of
+  yielding one frame each (73 maps, 178 ms of GL work; 73 → 30 frames).
+- `__BUILD_ID__` → `?v=` on the model/texture URLs; `/models` and `/textures`
+  are `immutable`. **`/draco` is NOT** — `useGLTF.setDecoderPath` builds its
+  own URLs with no `?v=`, so `immutable` there would pin a stale decoder.
+- `H` hides the HUD (`src/hooks/useHudVisibility.ts`, `.hud-hidden` on
+  `<html>`, `visibility` so layout is untouched). Not persisted.
+- Safe-area insets on every anchored cluster + `viewport-fit=cover`
+  (without it `env()` is 0 on iOS).
+- OG/Twitter metadata, `robots.txt`, `sitemap.xml`, generated `og-image.png`;
+  `LICENSE`, `NOTICE.md`, `public/fonts/OFL.txt`.
+
+**PR #15 `fix/orbit-line-dashes`** — two measured `OrbitLine` defects:
+
+- The arc spanned the NOMINAL 92.68 min period against a 92.98 min element
+  set and dropped its final partial step, leaving a **214 km gap** where the
+  ring should close. Now driven by the live period
+  (`OrbitalEngine.periodMinutes`) with the step rounded, not truncated:
+  214 km → 11–16 km, the residual being SGP4's own non-closure.
+- The dash pattern slid ~1.8 pitches every refresh because `LineMaterial`
+  keys it on `instanceDistance` measured from the arc's trailing edge, which
+  moves ~460 km per refresh. `dashOffset` now carries that edge's absolute
+  position from the clock. **Do not modulo it by the pitch** — the pitch
+  changes every frame with the camera and the remainder slides by
+  `(phase/pitch)·Δpitch` (~17 km for a 0.3 km change; this was the first
+  implementation and the browser check caught it).
+
+**Merge order matters: #15 is stacked on #14.** `fix/orbit-line-dashes` was
+branched from `feat/tier0-gains`, so its diff against `main` carries all 25
+files of #14 plus the orbit-line changes. Merge #14 first — #15's base then
+retargets to `main` automatically. Merging #15 alone would land #14's work
+through the wrong PR.
+
 ## What this session changed (chronological)
 
 0. **IGOAL model forensic audit + corrections** — read
@@ -242,6 +283,21 @@ All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
   `window.__*` accumulator array.
 - Vite dev server + HMR: component edits hot-apply; a reload resets camera
   state (locate + zoom must be redone after `reload()`).
+- **Reading a WebGL canvas outside the render frame returns black.** With
+  `preserveDrawingBuffer: false` (the default, and the right setting), a
+  `toDataURL` issued from a later rAF callback sees a cleared buffer —
+  measured mean 0, max 0 over a 300×158 sample. Any capture must happen in
+  the same frame as the draw.
+- **`__orbitalScene` is DEV-only** (`import.meta.env.DEV`). Inspecting the
+  scene graph works on `npm run dev` (5173), never on `vite preview` (4173);
+  reach for the dev server when a check needs object internals.
+- **The orbit arc refreshes at most once per 60 s of SIM time** (plus a
+  250 ms wall floor). A browser check that waits ~5 s will see a stale arc —
+  seek the clock (simulationStore.seek) to force a regeneration instead of
+  waiting, and remember the dash offset is constant BETWEEN refreshes by
+  design (the ring geometry is too).
+- Vite binds IPv6-only on this machine (`[::1]:5173`). `127.0.0.1` is
+  refused; use `http://localhost:5173/`.
 
 ## Deployment — Vercel + the API-proxy pattern (important)
 
@@ -272,4 +328,18 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 ## Next steps
 
 `docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
-it next.
+it next. As of 2026-10-19 the top of that list is:
+
+1. Merge #14 and #15, then re-check the live deployment: `/models/*` and
+   `/textures/*` should now answer `immutable` with `?v=`; `/robots.txt`,
+   `/sitemap.xml`, `/og-image.png` 200; `H` hides the HUD; safe-area insets
+   on a notched phone; the orbit ring closed at the station's antipode.
+2. **D.1 — penumbra eclipse.** The largest fidelity gap left, and it also
+   supplies B.1's day/night countdown. The shadow test is binary in three
+   places (`ISSModel`, `ISSAnimations`, `ISSJointKinematics`' `sunlit`); the
+   real penumbra is ~63 km ≈ 8 s of flight, collapsed into one frame that
+   flips a 2.3× exposure boost, ambient, earthshine, the glint tint and the
+   TRRJ law.
+3. B.1–B.3. **B.2 must adopt D.3 first** — a 2 km ground-track offset
+   z-fights above ~500 km ground distance, so the track needs a
+   depth-independent draw.

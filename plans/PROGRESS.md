@@ -6,9 +6,58 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Current state (2026-10-19, branch `feat/tier0-gains`)
+## Current state (2026-10-19)
 
-### Tier 0 pass (2026-10-19)
+Two open PRs, both CI green and CLEAN, neither merged:
+
+| PR | Branch | Commits | Contents |
+|---|---|---|---|
+| [#14](https://github.com/slklnarnv/orbital/pull/14) | `feat/tier0-gains` | `f26f72a`, `c1bc242`, `013331e` | Tier 0 borrow pass (below) |
+| [#15](https://github.com/slklnarnv/orbital/pull/15) | `fix/orbit-line-dashes` | `a75f8fe` | Orbit ring closure + dash phase (below) |
+
+**#15 is STACKED on #14, not independent.** It was branched from
+`feat/tier0-gains`, so its diff against `main` carries all 25 files of #14
+plus the three orbit-line files. Merge #14 first; #15's base then retargets
+automatically (GitHub flips it to `main` once its parent merges). Do not
+merge #15 alone — that would land #14's contents through the wrong PR and
+leave #14 empty.
+
+### Orbit line repair (2026-10-19, PR #15)
+
+Two measured defects in `OrbitLine`, both on the dashed path:
+
+- **The ring did not close — 214 km gap.** `generateOrbitPath` spanned ±½ of
+  the NOMINAL `ISS_ORBITAL_PERIOD_MIN` (92.68 min) while the live element set
+  runs 92.98 min, and `while (t <= end)` dropped the final partial step. First
+  and last samples therefore sat 214 km apart (~11 px at the home view) at the
+  station's antipode. `OrbitalEngine.periodMinutes` now exposes the live
+  period from `satrec.no`; the predictor spreads exactly `steps` samples
+  across it and ROUNDS the step, so a reboost or a slower vehicle cannot
+  silently reopen the seam. After: 11–16 km, which is SGP4's own non-closure
+  (an SGP4 orbit does not repeat bit-exactly), not a sampling shortfall.
+- **The dash pattern slid every refresh.** `LineMaterial` keys the pattern on
+  `instanceDistance`, measured from the arc's TRAILING edge — and that edge
+  moves ~460 km per refresh because the arc is regenerated centred on the
+  station. The pattern jumped ~1.8 pitches every `ORBIT_PATH_REFRESH_MS`, a
+  visible shimmer. `dashOffset` now carries the trailing edge's ABSOLUTE
+  position along the orbit, derived from the clock (not accumulated, so a seek
+  cannot corrupt it); `vLineDistance + dashOffset` is then a fixed position on
+  the ring.
+  **Do not reduce that offset modulo the pitch.** The pitch changes every
+  frame with the camera, and a remainder against a moving divisor shifts by
+  `(phase / pitch) · Δpitch` — measured ~17 km of slide for a 0.3 km pitch
+  change during a slow zoom. This was the first implementation and the
+  browser check caught it.
+
+`MAX_ORBIT_POINTS` moved into the predictor, which clamps to it, so the
+fixed-size instance buffers cannot be overrun by a slower orbit.
+
+Verification: `npm run verify` exit 0 (232 tests, lint 0 warnings, build).
+Browser (dev server, dashed style): 186 segments, arc 42,719 km, ring gap
+11.3 km, dash pitch 6.3 px at the home view; `dashOffset` advances across
+refreshes (555.9 → 7666.5 after a 15 min seek) and holds within one.
+
+### Tier 0 pass (2026-10-19, PR #14)
 
 Five borrow items from the youreyesinspace comparison, no behaviour change to
 the simulation:
@@ -43,9 +92,10 @@ the simulation:
   fonts, dependencies, trademarks) and `public/fonts/OFL.txt` for the two
   self-hosted OFL families.
 
-Verification: `npm run verify` exit 0 (227 tests, lint 0 warnings, build).
-Browser (production preview): assets request with `?v=`, `/robots.txt`,
-`/sitemap.xml` and `/og-image.png` all 200; `og-image.png` is 1200×630;
+Verification: `npm run verify` exit 0 (227 tests at the time, lint 0
+warnings, build). Browser (production preview): assets request with `?v=`,
+`/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200; `og-image.png` is
+1200×630;
 `H` hides the HUD with the canvas still rendering; Locate reaches the flight
 in ~1.4 s warm. Production baseline confirmed the old behaviour being fixed:
 `https://orbitaliss.vercel.app/models/iss_igoal.glb` answered
@@ -129,6 +179,15 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 - **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
   closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
   and the pinned render-scale override from D.6 are still open).
+- **Orbit line, remaining polish**: the ring now closes and the dash phase is
+  fixed to the orbit, but two things are still unverified or open.
+  (a) The `alphaCurve` fade was NOT re-tuned — the past trail still fades
+  0 → 0.30 and the future arc holds 0.60; whether those read right against
+  the now-closed ring is a visual call, not a measurement.
+  (b) No test covers `refreshPath`'s buffer writes or the dash-offset maths —
+  the geometry is covered only by the predictor test (span, closure, step,
+  budget, alpha, centring). A headless test of the instance-buffer layout
+  would need a GL context, so this stays a browser check.
 
 ## Canon decisions (do not re-litigate; full context in history)
 
