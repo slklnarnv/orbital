@@ -22,6 +22,43 @@ Merging in the order above landed each change through its own PR; merging
 #15 alone would have landed #14's contents through the wrong one. That risk
 is closed.
 
+### Locate LOD + two-tier detail (2026-10-23)
+
+The "slow Locate shows Model A, then swaps to IGOAL" report traced to the 8 s
+departure gate: the full asset is 20.5 MB / 2.665M triangles, and 76% of those
+triangles sit in `Details_*` greebles/handrails. Uniform simplification only
+removed ~14% on this CAD-style mesh, so the fix is a derived Locate tier:
+
+- **Build** (`scripts/build-iss-locate-lod.mjs`, `npm run build:iss-lod`):
+  strip detail/handrail meshes except a silhouette keep-list (AMS, Bartolomeo,
+  ELCs, MLM/ERA, Node3, batteries, Columbus, MBSU, Bishop), simplify kept
+  geometry 0.3/0.03, resize textures to 512, Draco 12/8/10. Candidate-first
+  validation (rig, WebP, finite geometry, truss span, budget), then publish.
+- **Measured** `public/models/iss_igoal_locate.glb`: **5.27 MiB, 784k
+  triangles, ~1.75M vertices, 240 mesh instances / 234 stored meshes, 73 WebP
+  textures at 512 px, 703 nodes**. Full 703-node rig preserved (12 joints, 8
+  oscillators, six attachment frames, `extras.orbitalRig`); truss span 108.294
+  m vs high 108.293, so the normalization constants are shared. Decode ~0.2 s
+  Draco + ~0.5 s WebP (Node measurement) versus ~3.6 s for high.
+- **Runtime**: `DetailQuality` adds `locate`. `high` loads `locate` first for
+  Locate/Follow; the full asset is requested only inside the 200/220 km
+  `isClose` band (covers Inspect and close FREE views). The departure gate now
+  waits for the first committed tier (`shouldAwaitDetail`), not the full
+  asset. A high failure keeps the committed LOD; a LOD failure demotes to
+  legacy. The committed LOD stays visible while high prepares.
+- **Prefetch + caching**: a 5 s boot-idle, connection-gated bare `fetch` warms
+  the LOD (not `useGLTF.preload`); `__BUILD_ID__` is now a hash of the
+  `/models` + `/textures` bytes, so docs/code deploys no longer invalidate the
+  model cache. A prepared-URL set skips re-preparing a URL on its committed
+  remount.
+- **Tests**: 243 total (14 lifecycle/gate cases, 5 LOD build/contract cases).
+  `npm run verify` exit 0. The LOD passes
+  `iss-model-manifest --check-only`; the high asset is unchanged.
+- **Not yet browser-verified**: the two-tier swap, the high-tier hitch at
+  Inspect, and throttled-network Locate need a real browser pass. KTX2/meshopt
+  for the full asset (C.2) remains the decode/VRAM follow-up.
+
+
 ### Orbit line repair (2026-10-19, PR #15)
 
 Two measured defects in `OrbitLine`, both on the dashed path:
@@ -68,11 +105,12 @@ the simulation:
   each); 73 frames → 30 frames. The GPU work is unchanged; only the yielding
   is removed. `TEXTURE_UPLOAD_BUDGET_MS` documents the budget.
 - **D.2 — versioned immutable assets.** `vite.config.ts` defines
-  `__BUILD_ID__` (Vercel commit SHA, timestamp locally); `assetUrl()` in
-  `src/utils/assetUrl.ts` appends `?v=<id>` to the three model URLs, the four
-  Earth maps and the starmap. `vercel.json` serves `/models` and `/textures`
-  as `public, max-age=31536000, immutable`. `vitest.config.ts` defines the
-  same constant so tests can import modules that build URLs.
+  `__BUILD_ID__` (an asset-content hash since 2026-10-23; commit SHA/timestamp
+  fallback if the tree cannot be read); `assetUrl()` in
+  `src/utils/assetUrl.ts` appends `?v=<id>` to the model, Earth-map and starmap
+  URLs. `vercel.json` serves `/models` and `/textures` as
+  `public, max-age=31536000, immutable`. `vitest.config.ts` defines the same
+  constant so tests can import modules that build URLs.
   **`/draco` deliberately stays `max-age=3600`**: `useGLTF.setDecoderPath`
   builds its own URLs and never carries `?v=`, so `immutable` there would pin
   a stale decoder for a year after an upgrade. Caught in review of the
@@ -144,7 +182,7 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 ## Verification snapshot
 
 - `npm run verify` green end-to-end: asset budget → shader ramps → typecheck
-  (tests + scripts + configs) → lint (0 warnings) → 232 unit tests → build.
+  (tests + scripts + configs) → lint (0 warnings) → 243 unit tests → build.
 - CI green on PR #12 (ubuntu, Node 20) after guarding module-scope
   `navigator` reads (Node 20 has no global `navigator` — platform trap).
 - Browser (dev server, built-in Chromium): 300× joint motion ≤0.36°/frame;
@@ -166,9 +204,11 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 - **Model A terminal-'unavailable' path**: implemented + unit-tested, but the
   live firing of `DefaultLoadingManager.onError` was never confirmed in a
   real browser. Verify only if that state ever matters.
-- **Faster Locate on fresh load**: C.6a (texture-upload batching) LANDED in
-  PR #14. C.6b (network warm on Locate intent) not started; the deep cut is
-  KTX2/meshopt via C.2.
+- **Faster Locate on fresh load**: C.6a (texture-upload batching), C.6b (5 s
+  boot-idle LOD warm) and the 2026-10-23 Locate LOD + two-tier detail LANDED.
+  Follow-ups: browser-verify the LOD→high swap and the high-tier hitch at
+  Inspect; KTX2/meshopt for the full asset via C.2 (decode/VRAM, not the LOD's
+  cold-network path).
 - **Features/engineering roadmap**: `docs/NEXT_STEPS.md` "Roadmap" section is
   the ranked list (day/night countdown, ground track, visible passes, …).
 - **youreyesinspace comparison** (2026-10-19): borrow list D.1-D.9 in

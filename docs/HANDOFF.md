@@ -21,6 +21,40 @@ npm run verify     # asset budget + shader ramps + tsc + unit tests + build
 
 All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
 
+## Session log — 2026-10-23 (Locate LOD + two-tier detail)
+
+Read this block before the older chronological list below; it is the current
+state. The 2026-10-19 PR block follows it.
+
+**The report:** a cold Locate on slow wifi loaded the first tier, departed,
+and then showed the schematic Model A before swapping to IGOAL mid-flight with
+a hitch. Cause: the full asset is 20.5 MB / 2.665M triangles and the departure
+gate is bounded at 8 s; 76% of the triangles are `Details_*` greebles.
+
+**The fix:** a derived Locate tier (`public/models/iss_igoal_locate.glb`,
+5.27 MiB, 784k triangles, 703 nodes, full 12-joint rig, 512 px textures) is
+loaded first for Locate/Follow; the full `iss_igoal.glb` is requested only
+inside the 200/220 km Inspect band. Measured LOD decode ~0.2 s Draco + ~0.5 s
+WebP vs ~3.6 s for the full asset. A high failure keeps the committed LOD; a
+LOD failure demotes to legacy.
+
+- Build: `scripts/build-iss-locate-lod.mjs` / `npm run build:iss-lod` strips
+  details except the silhouette keep-list, simplifies 0.3/0.03, resizes
+  textures to 512, Draco 12/8/10, validates the candidate, then publishes.
+- Runtime: `DetailQuality` adds `locate`; `shouldAwaitDetail` gates on the
+  first committed tier; `isClose` (200/220 km) starts the full asset. A
+  prepared-URL set skips re-preparing the LOD when it becomes the committed
+  model, avoiding a remount hitch.
+- Caching: `__BUILD_ID__` is now the `/models` + `/textures` content hash, so
+  docs/code deploys keep the model cache. A 5 s boot-idle, connection-gated
+  bare fetch warms the LOD; the full asset is not prefetched.
+- Verified: `npm run verify` exit 0 (243 tests), LOD passes
+  `iss-model-manifest --check-only`, high asset unchanged. **Browser checks
+  still owed**: throttled cold Locate, the LOD→high swap at 200 km, and the
+  high model's first-draw hitch at Inspect.
+- Open: KTX2/meshopt for the full asset (C.2); high-tier preload heuristics if
+  the Inspect wait feels long; VRAM overlap while both tiers are resident.
+
 ## Session log — 2026-10-19 (PRs #14/#15, merged 2026-10-23)
 
 Read this block before the older chronological list below; it is the current
@@ -155,10 +189,13 @@ landed through its own PR.
   for tracking, but must not run during a cinematic flight. Overview/local Locate
   retains the two-second `lerpLookAt` path; Reset View and close-Earth departures use
   `CameraFlightPath`, sampled by the same frame-owned transition lifecycle.
-- Locate requests detail before departure. `loadingStore.issDetailStatus` covers
-  downloading, GPU preparation, ready, and failure; `ISSModel` uploads textures over
-  separate frames, compiles against scene lights, and primes buffers with a zero-area
-  scissor. Keep preparation out of the flight and restore shared renderer state.
+- Locate requests the fast detail tier before departure. `loadingStore.issDetail`
+  covers the Locate LOD (downloading, GPU preparation, ready, failure) and the
+  full high attempt separately; `ISSModel` uploads textures over separate frames,
+  compiles against scene lights, and primes buffers with a zero-area scissor. The
+  departure gate waits for any committed tier (`shouldAwaitDetail`), not the full
+  asset; the full high model loads inside the 200/220 km `isClose` band. Keep
+  preparation out of the flight and restore shared renderer state.
 - Locate is ONE simple sweep (`CameraFlightPath`): the eye's direction rotates
   about a single fixed axis (uniform angular rate — a normalized lerp runs ~5×
   faster mid-path on wide sweeps, measured as an 11°/frame view spike) from the
@@ -330,11 +367,13 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 `docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
 it next. As of 2026-10-23 the top of that list is:
 
-1. Re-check the live deployment now that #14/#15 are merged: `/models/*` and
-   `/textures/*` should now answer `immutable` with `?v=`; `/robots.txt`,
-   `/sitemap.xml`, `/og-image.png` 200; `H` hides the HUD; safe-area insets
-   on a notched phone; the orbit ring closed at the station's antipode and
-   the dashes holding across refreshes.
+1. Re-check the live deployment after the #14/#15 and Locate-LOD merges:
+   `/models/*` and `/textures/*` should answer `immutable` with
+   `?v=<asset hash>`; `/robots.txt`, `/sitemap.xml`, `/og-image.png` 200; `H`
+   hides the HUD; safe-area insets on a notched phone; the orbit ring closes
+   at the station's antipode and the dashes hold across refreshes. On a
+   throttled connection, Locate must depart on the detailed LOD (not the
+   schematic) at Follow, with the full model appearing only below 200 km.
 2. **D.1 — penumbra eclipse.** The largest fidelity gap left, and it also
    supplies B.1's day/night countdown. The shadow test is binary in three
    places (`ISSModel`, `ISSAnimations`, `ISSJointKinematics`' `sunlit`); the

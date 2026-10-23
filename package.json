@@ -11,6 +11,7 @@
     "build": "tsc && vite build",
     "check:assets": "node scripts/check-asset-budget.mjs",
     "check:shaders": "node scripts/check-shader-ramps.mjs",
+    "build:iss-lod": "node scripts/build-iss-locate-lod.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint . --max-warnings 0",

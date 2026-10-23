@@ -20,6 +20,7 @@ in [`public/textures/README.md`](public/textures/README.md).
 | Item | Files | Source | Licence |
 |---|---|---|---|
 | ISS, high fidelity | `public/models/iss_igoal.glb` | NASA "International Space Station (ISS) (D) (IGOAL)" asset, rebuilt by `scripts/build-iss-model.mjs` | NASA material, generally not copyrighted — see the [NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/); the NASA insignia and name must not imply endorsement |
+| ISS, Locate LOD | `public/models/iss_igoal_locate.glb` | Derived from the high asset by `scripts/build-iss-locate-lod.mjs` | As above |
 | ISS, legacy detailed | `public/models/international_space_station.glb` | NASA 3D Resources | As above |
 | ISS, schematic fallback | `public/models/International Space Station (ISS) (A).glb` | NASA 3D Resources | As above |
 | Draco decoder | `public/draco/*` | [google/draco](https://github.com/google/draco) | Apache-2.0 |

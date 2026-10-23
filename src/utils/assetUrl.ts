@@ -11,9 +11,11 @@
  * `useGLTF.setDecoderPath` builds its own decoder URLs with no `?v=`, so an
  * immutable route would pin a stale decoder after an upgrade.
  *
- * `__BUILD_ID__` is injected by `vite.config.ts` (commit SHA on Vercel,
- * timestamp locally). One id per build means exactly one re-download after a
- * deploy and none in between.
+ * `__BUILD_ID__` is injected by `vite.config.ts` as a hash of the bytes under
+ * `/models` and `/textures` (not the commit SHA). It changes only when an
+ * asset actually changes, so docs/code-only deploys keep the 20.5 MB model and
+ * the Locate LOD warm in client caches; one asset change re-downloads them
+ * once.
  */
 export function assetUrl(path: string): string {
   return `${path}?v=${__BUILD_ID__}`

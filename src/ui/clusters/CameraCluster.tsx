@@ -1,5 +1,5 @@
 import { useCameraStore } from '@/stores/cameraStore'
-import { useLoadingStore } from '@/stores/loadingStore'
+import { hasCommittedDetail, useLoadingStore } from '@/stores/loadingStore'
 import { CameraStateMachine } from '@/interaction/camera/CameraStateMachine'
 import type { PerspectiveCamera } from 'three'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
@@ -33,7 +33,11 @@ export function CameraCluster(): JSX.Element {
   // committed quality is the legacy fallback, independent of what a pending
   // candidate is doing.
   const showingFallback = issDetail.activeQuality === 'legacy'
+  // "Loading/Preparing ISS" covers the departure wait for the FIRST usable
+  // tier only. Once the Locate LOD is committed, a background high-tier load
+  // must not relabel a Locate flight as loading.
   const isPreparing = isTransitioning && !isResetting
+    && !hasCommittedDetail(issDetail)
     && issDetail.status !== 'ready' && issDetail.status !== 'failed'
     && issDetail.status !== 'unavailable'
   const status = isPreparing

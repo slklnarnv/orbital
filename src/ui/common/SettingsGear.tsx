@@ -121,7 +121,12 @@ export function SettingsGear(): JSX.Element {
           >
             {MODEL_OPTIONS.map((option) => {
               const isSelected = issModelQuality === option.value
-              const isPending = isLoadingModel && issDetail.quality === option.value
+              // The 'high' setting loads the Locate LOD first; show its spinner
+              // on High too, not only when the full asset is the candidate.
+              const isPending = isLoadingModel && (
+                issDetail.quality === option.value
+                || (option.value === 'high' && issDetail.quality === 'locate')
+              )
               return (
                 <button
                   key={option.value}

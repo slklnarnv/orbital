@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -36,13 +40,50 @@ function devApiTle(): Plugin {
   }
 }
 
+const root = path.dirname(fileURLToPath(import.meta.url))
+
+function listFiles(dir: string): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) files.push(...listFiles(full))
+    else if (entry.isFile()) files.push(full)
+  }
+  return files
+}
+
 /**
  * Build id stamped onto the non-content-hashed static assets (/models,
- * /textures, /draco). Those routes are served `immutable` for a year, so a
- * deploy has to change the URL to bust the cache: `?v=<id>`. Vercel exposes
- * the commit SHA; local and preview builds fall back to a timestamp.
+ * /textures). Those routes are served `immutable` for a year, so a deploy has
+ * to change the URL to bust the cache: `?v=<id>`.
+ *
+ * The id is a hash of the asset BYTES, not the commit SHA: docs/code-only
+ * deploys then keep the 20.5 MB high model and the Locate LOD warm in client
+ * caches, while any real asset change still changes every URL. Reading the
+ * ~30 MiB asset tree at config time costs tens of milliseconds.
  */
-const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? Date.now().toString(36)
+function assetBuildId(): string {
+  const dirs = ['public/models', 'public/textures']
+  const files = dirs.flatMap((dir) => listFiles(path.join(root, dir))).sort()
+  const hash = createHash('sha256')
+  for (const file of files) {
+    hash.update(path.relative(root, file).split(path.sep).join('/'))
+    hash.update('\0')
+    hash.update(readFileSync(file))
+    hash.update('\0')
+  }
+  return hash.digest('hex').slice(0, 12)
+}
+
+const BUILD_ID = (() => {
+  try {
+    return assetBuildId()
+  } catch {
+    // A missing asset tree must not break a config load; fall back to the
+    // deployment identity or a build timestamp.
+    return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? Date.now().toString(36)
+  }
+})()
 
 export default defineConfig({
   define: {

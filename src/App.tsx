@@ -4,6 +4,7 @@ import { initTelemetryStoreListeners } from '@/stores/telemetryStore'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
+import { scheduleLocatePrefetch } from '@/rendering/iss/prefetchDetail'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
 import { useHudVisibility } from '@/hooks/useHudVisibility'
 import { TopBar } from '@/ui/layout/TopBar'
@@ -405,7 +406,13 @@ export default function App(): JSX.Element {
     // rate-limited cadence — independent of telemetry mode.
     geoLookupService.start()
 
+    // 4. Warm the fast Locate LOD after boot idle. Locate is a primary
+    // feature; this moves the deferred download off the click path without
+    // preloading it (see prefetchDetail.ts).
+    const cancelPrefetch = scheduleLocatePrefetch()
+
     return () => {
+      cancelPrefetch()
       // Stop producers before removing their consumers. Both lifecycle owners are
       // idempotent so React StrictMode's development remount cannot duplicate work.
       geoLookupService.stop()

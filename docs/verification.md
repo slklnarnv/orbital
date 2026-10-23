@@ -28,6 +28,30 @@ camera, shader, asset, or scene changes.
    position step above a few km and no visible orientation change on the first
    tracking frame after the flight.
 
+## Locate detail tiers
+
+Run against a production build with the network throttled (or cache disabled)
+after a reload. The `high` setting now loads a fast LOD first; the full model
+is Inspect-only.
+
+1. Hover/focus Locate: the network panel must request
+   `/models/iss_igoal_locate.glb?v=…` (~5.3 MiB), not `iss_igoal.glb`.
+   The HUD reads “Loading ISS” / “Preparing ISS” until the LOD commits.
+2. Press Locate. The flight must depart with the detailed LOD visible at the
+   Follow standoff; the schematic Model A must not appear at close range. On a
+   cold, throttled connection the 8 s bound may still expire — verify the
+   prefetch (5 s after boot) makes this case rare.
+3. Zoom below 200 km (Inspect). The full `iss_igoal.glb` must be requested
+   only then, while the LOD stays visible; when it commits, the swap must not
+   show Model A. Note any single-frame hitch from the full model's first draw.
+4. Zoom back above 220 km: the full asset may remain ready; the LOD must still
+   render Follow. Re-enter Inspect: no second download.
+5. Fail the full asset (dev `?failAssets=iss_igoal.glb`): the LOD must remain
+   on screen and the HUD must not report low detail. Fail the LOD instead: the
+   legacy model (or Model A) is the fallback and Locate completes.
+6. With `issModelQuality: legacy`, Locate must load the legacy model and never
+   request either IGOAL tier.
+
 ## Camera navigation
 
 1. In Earth view, compare equal horizontal drags at 35,000 km and 6,500 km

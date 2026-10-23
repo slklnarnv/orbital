@@ -19,6 +19,15 @@
   spans the live period (the 214 km seam is down to the 11–16 km SGP4
   residual) and the dash pattern is phased from the clock instead of the
   moving arc edge; 5 new predictor tests.
+- **Locate LOD + two-tier detail landed 2026-10-23** (`feat/locate-lod`):
+  `public/models/iss_igoal_locate.glb` is derived from the high asset by
+  `scripts/build-iss-locate-lod.mjs` — 5.27 MiB, 784k triangles, 703 nodes and
+  the full 12-joint rig, 512 px textures. Locate/Follow loads this tier; the
+  full 20.5 MiB `iss_igoal.glb` loads only inside the 200/220 km Inspect band.
+  A 5 s boot-idle prefetch warms the LOD (connection-gated), and `__BUILD_ID__`
+  is now an asset-content hash instead of the commit SHA, so docs/code deploys
+  no longer invalidate the model cache. Full-high failure keeps the LOD;
+  LOD failure demotes to legacy.
 - Measured on the C.6a change: `iss_igoal.glb` carries 73 WebP textures;
   uploading them costs 178 ms of GL work on this machine (2.44 ms each).
   The old loop yielded one frame per texture (73 frames ≈ 1.2 s at 60 Hz);
@@ -27,8 +36,8 @@
   had been switched to `immutable` although `useGLTF.setDecoderPath` builds
   its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
   `/textures` are immutable, and both are versioned.
-- Green on merged main: `npm run verify` (232 unit tests + build) and CI on
-  both merge commits.
+- Green on merged main: `npm run verify` (243 unit tests + build) and CI on
+  the merge commits.
 - Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
   DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
   `plans/PROGRESS.md`.
@@ -37,14 +46,15 @@
 
 ## Next (ranked)
 
-1. Re-check the live deployment after the #14/#15 merges: console free of CSP
-   errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404; Nauka,
-   wing tilt and flare up close; `/models/*` and `/textures/*` now answering
-   `immutable` with `?v=<build id>` (before these PRs they answered
-   `max-age=3600`); `/robots.txt`, `/sitemap.xml` and `/og-image.png` all
-   200; `H` hides the HUD; safe-area insets on a notched phone; the orbit
-   ring closes at the station's antipode and the dashes hold across
-   refreshes.
+1. Re-check the live deployment after the #14/#15 and Locate-LOD merges:
+   console free of CSP errors; `/api/tle` 200 with its cache header;
+   `/api/tle?x=1` 404; Nauka, wing tilt and flare up close; `/models/*` and
+   `/textures/*` answering `immutable` with `?v=<asset hash>`;
+   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200; `H` hides the
+   HUD; safe-area insets on a notched phone; the orbit ring closes at the
+   station's antipode and the dashes hold across refreshes; on a throttled
+   connection, Locate departs with the detailed LOD (not the schematic) at
+   Follow and the full model appears only below 200 km.
 2. **D.1 - penumbra eclipse** (comparison section below). The largest
    fidelity gap left, and it pays for B.1's countdown at the same time.
 3. Roadmap B.1-B.3: orbital day/night countdown, ground track + footprint,
@@ -140,37 +150,35 @@ can be extended. "Touches" lists the files expected to change.
    a high-contrast HUD class.
 5. **Release routine.** Scheduled CI job running `npm run refresh:tle` that
    opens a PR when the fallback changes; a short `CHANGELOG.md`.
-6. **Faster Locate (fresh load).** Locating on a cold session waits for the
-   full high-fidelity pipeline, and the user report is that it is slower than
-   it should be. The cost chain: network fetch of `iss_igoal.glb` (19.6 MiB;
-   after PR #14 it is cached `immutable` for a year at a versioned URL, so
-   the fetch happens once per deploy rather than once per hour) → Draco
-   decode of ~2.67 M triangles in a worker → `prepare()` in `ISSModel.tsx`
-   uploading the textures → `compileAsync` → scissor prime. Locate's
-   departure gate waits for all of it (deliberate: a mid-flight model pop was
-   rejected in fd5d353/plan 001 R2 — do not reopen that without a measured
-   reason). Minimal cuts, in order:
-   a. **Batch the texture uploads** on a per-frame time budget (~6 ms/frame)
-      instead of one texture per frame — removes the single biggest pure-yield
-      cost, no visual risk. Touches: `ISSModel.tsx` `prepare()`.
-      **LANDED 2026-10-19 (PR #14).** Measured: 73 WebP textures, 178 ms of
-      GL work (2.44 ms each); 73 frames → 30 frames. No profiling of the
-      remaining chain was done — the next cut should start with a trace.
-   b. **Warm the network fetch** of the GLB after boot idle (~5 s) and on
-      Locate hover/focus: a low-priority `fetch` into the HTTP cache
-      (the URL is now versioned and `immutable`, so the warm is a one-time
-      cost per deploy, not a revalidation), connection-gated (skip on
-      `saveData`/2G), silent failure, once per session. Deliberately use a
-      bare fetch, NOT `useGLTF.preload`: a failed preload fires the
-      `DefaultLoadingManager` error hook that maps to the terminal
-      "ISS unavailable" state. Touches: new small module +
-      `CameraCluster` hover/focus.
-   c. Only if still slow after a+b: the deep fix is decode/upload cost —
-      KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2,
-      which already covers the texture half).
+6. **Faster Locate (fresh load).** Locate is a primary feature. A cold session
+   used to wait for the full high pipeline, and on a slow connection the 8 s
+   departure gate expired, so the camera departed on Model A and swapped
+   mid-flight. **LANDED 2026-10-23: the Locate LOD + two-tier detail.**
+   Locate/Follow now fetches `iss_igoal_locate.glb` (5.27 MiB, 784k triangles,
+   512 px textures) instead of the 20.5 MiB full asset; `iss_igoal.glb` loads
+   only inside the 200/220 km Inspect band, where its fine detail resolves.
+   Measured LOD chain: ~0.2 s Draco + ~0.5 s WebP decode (Node; browser similar)
+   + GPU preparation, versus ~3.6 s of CPU decode for the full asset. The LOD
+   fits the 8 s gate at roughly 5–8 Mbps; the full asset needs ~25–50 Mbps.
 
-Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a landed in
-PR #14; C.6b is still cheap enough to ride along with any pass).
+   Remaining cuts:
+   a. **Batch the texture uploads** on a per-frame time budget (~6 ms/frame)
+      instead of one texture per frame. **LANDED 2026-10-19 (PR #14).**
+      Measured: 73 WebP textures, 178 ms of GL work (2.44 ms each); 73 frames
+      → 30 frames.
+   b. **Warm the network fetch** after boot idle (~5 s) and on Locate
+      hover/focus, into the HTTP cache, connection-gated (skip
+      `saveData`/2G), silent failure, once per session; deliberately a bare
+      `fetch`, NOT `useGLTF.preload` (a failed preload maps to the terminal
+      "ISS unavailable" state). **LANDED 2026-10-23 for the LOD**: hover/focus
+      already starts the first tier, and a 5 s boot-idle warm was added. The
+      full high model is NOT prefetched — it loads at Inspect.
+   c. Only if the full Inspect load still feels slow: decode/VRAM cost —
+      KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2).
+      This does not reduce the LOD's cold-network path.
+
+Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a/C.6b and the
+Locate LOD landed 2026-10-23; C.2 remains for the full-asset decode/VRAM path).
 
 ## Reference comparison - berkcomba/youreyesinspace (2026-10-19)
 
@@ -250,25 +258,28 @@ did too. Confirmed against production: `/models/iss_igoal.glb` answered
 defines `__BUILD_ID__`, every non-content-hashed URL carries `?v=<id>`, and
 nginx sends `immutable` for a year - a deploy still busts it.
 
-First cut: `define: { __BUILD_ID__ }` in `vite.config.ts` (env
-`VERCEL_GIT_COMMIT_SHA`, falling back to a build timestamp); append
-`?v=${__BUILD_ID__}` to the three model URLs in `ISSModel.tsx` and the four
-Earth maps + starmap in `EarthConstants.ts` / `EnvironmentLayer.tsx`; flip
-`/models` and `/textures` to `public, max-age=31536000, immutable`.
-**Do NOT flip `/draco`**: `useGLTF.setDecoderPath('/draco/')` builds its own
-URLs and never carries `?v=`, so `immutable` there would pin a stale decoder
-for a year after any upgrade. It stays `max-age=3600`.
+First cut: `define: { __BUILD_ID__ }` in `vite.config.ts` (a content hash of
+`/models` + `/textures`, falling back to the commit SHA/timestamp if the tree
+cannot be read); append `?v=${__BUILD_ID__}` to the model URLs in
+`ISSModel.tsx` / `modelUrls.ts` and the four Earth maps + starmap in
+`EarthConstants.ts` / `EnvironmentLayer.tsx`; flip `/models` and `/textures`
+to `public, max-age=31536000, immutable`. **Do NOT flip `/draco`**:
+`useGLTF.setDecoderPath('/draco/')` builds its own URLs and never carries
+`?v=`, so `immutable` there would pin a stale decoder for a year after any
+upgrade. It stays `max-age=3600`.
 
-Watch: drei's `useGLTF` caches by URL, so a new id means one re-download per
-deploy (intended). `FALLBACK_URL_PATTERN` is a substring regex and still
-matches with the query string. `check-asset-budget.mjs` reads disk paths and
-is unaffected.
+Watch: drei's `useGLTF` caches by URL, so a new id means one re-download when
+the assets actually change (intended); a docs/code-only deploy keeps the id
+stable. `FALLBACK_URL_PATTERN` is a substring regex and still matches with the
+query string. `check-asset-budget.mjs` reads disk paths and is unaffected.
 
 **Landed (PR #14).** `src/utils/assetUrl.ts` + `src/types/build.d.ts`; the
 `/draco` exception above was caught reviewing the deployed preview and fixed
 in `c1bc242`. A test importing `EarthConstants` failed until
 `vitest.config.ts` mirrored the `__BUILD_ID__` define — vitest does not read
-`vite.config.ts`.
+`vite.config.ts`. **2026-10-23:** the id moved from the commit SHA to the
+asset-content hash, so docs/code deploys no longer invalidate the 20.5 MB
+model or the Locate LOD.
 
 Touches: `vite.config.ts`, `ISSModel.tsx`, `EarthConstants.ts`,
 `EnvironmentLayer.tsx`, `vercel.json`, the global type declaration.

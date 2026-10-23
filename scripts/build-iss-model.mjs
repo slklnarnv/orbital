@@ -79,7 +79,7 @@ const DETAILS_ERROR = 0.005
 // ~500 m² of panel faces across P1/S1; support frames/edges stay put).
 const PANEL_NORMAL_Y_THRESHOLD = 0.7
 
-async function createIO() {
+export async function createIO() {
   return new NodeIO()
     .registerExtensions([
       KHRDracoMeshCompression,

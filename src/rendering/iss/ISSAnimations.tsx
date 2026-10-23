@@ -37,7 +37,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import type { IssModelQuality } from '@/stores/settingsStore'
+import type { DetailQuality } from '@/stores/loadingStore'
 import {
   BGA_SLEW_DEG_PER_SIM_SECOND,
   IGOAL_JOINT_DEFS,
@@ -72,7 +72,7 @@ const STATIC_CONFIG: ModelAnimationConfig = {
   limits: IGOAL_TRRJ_LIMITS,
 }
 
-function configForQuality(quality: IssModelQuality, rigMetadata: RigMetadataParse | undefined): ModelAnimationConfig {
+function configForQuality(quality: DetailQuality, rigMetadata: RigMetadataParse | undefined): ModelAnimationConfig {
   // A rebuilt asset embeds its rig contract in scene extras; use it when it
   // validates (it mirrors the built-in definitions, which remain the
   // fallback for pre-rebuild assets). Invalid metadata never reaches here:
@@ -84,7 +84,10 @@ function configForQuality(quality: IssModelQuality, rigMetadata: RigMetadataPars
       limits: rigMetadata.metadata.limits,
     }
   }
-  if (quality !== 'high') return STATIC_CONFIG
+  // The Locate LOD is derived from the IGOAL asset and shares its rig, so it
+  // falls back to the same definitions as high. Only legacy is deliberately
+  // static.
+  if (quality === 'legacy') return STATIC_CONFIG
   return {
     joints: IGOAL_JOINT_DEFS,
     oscillators: IGOAL_OSCILLATOR_SPECS,
@@ -104,7 +107,7 @@ interface JointRuntime {
 
 export interface IssAnimationsProps {
   rootRef: React.RefObject<THREE.Group | null>
-  quality: IssModelQuality
+  quality: DetailQuality
   /** Validated scene-extras rig metadata (absent for pre-rebuild assets). */
   rigMetadata?: RigMetadataParse
   /** Detail contract failure (missing/unresolvable rig) — must not animate
