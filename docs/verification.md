@@ -34,6 +34,13 @@ Run against a production build with the network throttled (or cache disabled)
 after a reload. The `high` setting now loads a fast LOD first; the full model
 is Inspect-only.
 
+**Verified 2026-10-23** (headless Chrome 156, live build `aecac83bf949`,
+unthrottled): Locate reached `Follow · Locked` and requested only
+`iss_igoal_locate.glb` (4.80 MB transfer / 2.4 s first load, then a 49 ms cache
+hit on the click); zooming to `Inspect · Locked` requested `iss_igoal.glb` once
+(17.95 MB / 7.4 s); no console errors. The first-draw hitch and the throttled
+cold-Locate path were not measured — run the checklist below for those.
+
 1. Hover/focus Locate: the network panel must request
    `/models/iss_igoal_locate.glb?v=…` (~5.3 MiB), not `iss_igoal.glb`.
    The HUD reads “Loading ISS” / “Preparing ISS” until the LOD commits.

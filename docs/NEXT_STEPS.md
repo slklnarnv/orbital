@@ -27,7 +27,10 @@
   A 5 s boot-idle prefetch warms the LOD (connection-gated), and `__BUILD_ID__`
   is now an asset-content hash instead of the commit SHA, so docs/code deploys
   no longer invalidate the model cache. Full-high failure keeps the LOD;
-  LOD failure demotes to legacy.
+  LOD failure demotes to legacy. Browser-verified 2026-10-23 (headless Chrome,
+  live): Locate requested only the LOD and reached `Follow · Locked`; Inspect
+  requested the full asset once; no console errors. A human visual/hitch pass
+  and a throttled cold run remain.
 - Measured on the C.6a change: `iss_igoal.glb` carries 73 WebP textures;
   uploading them costs 178 ms of GL work on this machine (2.44 ms each).
   The old loop yielded one frame per texture (73 frames ≈ 1.2 s at 60 Hz);

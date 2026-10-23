@@ -54,9 +54,14 @@ removed ~14% on this CAD-style mesh, so the fix is a derived Locate tier:
 - **Tests**: 246 total (14 lifecycle/gate, 5 LOD build/contract, 3 build-id
   determinism). `npm run verify` exit 0. The LOD passes
   `iss-model-manifest --check-only`; the high asset is unchanged.
-- **Not yet browser-verified**: the two-tier swap, the high-tier hitch at
-  Inspect, and throttled-network Locate need a real browser pass. KTX2/meshopt
-  for the full asset (C.2) remains the decode/VRAM follow-up.
+- **Browser-verified 2026-10-23** (headless Chrome 156, live build
+  `aecac83bf949`): a fresh load + Locate reached `Follow · Locked` and
+  requested only `iss_igoal_locate.glb` (first fetch 4.80 MB / 2.4 s, later
+  cache hit 49 ms); zooming to `Inspect · Locked` requested `iss_igoal.glb`
+  once (17.95 MB / 7.4 s); no console errors. Remaining: a human visual pass on
+  the swap/hitch and a throttled-network repeat; the first-draw hitch was not
+  measured. KTX2/meshopt for the full asset (C.2) remains the decode/VRAM
+  follow-up.
 
 
 ### Orbit line repair (2026-10-19, PR #15)

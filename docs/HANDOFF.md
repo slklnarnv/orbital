@@ -49,9 +49,12 @@ LOD failure demotes to legacy.
   docs/code deploys keep the model cache. A 5 s boot-idle, connection-gated
   bare fetch warms the LOD; the full asset is not prefetched.
 - Verified: `npm run verify` exit 0 (246 tests), LOD passes
-  `iss-model-manifest --check-only`, high asset unchanged. **Browser checks
-  still owed**: throttled cold Locate, the LOD→high swap at 200 km, and the
-  high model's first-draw hitch at Inspect.
+  `iss-model-manifest --check-only`, high asset unchanged. **Browser-verified
+  2026-10-23** (headless Chrome 156, live): Locate reached `Follow · Locked`
+  and requested only the LOD (4.80 MB / 2.4 s, then a 49 ms cache hit);
+  zooming to `Inspect · Locked` requested `iss_igoal.glb` once
+  (17.95 MB / 7.4 s); no console errors. Remaining: a human visual pass on the
+  swap/hitch and a throttled cold-Locate repeat.
 - Open: KTX2/meshopt for the full asset (C.2); high-tier preload heuristics if
   the Inspect wait feels long; VRAM overlap while both tiers are resident.
 
