@@ -147,10 +147,16 @@ export function getTLEAgeHours(tle: TLEData, nowMs: number): number {
   return (nowMs - epoch.getTime()) / (1000 * 3600)
 }
 
-/** Compute confidence score (0–1) based on TLE age */
+/**
+ * Compute confidence score (0–1) based on TLE age.
+ * Uses the magnitude of the age: SGP4 error grows in both directions from the
+ * epoch, so seeking days before it must not read as 100 % confidence.
+ */
 export function tleConfidence(ageHours: number): number {
-  if (ageHours < 24) return 1.0
-  if (ageHours < 72) return 0.9
-  if (ageHours < 168) return 0.7  // 7 days
+  if (!Number.isFinite(ageHours)) return 0.4
+  const age = Math.abs(ageHours)
+  if (age < 24) return 1.0
+  if (age < 72) return 0.9
+  if (age < 168) return 0.7  // 7 days
   return 0.4
 }

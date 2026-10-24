@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTLEString, validateTLEData } from '@/core/orbital/TLEParser'
+import { parseTLEString, tleConfidence, validateTLEData } from '@/core/orbital/TLEParser'
 import fallbackTLE from '@/data/fallback-tle.json'
 import type { TLEData } from '@/types/orbital'
 
@@ -67,5 +67,20 @@ describe('TLE validation', () => {
       reason: 'unexpected-catalog',
     })
     expect(parseTLEString(`${VALID_LINE_1.slice(0, -1)}\n${VALID_LINE_2}`, 'celestrak', 25544)).toBeNull()
+  })
+})
+
+describe('tleConfidence', () => {
+  it.each([
+    [0, 1],
+    [23.9, 1],
+    [-23.9, 1],
+    [-30, 0.9],
+    [-100, 0.7],
+    [-200, 0.4],
+    [200, 0.4],
+    [Number.NaN, 0.4],
+  ])('maps an age of %s h to %s', (ageHours, expected) => {
+    expect(tleConfidence(ageHours)).toBe(expected)
   })
 })
