@@ -62,6 +62,7 @@ import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
+import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
 import {
   FALLBACK_MODEL_URL,
   HIGH_MODEL_URL,
@@ -374,66 +375,81 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         return
       }
       useLoadingStore.getState().setIssDetailPreparing(attempt)
-      const textures = new Set<THREE.Texture>()
-      const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
-      detailedScene.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return
-        meshes.push({ mesh: object, frustumCulled: object.frustumCulled })
-        const materials = Array.isArray(object.material) ? object.material : [object.material]
-        for (const material of materials) {
-          for (const value of Object.values(material)) {
-            if (value instanceof THREE.Texture) textures.add(value)
+      // With Bloom on, the visible frame is drawn into a HalfFloat target, not
+      // the default framebuffer; prepare against the same kind of target.
+      const composerActive = useSettingsStore.getState().postprocessing
+      const prepTarget = composerActive ? createPreparationTarget() : null
+      try {
+        const textures = new Set<THREE.Texture>()
+        const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
+        detailedScene.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return
+          meshes.push({ mesh: object, frustumCulled: object.frustumCulled })
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+          for (const material of materials) {
+            for (const value of Object.values(material)) {
+              if (value instanceof THREE.Texture) textures.add(value)
+            }
+          }
+        })
+
+        // Upload textures in time-budgeted batches while the camera stays put. A
+        // resolved GLTF alone is not ready: lazy texture uploads and shader linking
+        // otherwise hitch the first close-up frame. Compile against the actual
+        // scene's lighting.
+        //
+        // The old loop yielded one frame per texture (73 textures ≈ 73 frames ≈
+        // 1.2 s at 60 Hz, 2.4 s at 30 Hz) — pure yielding, since each initTexture
+        // is a sub-millisecond GL call. Uploading until a frame's budget is spent
+        // keeps the GPU work identical while cutting the wait by ~90%.
+        let budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
+        for (const texture of textures) {
+          if (cancelled) return
+          gl.initTexture(texture)
+          if (performance.now() >= budgetEnd) {
+            await nextFrame()
+            if (cancelled) return
+            budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
           }
         }
-      })
-
-      // Upload textures in time-budgeted batches while the camera stays put. A
-      // resolved GLTF alone is not ready: lazy texture uploads and shader linking
-      // otherwise hitch the first close-up frame. Compile against the actual
-      // scene's lighting.
-      //
-      // The old loop yielded one frame per texture (73 textures ≈ 73 frames ≈
-      // 1.2 s at 60 Hz, 2.4 s at 30 Hz) — pure yielding, since each initTexture
-      // is a sub-millisecond GL call. Uploading until a frame's budget is spent
-      // keeps the GPU work identical while cutting the wait by ~90%.
-      let budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
-      for (const texture of textures) {
+        await nextFrame()
         if (cancelled) return
-        gl.initTexture(texture)
-        if (performance.now() >= budgetEnd) {
-          await nextFrame()
-          if (cancelled) return
-          budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
-        }
-      }
-      await nextFrame()
-      if (cancelled) return
-      await gl.compileAsync(detailedScene, camera, scene)
-      await nextFrame()
-      if (cancelled || !groupRef.current) return
+        // compileAsync builds the programs synchronously in its first call (using
+        // the current target), so the target is restored right after the call and
+        // not held across the await — the composer renders in between.
+        const compiled = withPreparationTarget(gl, prepTarget, () =>
+          gl.compileAsync(detailedScene, camera, scene))
+        await compiled
+        await nextFrame()
+        if (cancelled || !groupRef.current) return
 
-      // A zero-area scissor uploads vertex buffers without writing any pixels.
-      // Unlike an offscreen target, it uses the exact on-screen shader variant.
-      const group = groupRef.current
-      const wasVisible = group.visible
-      const previousScissor = gl.getScissor(new THREE.Vector4())
-      const previousScissorTest = gl.getScissorTest()
-      try {
-        group.visible = true
-        for (const { mesh } of meshes) mesh.frustumCulled = false
-        gl.setScissor(0, 0, 0, 0)
-        gl.setScissorTest(true)
-        gl.render(scene, camera)
+        // A zero-area scissor uploads vertex buffers without writing any pixels.
+        // The prime runs against the same kind of target the visible frame uses
+        // (the default framebuffer without Bloom, a HalfFloat target with Bloom),
+        // so it warms the exact shader variant that will be drawn.
+        const group = groupRef.current
+        const wasVisible = group.visible
+        const previousScissor = gl.getScissor(new THREE.Vector4())
+        const previousScissorTest = gl.getScissorTest()
+        try {
+          group.visible = true
+          for (const { mesh } of meshes) mesh.frustumCulled = false
+          gl.setScissor(0, 0, 0, 0)
+          gl.setScissorTest(true)
+          withPreparationTarget(gl, prepTarget, () => gl.render(scene, camera))
+        } finally {
+          gl.setScissor(previousScissor)
+          gl.setScissorTest(previousScissorTest)
+          group.visible = wasVisible
+          for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
+        }
+        await nextFrame()
+        if (!cancelled) {
+          preparedModelUrls.add(spec.url)
+          onReady(attempt)
+        }
       } finally {
-        gl.setScissor(previousScissor)
-        gl.setScissorTest(previousScissorTest)
-        group.visible = wasVisible
-        for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
-      }
-      await nextFrame()
-      if (!cancelled) {
-        preparedModelUrls.add(spec.url)
-        onReady(attempt)
+        prepTarget?.dispose()
       }
     }
 
