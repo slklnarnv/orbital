@@ -136,13 +136,16 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
   useEffect(() => {
     let pmrem: THREE.PMREMGenerator | null = null
     let room: RoomEnvironment | null = null
-    let envTexture: THREE.Texture | null = null
+    // Keep the render target, not just its texture: three ignores dispose() on a
+    // render-target texture, so only the target's dispose() frees the
+    // framebuffer and depth attachments.
+    let envTarget: THREE.WebGLRenderTarget | null = null
 
     const release = () => {
-      envTexture?.dispose()
+      envTarget?.dispose()
       room?.dispose()
       pmrem?.dispose()
-      envTexture = null
+      envTarget = null
       room = null
       pmrem = null
     }
@@ -151,8 +154,8 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
       release()
       pmrem = new THREE.PMREMGenerator(gl)
       room = new RoomEnvironment()
-      envTexture = pmrem.fromScene(room, 0.04).texture
-      scene.environment = envTexture
+      envTarget = pmrem.fromScene(room, 0.04)
+      scene.environment = envTarget.texture
       scene.environmentIntensity = 0.28
     }
 
