@@ -61,6 +61,20 @@ async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
   }
 }
 
+export interface TLEFetchResult {
+  tle: TLEData
+  /**
+   * True when the proxy answered from its warm memo after an upstream failure
+   * (`X-TLE-Stale: 1`). The element set is valid but not freshly confirmed.
+   */
+  stale: boolean
+}
+
+async function fallbackResult(noradId: number): Promise<TLEFetchResult | null> {
+  const tle = await fetchBrowserFallback(noradId)
+  return tle ? { tle, stale: false } : null
+}
+
 /**
  * Fetches a fresh TLE through the same-origin Vercel Function.
  *
@@ -69,10 +83,13 @@ async function fetchBrowserFallback(noradId: number): Promise<TLEData | null> {
  * If the proxy itself is unavailable, the client retains one emergency request
  * to the CORS-open wheretheiss.at mirror before TelemetryManager falls back to
  * cached or packaged telemetry.
+ *
+ * Also reports whether the proxy flagged its answer stale, so the caller can
+ * keep a short retry ramp instead of resting for the full refresh interval.
  */
-export async function fetchTLEFromCelesTrak(
+export async function fetchTLEWithStatus(
   noradId: number = ISS_NORAD_ID,
-): Promise<TLEData | null> {
+): Promise<TLEFetchResult | null> {
   const startTime = performance.now()
 
   try {
@@ -84,7 +101,7 @@ export async function fetchTLEFromCelesTrak(
     if (!response.ok) {
       const elapsed = performance.now() - startTime
       console.warn(`[TLE] Proxy request failed with status ${response.status} in ${elapsed.toFixed(0)}ms`)
-      return fetchBrowserFallback(noradId)
+      return fallbackResult(noradId)
     }
 
     let candidate: unknown
@@ -93,23 +110,30 @@ export async function fetchTLEFromCelesTrak(
     } catch {
       const elapsed = performance.now() - startTime
       console.warn(`[TLE] Proxy returned invalid JSON in ${elapsed.toFixed(0)}ms`)
-      return fetchBrowserFallback(noradId)
+      return fallbackResult(noradId)
     }
 
     const validated = validateTLEData(clampFutureFetchTime(candidate), noradId)
     const elapsed = performance.now() - startTime
     if (!validated.ok) {
       console.warn(`[TLE] Proxy returned invalid data in ${elapsed.toFixed(0)}ms`)
-      return fetchBrowserFallback(noradId)
+      return fallbackResult(noradId)
     }
 
     console.log(`[TLE] Proxy success in ${elapsed.toFixed(0)}ms`)
-    return validated.tle
+    return { tle: validated.tle, stale: response.headers.get('X-TLE-Stale') === '1' }
   } catch (error) {
     const elapsed = performance.now() - startTime
     const timedOut = error instanceof DOMException
       && (error.name === 'TimeoutError' || error.name === 'AbortError')
     console.warn(`[TLE] Proxy ${timedOut ? 'timed out' : 'unreachable'} in ${elapsed.toFixed(0)}ms`)
-    return fetchBrowserFallback(noradId)
+    return fallbackResult(noradId)
   }
+}
+
+/** Thin wrapper kept for callers that only need the element set. */
+export async function fetchTLEFromCelesTrak(
+  noradId: number = ISS_NORAD_ID,
+): Promise<TLEData | null> {
+  return (await fetchTLEWithStatus(noradId))?.tle ?? null
 }

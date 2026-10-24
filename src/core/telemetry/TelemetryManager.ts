@@ -1,4 +1,4 @@
-import { fetchTLEFromCelesTrak } from '../api/CelesTrakClient'
+import { fetchTLEWithStatus } from '../api/CelesTrakClient'
 import { tleCache } from '../api/TLECache'
 import { ApiRateLimiter } from '../api/ApiRateLimiter'
 import { networkMonitor } from './NetworkMonitor'
@@ -187,7 +187,11 @@ export class TelemetryManager {
     const cached = await tleCache.get(this._entity.config.noradId)
     if (!this.isActive(generation)) return
 
-    if (cached) {
+    // The runtime's first step can start the live fetch while this await is
+    // pending; if a network TLE already won the race, the cache is older by
+    // construction and must not replace it (the next refresh is 4 h away).
+    const current = this._entity.currentTLE
+    if (cached && !(current && current.source !== 'fallback')) {
       const installed = await this._installCandidate(cached, generation, false)
       if (!this.isActive(generation)) return
       if (!installed) await tleCache.remove(this._entity.config.noradId)
@@ -223,12 +227,20 @@ export class TelemetryManager {
     }
 
     try {
-      const tle = await fetchTLEFromCelesTrak(this._entity.config.noradId)
+      const result = await fetchTLEWithStatus(this._entity.config.noradId)
       if (!this.isActive(generation)) return
 
-      if (tle && await this._installCandidate(tle, generation, true)) {
+      if (result && await this._installCandidate(result.tle, generation, true)) {
         if (!this.isActive(generation)) return
-        this._rateLimiter.recordSuccess()
+        if (result.stale) {
+          // The proxy answered from its warm memo after an upstream failure
+          // (HTTP 200 + X-TLE-Stale). The TLE is usable, but recordSuccess()
+          // would rest the next fetch 4 h away even if upstream recovers in
+          // minutes — keep the short exponential retry ramp instead.
+          this._rateLimiter.recordFailure()
+        } else {
+          this._rateLimiter.recordSuccess()
+        }
         networkMonitor.recordSuccess()
         this._recalculateMode()
       } else {

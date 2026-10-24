@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrbitalEntity } from '@/core/entities/OrbitalEntity'
 import type { OrbitalState, TLEData } from '@/types/orbital'
 
@@ -13,10 +13,15 @@ const mocks = vi.hoisted(() => ({
   networkFailure: vi.fn(),
   busOn: vi.fn(),
   busEmit: vi.fn(),
+  stale: false,
 }))
 
 vi.mock('@/core/api/CelesTrakClient', () => ({
   fetchTLEFromCelesTrak: mocks.fetchTLE,
+  fetchTLEWithStatus: async (...args: unknown[]) => {
+    const tle = await mocks.fetchTLE(...args)
+    return tle ? { tle, stale: mocks.stale } : null
+  },
 }))
 
 vi.mock('@/core/api/TLECache', () => ({
@@ -46,6 +51,7 @@ vi.mock('@/core/telemetry/TelemetryEventBus', () => ({
 
 import { TelemetryManager } from '@/core/telemetry/TelemetryManager'
 import { networkMonitor } from '@/core/telemetry/NetworkMonitor'
+import { buildSimulationTime } from '@/core/clock/SimulationTime'
 
 const currentTLE: TLEData = {
   line1: '1 25544U 98067A   26194.12129675  .00004316  00000+0  86456-4 0  9991',
@@ -71,11 +77,18 @@ const orbitalState: OrbitalState = {
 }
 
 beforeEach(() => {
-  for (const mock of Object.values(mocks)) mock.mockReset()
+  for (const mock of Object.values(mocks)) {
+    if (typeof mock === 'function') mock.mockReset()
+  }
+  mocks.stale = false
   mocks.cacheGet.mockResolvedValue(null)
   mocks.cacheSet.mockResolvedValue(undefined)
   mocks.cacheRemove.mockResolvedValue(undefined)
   mocks.busOn.mockImplementation(() => vi.fn())
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('TelemetryManager lifecycle', () => {
@@ -270,5 +283,79 @@ describe('TelemetryManager lifecycle', () => {
     } finally {
       monitor.isOnline = true
     }
+  })
+
+  it.each([
+    [true, 2],
+    [false, 1],
+  ])('retry cadence after a successful install (stale=%s) fetches %s time(s) within 6 s', async (stale, expectedFetches) => {
+    mocks.stale = stale
+    mocks.fetchTLE.mockResolvedValue(currentTLE)
+
+    let installedTLE: TLEData | null = null
+    const entity: OrbitalEntity = {
+      config: { id: 'iss-test', name: 'ISS test', noradId: 25544, orbitColor: '#fff' },
+      loadTLE: vi.fn((tle: TLEData) => {
+        installedTLE = tle
+        return true
+      }),
+      clearTLE: vi.fn(() => { installedTLE = null }),
+      propagate: vi.fn(() => orbitalState),
+      hasTLE: () => installedTLE !== null,
+      get currentTLE() { return installedTLE },
+    }
+
+    const manager = new TelemetryManager(entity)
+    await manager.start()
+    // The install itself succeeds either way; only the next-fetch timing differs.
+    expect(mocks.busEmit).toHaveBeenCalledWith('TLE_REFRESHED', {
+      entityId: 'iss-test',
+      tle: currentTLE,
+    })
+    expect(mocks.fetchTLE).toHaveBeenCalledTimes(1)
+
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(6_000)
+    manager.update(buildSimulationTime(Date.now(), 100, 100))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(mocks.fetchTLE).toHaveBeenCalledTimes(expectedFetches)
+
+    manager.stop()
+  })
+
+  it('does not replace a network TLE with an older cached one during bootstrap', async () => {
+    const cached: TLEData = { ...currentTLE, source: 'fallback' as const }
+    let resolveCache: (tle: TLEData) => void = () => undefined
+    mocks.cacheGet.mockImplementation(
+      () => new Promise<TLEData>((resolve) => { resolveCache = resolve }),
+    )
+    mocks.fetchTLE.mockResolvedValue(null)
+
+    // The live fetch (started by the runtime's first step) already installed.
+    let installedTLE: TLEData | null = currentTLE
+    const entity: OrbitalEntity = {
+      config: { id: 'iss-test', name: 'ISS test', noradId: 25544, orbitColor: '#fff' },
+      loadTLE: vi.fn((tle: TLEData) => {
+        installedTLE = tle
+        return true
+      }),
+      clearTLE: vi.fn(() => { installedTLE = null }),
+      propagate: vi.fn(() => orbitalState),
+      hasTLE: () => installedTLE !== null,
+      get currentTLE() { return installedTLE },
+    }
+
+    const manager = new TelemetryManager(entity)
+    const started = manager.start()
+    await vi.waitFor(() => expect(mocks.cacheGet).toHaveBeenCalledTimes(1))
+    resolveCache(cached)
+    await started
+
+    expect(entity.loadTLE).not.toHaveBeenCalledWith(cached)
+    expect(installedTLE).toEqual(currentTLE)
+    expect(mocks.cacheRemove).not.toHaveBeenCalled()
+
+    manager.stop()
   })
 })
