@@ -10,8 +10,8 @@ npm run verify   # asset budget -> shader ramps -> typecheck -> lint -> unit tes
 ```
 
 It is the release gate; never commit red. A first run also catches environment
-surprises (Node 20 has no global `navigator` - guard module-scope browser
-reads; this broke CI once). Requires Node 20+.
+surprises (guard module-scope browser reads such as `navigator`; Node 20
+lacked a global `navigator` and this broke CI once). Requires Node 22+.
 
 ## What this is
 

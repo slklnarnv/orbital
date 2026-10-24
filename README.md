@@ -126,7 +126,7 @@ tests/unit/              Core, API, camera, rendering, and shader tests
 
 ## Development
 
-Requires Node.js 20 or later.
+Requires Node.js 22 or later.
 
 ```bash
 git clone https://github.com/slklnarnv/orbital.git
