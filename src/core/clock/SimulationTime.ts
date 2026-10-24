@@ -1,4 +1,4 @@
-import { UNIX_EPOCH_JULIAN } from '@/utils/constants'
+import { JULIAN_DATE_J2000, UNIX_EPOCH_JULIAN } from '@/utils/constants'
 import type { SimulationTime } from '@/types/orbital'
 
 
@@ -11,7 +11,7 @@ export type { SimulationTime }
  * Uses the IAU 1982 expression — accurate to ~0.1s over centuries.
  */
 export function computeGMST(julianDate: number): number {
-  const T = (julianDate - 2451545.0) / 36525.0;
+  const T = (julianDate - JULIAN_DATE_J2000) / 36525.0;
   // GMST in seconds of time (IAU-1982 polynomial — output is seconds of sidereal time)
   let gmst =
     67310.54841 +
