@@ -36,6 +36,9 @@ const OPEN_METEO_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 const CELL_DEG = 2
 const GEO_CELL_TTL_MS = 30 * 24 * 60 * 60 * 1000   // place names are stable
 const WX_CELL_TTL_MS = 15 * 60 * 1000              // weather is not
+// Weather older than an hour is not "current": the HUD hides it rather than
+// show it as live while the 15 min refetch is rate-limited or failing.
+const WX_DISPLAY_MAX_MS = 60 * 60 * 1000
 const TICK_INTERVAL_MS = 5_000
 const FIRST_TICK_DELAY_MS = 3_000                  // let telemetry leave its 0,0 seed
 const FETCH_TIMEOUT_MS = 9_000
@@ -378,18 +381,24 @@ export class GeoLookupService {
   }
 
   private _applySnapshot(snapshot: GeoSnapshot): void {
-    const state = useGeoStore.getState()
+    // Place, timezone and offset are place-stable facts; only weather expires.
+    const weatherCurrent = weatherAgeOf(snapshot) <= WX_DISPLAY_MAX_MS
     useGeoStore.setState({
       status: 'ready',
       snapshot,
       placeName: snapshot.placeName,
       continent: snapshot.continent,
       tzAbbr: snapshot.tzAbbreviation,
-      temperatureC: snapshot.temperatureC,
-      weatherLabel: snapshot.weatherCode !== null ? describeWeatherCode(snapshot.weatherCode) : null,
+      temperatureC: weatherCurrent ? snapshot.temperatureC : null,
+      weatherLabel: weatherCurrent && snapshot.weatherCode !== null
+        ? describeWeatherCode(snapshot.weatherCode)
+        : null,
+      // Never fall back to the previous cell's clock: a snapshot without an
+      // offset (place answered, weather not yet) must not freeze another
+      // ground point's time under this one.
       localTime: snapshot.utcOffsetSeconds !== null
         ? formatLocalClock(Date.now(), snapshot.utcOffsetSeconds)
-        : state.localTime,
+        : null,
       updatedAt: Date.now(),
     })
   }

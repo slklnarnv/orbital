@@ -231,3 +231,124 @@ describe('GeoLookupService time-control gate', () => {
     expect(fetchMock.mock.calls.length).toBe(2)
   })
 })
+
+describe('GeoLookupService freshness and clock', () => {
+  const TOKYO = { latitude: 35.68, longitude: 139.77 }
+  const BUENOS_AIRES = { latitude: -33.87, longitude: -58.04 }
+  const MINUTE = 60_000
+
+  const WEATHER_OK = {
+    timezone: 'Asia/Tokyo',
+    timezone_abbreviation: 'JST',
+    utc_offset_seconds: 32400,
+    current: { temperature_2m: 21.4, weather_code: 2 },
+  }
+  const PLACE_OK = { countryName: 'Japan', continent: 'Asia', locality: '' }
+
+  let service: GeoLookupService
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.UTC(2026, 8, 28, 12, 0, 0))
+    useTelemetryStore.setState(useTelemetryStore.getInitialState(), true)
+    useGeoStore.setState(useGeoStore.getInitialState(), true)
+    simulationClock.setMode('REALTIME')
+    simulationClock.setTimeScale(1)
+
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    service = new GeoLookupService()
+  })
+
+  afterEach(() => {
+    service.stop()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('does not carry the previous cell\'s local time onto a cell without an offset', async () => {
+    let weatherFails = false
+    fetchMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes('open-meteo')) {
+        if (weatherFails) return { ok: false, status: 503, json: async () => ({}) }
+        return { ok: true, json: async () => WEATHER_OK }
+      }
+      return { ok: true, json: async () => PLACE_OK }
+    })
+
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000)
+    expect(useGeoStore.getState().localTime).toBe('21:00')
+
+    // New cell: place answers, weather (and with it the UTC offset) does not.
+    weatherFails = true
+    useTelemetryStore.setState(BUENOS_AIRES)
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+    expect(urls.some((url) => url.includes('open-meteo') && url.includes('latitude=-33.87'))).toBe(true)
+    const state = useGeoStore.getState()
+    expect(state.snapshot?.utcOffsetSeconds).toBeNull()
+    expect(state.localTime).toBeNull()
+  })
+
+  it('hides weather older than an hour but keeps the place', async () => {
+    let weatherFails = false
+    fetchMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes('open-meteo')) {
+        if (weatherFails) return { ok: false, status: 503, json: async () => ({}) }
+        return { ok: true, json: async () => WEATHER_OK }
+      }
+      return { ok: true, json: async () => PLACE_OK }
+    })
+
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000)
+    expect(useGeoStore.getState().temperatureC).toBe(21.4)
+
+    weatherFails = true
+    await vi.advanceTimersByTimeAsync(30 * MINUTE)
+    // Past the 15 min refetch TTL but inside the hour: still shown.
+    expect(useGeoStore.getState().weatherLabel).toBe('Partly cloudy')
+
+    await vi.advanceTimersByTimeAsync(31 * MINUTE)
+    const state = useGeoStore.getState()
+    expect(state.temperatureC).toBeNull()
+    expect(state.weatherLabel).toBeNull()
+    expect(state.placeName).toBe('Japan')
+    expect(state.localTime).not.toBeNull()
+  })
+
+  it('does not let a place refetch make old weather displayable again', async () => {
+    let weatherCalls = 0
+    fetchMock.mockImplementation(async (url: unknown) => {
+      if (String(url).includes('open-meteo')) {
+        weatherCalls += 1
+        if (weatherCalls > 1) return { ok: false, status: 503, json: async () => ({}) }
+        return { ok: true, json: async () => WEATHER_OK }
+      }
+      // Place keeps failing until the weather is past the display window.
+      if (Date.now() < Date.UTC(2026, 8, 28, 12, 0, 0) + 61 * MINUTE) {
+        return { ok: false, status: 503, json: async () => ({}) }
+      }
+      return { ok: true, json: async () => PLACE_OK }
+    })
+
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000)
+    expect(useGeoStore.getState().weatherLabel).toBe('Partly cloudy')
+    expect(useGeoStore.getState().placeName).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(72 * MINUTE)
+    const state = useGeoStore.getState()
+    expect(state.placeName).toBe('Japan')
+    expect(state.weatherLabel).toBeNull()
+    expect(state.temperatureC).toBeNull()
+    // The place fetch advanced only its own stamp.
+    expect(state.snapshot?.placeFetchedAt).toBeGreaterThan(state.snapshot?.weatherFetchedAt ?? Infinity)
+  })
+})
