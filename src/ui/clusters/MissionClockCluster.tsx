@@ -38,7 +38,7 @@ export function MissionClockCluster(): JSX.Element {
         <span style={{ opacity: 0.5, marginLeft: 1 }}>Z</span>
       </span>
       <span className="hud-label" style={{ marginTop: 2, color: 'var(--hud-hi)', fontWeight: 500 }}>
-        ISS · ZARYA
+        ISS · Zarya
       </span>
       <TimeControls />
     </div>

@@ -115,7 +115,7 @@ export function GroundTrackGlobe(): JSX.Element {
   const wxSegments: string[] = []
   if (localTime !== null) wxSegments.push(tzAbbr !== null ? `${localTime} ${tzAbbr}` : localTime)
   if (temperatureC !== null) wxSegments.push(`${Math.round(temperatureC)}°C`)
-  if (weatherLabel !== null) wxSegments.push(weatherLabel.toUpperCase())
+  if (weatherLabel !== null) wxSegments.push(weatherLabel)
   const wxText = wxSegments.length > 0 ? wxSegments.join(' · ') : '—'
 
   return (

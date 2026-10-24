@@ -106,7 +106,7 @@ export function SettingsGear(): JSX.Element {
           className="hud-settings-popover hud-text"
         >
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
-            RENDER SETTINGS
+            Render settings
           </span>
 
           <span className="hud-label" style={{ marginTop: 10, color: 'var(--hud-mid)' }}>
