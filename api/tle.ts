@@ -23,6 +23,9 @@ const ALLOW = 'GET, HEAD, OPTIONS'
 // reuses its last good answer for this long, so a burst of edge-cache misses
 // (cold POPs, purges) costs one upstream race instead of one per request.
 const MEMO_MIN_AGE_MS = 15 * 60_000
+// A TLE pair is ~170 bytes; this only bounds a misbehaving mirror so it cannot
+// make the function buffer an arbitrarily large body.
+const MAX_UPSTREAM_BYTES = 16_384
 // Identify ourselves to CelesTrak/wheretheiss.at; anonymous bulk traffic is
 // what their fair-use policies throttle first.
 const USER_AGENT = 'orbital-iss-visualizer (Vercel function; ISS TLE proxy)'
@@ -131,7 +134,9 @@ async function tryFetchWithSignal(
       signal: controller.signal,
     })
     if (!response.ok) return null
-    return await response.text()
+    if (Number(response.headers.get('content-length')) > MAX_UPSTREAM_BYTES) return null
+    const text = await response.text()
+    return text.length > MAX_UPSTREAM_BYTES ? null : text
   } catch {
     return null
   } finally {
