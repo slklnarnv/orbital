@@ -104,12 +104,18 @@ export class CameraFlightPath {
     const approach = new THREE.Vector3().crossVectors(stationDir, this.sweepAxis).normalize()
     const dirEnd = station.clone().addScaledVector(stationDir, 250).addScaledVector(approach, 250)
     this.radiusEnd = dirEnd.length()
-    this.sweepAngle = this.dirStart.angleTo(dirEnd.clone().normalize())
+    const dirEndN = dirEnd.clone().normalize()
+    const cross = new THREE.Vector3().crossVectors(this.dirStart, dirEndN)
+    // Signed about the sweep axis: a departure already inside the standoff
+    // (closer to the station than the 2° standoff offset) must rotate BACK
+    // toward the approach side; an unsigned angle swung it over the station to
+    // the standoff's mirror image.
+    this.sweepAngle = Math.atan2(cross.dot(this.sweepAxis), this.dirStart.dot(dirEndN))
 
     // Long dives get more time: distance past the orbital envelope adds up to
     // two seconds, so a 100,000 km approach does not compress into a blink.
     const cruiseTerm = Math.min(2000, Math.max(0, this.startRadius - 20_000) * 0.025)
-    return 2000 + cruiseTerm + this.sweepAngle * 350
+    return 2000 + cruiseTerm + Math.abs(this.sweepAngle) * 350
   }
 
   sampleLocate(

@@ -63,6 +63,42 @@ describe('simple Locate sweep', () => {
     expect(eye.distanceTo(arrival)).toBeLessThan(1e-6)
   })
 
+  it('arrives on the departure-side standoff when departing inside it', () => {
+    // A camera ~150 km from the station is angularly closer to it than the 2 deg
+    // standoff is: the sweep must rotate BACK to the approach-side standoff, not
+    // swing over the station to its mirror image.
+    const station = new Vector3(0, 0, 6771)
+    const stationDir = station.clone().normalize()
+    const eyeStart = new Vector3(0, 0, 6921).applyAxisAngle(new Vector3(1, 0, 0), (0.5 * Math.PI) / 180)
+    const path = new CameraFlightPath(eyeStart, station.clone())
+    path.planLocate(new Vector3(), station)
+    const axis = new Vector3().crossVectors(eyeStart.clone().normalize(), stationDir).normalize()
+    const approach = new Vector3().crossVectors(stationDir, axis).normalize()
+    const expected = station.clone().addScaledVector(stationDir, 250).addScaledVector(approach, 250)
+    const eye = new Vector3()
+    const target = new Vector3()
+    path.sampleLocate(new Vector3(), station, 1, eye, target)
+    expect(eye.distanceTo(expected)).toBeLessThan(1)
+    expect(eye.clone().sub(station).dot(approach)).toBeGreaterThan(0)
+  })
+
+  it('arrives on the standoff when departing exactly over the station (colinear fallback)', () => {
+    const station = new Vector3(0, 0, 6771)
+    const stationDir = station.clone().normalize()
+    const eyeStart = new Vector3(0, 0, 6921)
+    const path = new CameraFlightPath(eyeStart, station.clone())
+    path.planLocate(new Vector3(), station)
+    // |dirStart.y| < 0.9, so the fallback axis is cross(dirStart, (0, 1, 0)).
+    const axis = new Vector3().crossVectors(eyeStart.clone().normalize(), new Vector3(0, 1, 0)).normalize()
+    const approach = new Vector3().crossVectors(stationDir, axis).normalize()
+    const expected = station.clone().addScaledVector(stationDir, 250).addScaledVector(approach, 250)
+    const eye = new Vector3()
+    const target = new Vector3()
+    path.sampleLocate(new Vector3(), station, 1, eye, target)
+    expect(eye.distanceTo(expected)).toBeLessThan(1)
+    expect(eye.clone().sub(station).dot(approach)).toBeGreaterThan(0)
+  })
+
   it('stays outside Earth and never approaches the station inside its standoff', () => {
     // Far-side station at planetary distance: the sweep must round the globe
     // without dipping into the clearance sphere or swinging through the model.
