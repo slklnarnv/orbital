@@ -71,6 +71,11 @@ import {
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
 
+// Glint tint: light blue in daylight, deeper blue in Earth's shadow. Shared
+// constants so the frame loop copies them instead of parsing a hex string.
+const GLINT_COLOR_SUNLIT = new THREE.Color('#A8D8FF')
+const GLINT_COLOR_SHADOW = new THREE.Color('#6FAEE0')
+
 // ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
 // Instead of the gstatic.com CDN (blocked in offline/private-network environments),
 // we ship the decoder WASM and JS files in public/draco/ and point useGLTF at them.
@@ -629,6 +634,19 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // uniformly with no camera hotspot. The target object is moved to the ISS
   // center each frame; the light itself sits out along the nadir.
   const earthshineTarget = useMemo(() => new THREE.Object3D(), [])
+
+  // The glint's uniforms must be a stable object. three's renderer captures the
+  // uniforms object when the program is acquired and keeps uploading THAT one;
+  // an inline uniforms object literal is re-created on every render and R3F would
+  // swap it onto the material, leaving the frame loop writing into an object
+  // the GPU never reads (the fade and tint would freeze).
+  const glintUniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(GLINT_COLOR_SUNLIT) },
+      uOpacity: { value: 0.0 },
+    }),
+    [],
+  )
   useEffect(() => {
     scene.add(earthshineTarget)
     return () => { scene.remove(earthshineTarget) }
@@ -765,12 +783,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       const pulse = 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
-      const mat = auraRef.current.material as THREE.ShaderMaterial
-      if (mat) {
-        mat.uniforms.uOpacity.value = glintOpacity
-        // Daylight (light blue glint) vs. shadow (deeper blue) color shift
-        ;(mat.uniforms.uColor.value as THREE.Color).set(isShadowed ? '#6FAEE0' : '#A8D8FF')
-      }
+      glintUniforms.uOpacity.value = glintOpacity
+      // Daylight (light blue glint) vs. shadow (deeper blue) color shift
+      glintUniforms.uColor.value.copy(isShadowed ? GLINT_COLOR_SHADOW : GLINT_COLOR_SUNLIT)
     }
   })
 
@@ -848,10 +863,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         <shaderMaterial
           vertexShader={billboardVert}
           fragmentShader={softGlowFrag}
-          uniforms={{
-            uColor: { value: new THREE.Color('#A8D8FF') }, // Light blue glint (shadow shifts deeper blue)
-            uOpacity: { value: 0.0 },
-          }}
+          uniforms={glintUniforms}
           transparent={true}
           depthWrite={false}
           depthTest={true}
