@@ -201,6 +201,22 @@ describe('unavailable vs failed terminal states (R4)', () => {
     expect(useLoadingStore.getState().issDetail.status).toBe('unavailable')
   })
 
+  it('a new detail attempt does not revive an unavailable ISS', () => {
+    const store = useLoadingStore.getState()
+    store.beginISSDetailAttempt('high')
+    useLoadingStore.getState().markISSUnavailable()
+    const before = useLoadingStore.getState().issDetail
+
+    const returned = useLoadingStore.getState().beginISSDetailAttempt('locate')
+
+    const after = useLoadingStore.getState().issDetail
+    expect(after.status).toBe('unavailable')
+    expect(after.attempt).toBe(before.attempt)
+    expect(returned).toBe(before.attempt)
+    expect(after.quality).toBe(before.quality)
+    expect(shouldAwaitDetail(after)).toBe(false)
+  })
+
   it('markISSUnavailable discards no committed model disclosure and is idempotent', () => {
     const store = useLoadingStore.getState()
     const readyAttempt = store.beginISSDetailAttempt('high')

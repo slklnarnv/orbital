@@ -95,6 +95,12 @@ export const useLoadingStore = create<LoadingStore>((set) => ({
   beginISSDetailAttempt: (quality) => {
     let attempt = 0
     set((state) => {
+      // `unavailable` is terminal: Model A failed, so no ISS group can exist and
+      // a new detail attempt must not revive it.
+      if (state.issDetail.status === 'unavailable') {
+        attempt = state.issDetail.attempt
+        return state
+      }
       attempt = state.issDetail.attempt + 1
       return { issDetail: { ...state.issDetail, status: 'loading', quality, attempt } }
     })

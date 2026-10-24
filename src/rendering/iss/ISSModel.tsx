@@ -541,13 +541,18 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       return
     }
     const nonceChanged = seenSelection.current.nonce !== selectionNonce
-    const qualityChanged = seenSelection.current.quality !== requestedQuality
-    seenSelection.current = { quality: requestedQuality, nonce: selectionNonce }
+    // An explicit reselect clears the demotion in this same run, but
+    // `requestedQuality` still holds the stale demoted value until the rerun;
+    // use the quality the request is about to become so no spurious attempt
+    // (e.g. a legacy one) starts for it.
+    const effectiveQuality = nonceChanged ? settingQuality : requestedQuality
+    const qualityChanged = seenSelection.current.quality !== effectiveQuality
+    seenSelection.current = { quality: effectiveQuality, nonce: selectionNonce }
     if (nonceChanged) setDemotedQuality(null)
     if (!nonceChanged && !qualityChanged) return
 
     const detail = store.issDetail
-    if (requestedQuality === 'legacy') {
+    if (effectiveQuality === 'legacy') {
       if (detail.activeQuality !== 'legacy') store.beginISSDetailAttempt('legacy')
       return
     }
@@ -561,7 +566,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       return
     }
     store.beginISSDetailAttempt('locate')
-  }, [requestedQuality, firstTier, selectionNonce])
+  }, [requestedQuality, settingQuality, firstTier, selectionNonce])
 
   // Full-detail tier: only within the INSPECT band (<200 km, 220 km exit; a
   // close FREE view counts too). At Follow the LOD is visually
