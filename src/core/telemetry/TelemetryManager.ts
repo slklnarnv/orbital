@@ -64,6 +64,9 @@ export class TelemetryManager {
     this._started = true
     const generation = ++this._lifecycleGeneration
     networkMonitor.start()
+    // A session that STARTS offline never emits the online→offline step, so seed
+    // the flag from the live state or the first reconnect skips the eager retry.
+    this._wasOffline = !networkMonitor.isOnline
 
     // Subscribe to network changes to trigger mode recalculation and recovery
     this._unsubscribeNetworkStatus = telemetryBus.on('NETWORK_STATUS', () => {

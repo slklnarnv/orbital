@@ -45,6 +45,7 @@ vi.mock('@/core/telemetry/TelemetryEventBus', () => ({
 }))
 
 import { TelemetryManager } from '@/core/telemetry/TelemetryManager'
+import { networkMonitor } from '@/core/telemetry/NetworkMonitor'
 
 const currentTLE: TLEData = {
   line1: '1 25544U 98067A   26194.12129675  .00004316  00000+0  86456-4 0  9991',
@@ -231,5 +232,43 @@ describe('TelemetryManager lifecycle', () => {
     expect(mocks.networkSuccess).not.toHaveBeenCalled()
 
     manager.stop()
+  })
+
+  it('eagerly refreshes on reconnect when the session started offline', async () => {
+    mocks.fetchTLE.mockResolvedValue(currentTLE)
+    // A fresh cached TLE keeps the mode out of RECOVERY, so only the offline
+    // flag (not the RECOVERY entry path) can trigger the eager refresh.
+    mocks.cacheGet.mockResolvedValue({ ...currentTLE, source: 'fallback' as const })
+
+    let installedTLE: TLEData | null = null
+    const entity: OrbitalEntity = {
+      config: { id: 'iss-test', name: 'ISS test', noradId: 25544, orbitColor: '#fff' },
+      loadTLE: vi.fn((tle: TLEData) => {
+        installedTLE = tle
+        return true
+      }),
+      clearTLE: vi.fn(() => { installedTLE = null }),
+      propagate: vi.fn(() => orbitalState),
+      hasTLE: () => installedTLE !== null,
+      get currentTLE() { return installedTLE },
+    }
+
+    const monitor = networkMonitor as { isOnline: boolean }
+    monitor.isOnline = false
+    try {
+      const manager = new TelemetryManager(entity)
+      await manager.start()
+      // Offline start: the bootstrap refresh is skipped without hitting the network.
+      expect(mocks.fetchTLE).not.toHaveBeenCalled()
+
+      monitor.isOnline = true
+      const handler = mocks.busOn.mock.calls.find(c => c[0] === 'NETWORK_STATUS')?.[1] as () => void
+      handler()
+      await vi.waitFor(() => expect(mocks.fetchTLE).toHaveBeenCalledTimes(1))
+
+      manager.stop()
+    } finally {
+      monitor.isOnline = true
+    }
   })
 })
