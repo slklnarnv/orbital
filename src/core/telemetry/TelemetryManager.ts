@@ -266,15 +266,31 @@ export class TelemetryManager {
       if (previousTLE) this._entity.loadTLE(previousTLE)
       else this._entity.clearTLE()
       this._hasValidatedState = previousValidatedState
+      this._interpolation.cancel()
     }
+
+    // Propagate the OLD element set at the same instant as the new one, before
+    // it is replaced: the blend offset must be the element-set disagreement at
+    // one time, not old-at-tick-N minus new-at-tick-N+k (which folds orbital
+    // motion into the offset).
+    const simNow = simulationClock.now()
+    const previousAtNowRaw = previousTLE ? this._entity.propagate(simNow) : null
+    const previousAtNow = previousAtNowRaw && this._isFiniteOrbitalState(previousAtNowRaw)
+      ? previousAtNowRaw
+      : null
 
     if (!this._entity.loadTLE(tle)) return false
 
-    const propagated = this._entity.propagate(simulationClock.now())
+    const propagated = this._entity.propagate(simNow)
     if (!propagated || !this._isFiniteOrbitalState(propagated)) {
       rollback()
       return false
     }
+
+    // Start the blend BEFORE any await: ticks that run during the IndexedDB
+    // write already render the new TLE, and would otherwise snap unblended.
+    // rollback() cancels it if the install fails below.
+    this._interpolation.onTLEUpdate(previousAtNow ?? previousState, propagated)
 
     try {
       if (persist) await tleCache.set(this._entity.config.noradId, tle)
@@ -289,7 +305,6 @@ export class TelemetryManager {
     }
 
     this._hasValidatedState = true
-    this._interpolation.onTLEUpdate(previousState)
     if (!previousState) this._lastState = propagated
     telemetryBus.emit('TLE_REFRESHED', {
       entityId: this._entity.config.id,

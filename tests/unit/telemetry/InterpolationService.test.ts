@@ -66,4 +66,29 @@ describe('InterpolationService', () => {
     expect(moved.positionECI.x).toBeGreaterThan(6000)
     expect(moved.positionECI.x).toBeLessThan(6010)
   })
+
+  it('freezes the offset from a same-instant old/new pair', () => {
+    const service = new InterpolationService()
+    const old = state({ positionECI: { x: 6010, y: 0, z: 0 } })
+    const same = state({ positionECI: { x: 6000, y: 0, z: 0 } })
+    service.onTLEUpdate(old, same)
+
+    // The first smooth runs on a LATER tick: the offset must stay the 10 km
+    // element-set disagreement, not be re-derived against this later state.
+    const later = state({ positionECI: { x: 5000, y: 3000, z: 0 } })
+    const first = service.smooth(later, 0)
+    expect(first.positionECI.x).toBeCloseTo(later.positionECI.x + 10)
+    expect(first.positionECI.y).toBeCloseTo(later.positionECI.y)
+  })
+
+  it('passes states through untouched after cancel()', () => {
+    const service = new InterpolationService()
+    service.onTLEUpdate(
+      state({ positionECI: { x: 6010, y: 0, z: 0 } }),
+      state({ positionECI: { x: 6000, y: 0, z: 0 } }),
+    )
+    service.cancel()
+    const next = state()
+    expect(service.smooth(next, 16)).toBe(next)
+  })
 })

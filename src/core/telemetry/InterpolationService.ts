@@ -36,13 +36,43 @@ export class InterpolationService {
 
   /**
    * Call this whenever a new TLE is applied to an entity.
-   * Captures the current (old-TLE) state as the blend origin.
+   *
+   * Preferred form: pass `previous` (old element set) AND `next` (new element
+   * set) propagated to the SAME instant. The offset is then frozen immediately,
+   * so it contains only the element-set disagreement. Deriving it lazily on a
+   * later tick compared states at different times, folding orbital motion
+   * (>= 30 sim-s, ~230 km at 300x) into the blend.
+   *
+   * With only `previous`, the old-TLE state is captured as the blend origin and
+   * the offset is derived on the first `smooth()` call (legacy behaviour).
    */
-  onTLEUpdate(currentState: OrbitalState | null): void {
-    if (currentState) {
-      this._blendOrigin = currentState
-      this._offset = null
-      this._blendFactor = 0.0
+  onTLEUpdate(previous: OrbitalState | null, next?: OrbitalState | null): void {
+    if (!previous) return
+    this._blendOrigin = previous
+    this._offset = next ? InterpolationService.computeOffset(previous, next) : null
+    this._blendFactor = 0.0
+  }
+
+  /** Abort any pending blend (e.g. the TLE install was rolled back). */
+  cancel(): void {
+    this._blendOrigin = null
+    this._offset = null
+    this._blendFactor = 1.0
+  }
+
+  private static computeOffset(origin: OrbitalState, target: OrbitalState): BlendOffset {
+    const dLon = ((origin.longitude - target.longitude + 540) % 360) - 180
+    return {
+      px: origin.positionECI.x - target.positionECI.x,
+      py: origin.positionECI.y - target.positionECI.y,
+      pz: origin.positionECI.z - target.positionECI.z,
+      vx: origin.velocityECI.x - target.velocityECI.x,
+      vy: origin.velocityECI.y - target.velocityECI.y,
+      vz: origin.velocityECI.z - target.velocityECI.z,
+      latitude: origin.latitude - target.latitude,
+      longitude: dLon,
+      altitude: origin.altitude - target.altitude,
+      speed: origin.speed - target.speed,
     }
   }
 
@@ -54,21 +84,7 @@ export class InterpolationService {
     const origin = this._blendOrigin
     if (this._blendFactor >= 1.0 || !origin) return newState
 
-    if (!this._offset) {
-      const dLon = ((origin.longitude - newState.longitude + 540) % 360) - 180
-      this._offset = {
-        px: origin.positionECI.x - newState.positionECI.x,
-        py: origin.positionECI.y - newState.positionECI.y,
-        pz: origin.positionECI.z - newState.positionECI.z,
-        vx: origin.velocityECI.x - newState.velocityECI.x,
-        vy: origin.velocityECI.y - newState.velocityECI.y,
-        vz: origin.velocityECI.z - newState.velocityECI.z,
-        latitude: origin.latitude - newState.latitude,
-        longitude: dLon,
-        altitude: origin.altitude - newState.altitude,
-        speed: origin.speed - newState.speed,
-      }
-    }
+    if (!this._offset) this._offset = InterpolationService.computeOffset(origin, newState)
 
     this._blendFactor = Math.min(
       1.0,
