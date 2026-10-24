@@ -32,6 +32,46 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (!import.meta.env.DEV) {
+        return (
+          <div style={{
+            padding: '24px',
+            background: '#1c0e0e',
+            color: '#fca5a5',
+            fontFamily: 'system-ui, sans-serif',
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            gap: '12px',
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
+              Something went wrong
+            </h2>
+            <p style={{ margin: 0, opacity: 0.8 }}>
+              The visualizer hit an unexpected error. Reloading usually fixes it.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                marginTop: '8px',
+                padding: '8px 20px',
+                background: 'transparent',
+                color: 'inherit',
+                border: '1px solid #7f1d1d',
+                borderRadius: '6px',
+                font: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              Reload
+            </button>
+          </div>
+        )
+      }
       return (
         <div style={{
           padding: '24px',
