@@ -15,7 +15,7 @@ the index with per-plan status and the rejected/deferred findings is
 | Plan | Title | Result |
 |---|---|---|
 | 002 | Fresh fallback TLE | Packaged `src/data/fallback-tle.json` has epoch 2026-10-24. |
-| 003 | Toolchain, CI, Node 22 | Dev toolchain patched within its majors (vite `^6.4.5`, vitest `^4.1.12`, sharp `^0.35.5`); Node 22 via `.nvmrc`; actions pinned to SHAs, `persist-credentials: false`, full-tree `npm audit` step; `refresh-tle.yml` opens a fallback-TLE PR Mon/Thu (needs the repo setting "Allow GitHub Actions to create and approve pull requests"). |
+| 003 | Toolchain, CI, Node 22 | Dev toolchain patched within its majors (vite `^6.4.5`, vitest `^4.1.12`, sharp `^0.35.5`); Node 22 via `.nvmrc`; actions pinned to SHAs, `persist-credentials: false`, full-tree `npm audit` step; `refresh-tle.yml` refreshes the fallback TLE Mon/Thu and commits it straight to `main` when `npm run verify` passes (changed 2026-10-25 from opening a PR, to avoid PR clutter). |
 | 004 | Telemetry correctness | Offline-start recovery; confidence scored on \|age\|; clock clamp 100 → 1000 ms; `X-TLE-Stale` honoured (`fetchTLEWithStatus`); a cache bootstrap never replaces a network TLE; same-instant TLE blend; 16 KiB upstream body cap in `/api/tle`. |
 | 005 | Geo correctness | Separate place/weather freshness, weather hidden after 1 h, local time null without a UTC offset, persisted rows validated (`isGeoSnapshot`). |
 | 006 | Rendering correctness | Stable glint uniforms (fade and tint work again); detail preparation compiles the composer's shader variant (`detailPreparation.ts`); flare Earth mask off when Earth's centre is behind the camera; PMREM target disposed; `unavailable` stays terminal; no spurious legacy attempt on reselect. |

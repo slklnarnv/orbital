@@ -1,9 +1,9 @@
 # Twice-weekly refresh of the packaged fallback TLE (src/data/fallback-tle.json).
-# Opens a PR when the data changed; merging it is a human decision.
+# When the data changed and `npm run verify` passes, the new element set is
+# committed straight to main; Vercel deploys main, so it goes live without a PR.
 #
-# Repo setting required: Settings -> Actions -> General -> Workflow permissions
-# -> "Allow GitHub Actions to create and approve pull requests". Without it,
-# `gh pr create` fails (the branch is still pushed; open the PR by hand).
+# If main ever gets a ruleset that requires pull requests or status checks,
+# add GitHub Actions to that ruleset's bypass list, or this push is rejected.
 name: refresh-tle
 on:
   schedule:
@@ -11,7 +11,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
-  pull-requests: write
+concurrency:
+  group: refresh-tle
+  cancel-in-progress: false
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -21,6 +23,7 @@ jobs:
       # checkout's credentials.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: main
           persist-credentials: true
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -28,23 +31,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run refresh:tle
-      - name: Open a PR if the fallback TLE changed
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Commit to main if the fallback TLE changed
         run: |
           if git diff --quiet -- src/data/fallback-tle.json; then
             echo "Fallback TLE unchanged"; exit 0
           fi
           npm run verify
           epoch=$(node -p "require('./src/data/fallback-tle.json').epoch.slice(0,10)")
-          branch="chore/refresh-fallback-tle-$epoch"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
           git add src/data/fallback-tle.json
           git commit -m "Refresh packaged fallback TLE (epoch $epoch)"
-          git push --force-with-lease origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "Refresh packaged fallback TLE (epoch $epoch)" \
-            --body "Automated twice-weekly refresh via npm run refresh:tle; npm run verify passed." \
-            || echo "PR already exists or PR creation is disabled for Actions"
+          # main may have moved while verify ran: rebase the one-file commit
+          # onto it and retry, rather than force anything.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git pull --rebase origin main
+          done
+          echo "Could not push the refreshed TLE to main after 3 attempts" >&2
+          exit 1
