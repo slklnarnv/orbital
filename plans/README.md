@@ -83,11 +83,19 @@ reviewer maintains this table.
 | [009](009-core-math-tests.md) | Known-answer tests: OrbitalEngine, GMST, formatters, rate limiter, orbit-tape math | P2 | S–M | — | DONE (merged c8886b2) |
 | [010](010-hud-hygiene.md) | Production crash screen, sentence-case strings, dead constants | P3 | S | — | DONE (merged c8886b2) |
 
-Wave 2 (written after wave 1 lands, so excerpts match the merged code):
-penumbra eclipse (roadmap D.1), orbital day/night countdown (B.1, depends on
-D.1 and 004), Playwright smoke suite (A.3, depends on 003), ground track on
-the HUD globe and in 3D with the depth-independent draw (B.2 + D.3), and a
-final docs pass that folds both errata banners and records everything.
+Wave 2 (planned at `aa206a1`, after wave 1 merged):
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| [011](011-penumbra-sun-visibility.md) | Penumbra sun visibility (roadmap D.1) | P1 | M | 006 | TODO |
+| [012](012-day-night-countdown.md) | Day/night countdown in the HUD (B.1) | P2 | M | 011, 004 | TODO |
+| [013](013-playwright-smoke-suite.md) | Playwright smoke suite + CI job (A.3) | P2 | M | 003 | TODO |
+| [014](014-ground-track-hud.md) | Ground-track sampler + HUD globe track (B.2 first cut) | P2 | S–M | — | TODO |
+| [015](015-ground-track-3d.md) | Optional 3D ground track + footprint with constant-ulp depth bias (B.2 + D.3) | P3 | M | 014 | TODO |
+
+A final docs pass follows wave 2: fold both errata banners, fix the drift the
+audit found (60→70 km clearance, `lerpLookAt`, MiB units, flight formulas,
+test counts, layout, LIVE/HYBRID wording), and record everything that landed.
 
 ### Dependency notes
 
