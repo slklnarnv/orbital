@@ -17,6 +17,7 @@
     "lint": "eslint . --max-warnings 0",
     "refresh:tle": "node scripts/refresh-fallback-tle.mjs",
     "test": "vitest",
+    "test:e2e": "playwright test",
     "verify": "npm run check:assets && npm run check:shaders && npm run typecheck && npm run lint && npm test -- --run && npm run build"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
     "@gltf-transform/core": "^4.5.0",
     "@gltf-transform/extensions": "^4.5.0",
     "@gltf-transform/functions": "^4.5.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "22.20.5",
     "@types/react": "^18.3.0",
