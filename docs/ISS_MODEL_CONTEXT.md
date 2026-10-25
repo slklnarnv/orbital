@@ -176,10 +176,13 @@ the LOD. At runtime the mounted asset is logged:
 | Path | Role |
 |:--|:--|
 | `src/rendering/iss/ISSModel.tsx` | LOD selection, normalization constants, GPU prep, eclipse lighting, `[ISS AUDIT]` log |
-| `src/rendering/iss/ISSAnimations.tsx` | Frame-loop orchestration for SARJ/TRRJ/BGA joints + camera oscillators (all part motion) |
+| `src/rendering/iss/ISSAnimations.tsx` | Rig lifecycle: mount, visibility, the frame loop |
+| `src/rendering/iss/ISSRigAnimator.ts` | The per-frame rig step (SARJ/TRRJ/BGA joints + camera oscillators, tier hand-off), free of React |
 | `src/rendering/iss/ISSJointKinematics.ts` | Pure, unit-tested joint math: rig types, `resolveJoint`, target laws, slew, tier hand-off, `parseRigMetadata` |
 | `scripts/iss-rig-manifest.mjs` | Rig contract source of truth: joints, axes, oscillators, TRRJ limits, protected frames, required nodes |
-| `src/rendering/iss/ISSGroup.tsx` | LVLH/TEA flight attitude + inertial position (do not touch for model work) |
+| `src/rendering/iss/ISSGroup.tsx` | Inertial position + smoothed attitude (do not touch for model work) |
+| `src/rendering/iss/stationAttitude.ts` | `lvlhAttitude`: the LVLH/TEA attitude, pure (shared with the rig simulation test) |
+| `tests/unit/rendering/ISSRigSimulation.test.ts` | Flies the published assets' node trees through real orbits with the app's rig code and measures the result (§7.5) |
 | `scripts/build-iss-model.mjs` | IGOAL FBX + GLB → optimized runtime GLB + master (needs both source arguments and `ktx`) |
 | `scripts/build-iss-locate-lod.mjs` | Derives the Locate LOD from the high build's master (candidate → validate → publish) |
 | `scripts/iss-model-manifest.mjs` | Forensic per-node manifest of a GLB (REPAIRED — see §6.1) |
@@ -253,7 +256,10 @@ through world (or parent-relative) matrices/quaternions numerically.
 
 - NASA reference: original SAW ≈ 35.1 × 11.7 m → the 35.35 m lengths and
   ~11.4 m widths are correct. Wing length runs along model **X**, width along
-  **Z**, blanket normal along **±Y**.
+  **Z**, blanket normal along **±Y**. **+Y is the cell face** on all eight
+  wings and all six iROSAs (sampled from the blanket texture: dark cells on
+  +Y, gold Kapton backing on −Y), which is the face the SARJ/BGA laws turn to
+  the sun (`normalModel: [0, 1, 0]`).
 - NASA reference: iROSA ≈ 18.2 × 6 m → each `IROSA_Deployed_*` measures
   **21.31 × 5.43 × 6.08** (subtree includes end hardware) — correct.
 - Exactly six iROSAs installed (4A, 2B, 4B, 1A, 3A, 1B) = the real 2023–2026
@@ -400,7 +406,13 @@ The SARJs are NOT capped, deliberately: they follow their sun-tracking target
 exactly, which at 300× legitimately moves ~19.5 °/s (a cap would make them
 lag the sun), and a time seek moves them with the station's own position.
 Camera oscillators (JEM/ELP/SHP pan/tilt sine sweeps) run for the visible
-detail model. Do not re-introduce per-wing independent rotation of the arrays
+detail model. Each sweep turns the part about its OWN local axis
+(pre-multiplied in the parent frame) and pivots on the part itself: the ELP
+and SHP pan nodes carry an authored origin 2.7 m / 4.5 m away from their 0.5 m
+cameras, so when the origin lies outside the part (`oscillatorPivot`) the
+sweep turns about the geometry centre — rotating about that origin had swung
+those cameras ~0.3 m off their mounts. (The old sweep also wrote one Euler
+component, which is not a rotation about the part's own axis.) Do not re-introduce per-wing independent rotation of the arrays
 themselves: the SARJ turns the whole wing set and the BGAs only add the beta
 tilt.
 
@@ -513,7 +525,14 @@ silent in code and obvious only in render.
    is requested only inside the 200/220 km Inspect band), and the console
    shows `[ISS AUDIT] { quality: 'locate', url: '/models/iss_igoal_locate.glb?v=…', attempt }`
    (then `quality: 'high'` at Inspect).
-5. **Animation acceptance** (accelerate time per §6.6 to ~120×):
+5. **Animation acceptance.** First the automated part:
+   `tests/unit/rendering/ISSRigSimulation.test.ts` builds the published
+   assets' node trees from their JSON, flies them through two orbits at three
+   seasons in the true LVLH/TEA attitude with the app's own `RigAnimator`, and
+   asserts: every wing's cell face within 3° of the sun through daylight; each
+   radiator edge-on (within 2°) in daylight and facing Earth (within 15°) in
+   eclipse; every camera's centre within 10% of its size of its rest place on
+   its mount. Then by eye (accelerate time per §6.6 to ~120×):
    - Radiators: each beam rolls about its OWN long axis (native X, ⊥ the
      truss) and stays COAXIAL with its fixed bearing — on-axis landmarks do
      not move, the roll axis is parallel to the beam — never exceeding ±105°,

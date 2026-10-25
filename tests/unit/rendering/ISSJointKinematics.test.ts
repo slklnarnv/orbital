@@ -27,6 +27,7 @@ import {
   applyOscillators,
   bgaTargetAngle,
   freshHandoff,
+  oscillatorPivot,
   parseRigMetadata,
   resolveJoint,
   resolveOscillators,
@@ -553,17 +554,24 @@ describe('advanceToward: simulation-time slew', () => {
 // ─── Oscillator ownership (A1) ────────────────────────────────────────────────
 
 describe('oscillator ownership', () => {
+  const BASE = new THREE.Euler(0.1, 0.2, 0.3)
   function makeCameras(): { root: THREE.Group; cams: Record<string, THREE.Object3D> } {
     const root = new THREE.Group()
     const cams: Record<string, THREE.Object3D> = {}
     for (const name of ['cam1', 'cam2', 'cam3']) {
       const cam = new THREE.Object3D()
       cam.name = name
-      cam.rotation.set(0.1, 0.2, 0.3)
+      cam.rotation.copy(BASE)
       root.add(cam)
       cams[name] = cam
     }
     return { root, cams }
+  }
+
+  /** The authored pose turned by `angleRad` about the part's own local axis. */
+  function swept(axis: 'x' | 'y' | 'z', angleRad: number): THREE.Quaternion {
+    const local = new THREE.Vector3(axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, axis === 'z' ? 1 : 0)
+    return new THREE.Quaternion().setFromEuler(BASE).multiply(new THREE.Quaternion().setFromAxisAngle(local, angleRad))
   }
 
   const specB = { target: 'cam2', axis: 'x' as const, amplitudeDeg: 5, periodSec: 10, phaseDeg: 90 }
@@ -577,15 +585,13 @@ describe('oscillator ownership', () => {
     applyOscillators(entries, 1.25)
 
     // cam2 driven by specB's axis/period — not shifted by the missing entry.
-    const expectedB = 0.1 + 5 * DEG2RAD * Math.sin((2 * Math.PI * 1.25) / 10 + (Math.PI / 2))
-    expect(cams.cam2.rotation.x).toBeCloseTo(expectedB, 12)
-    expect(cams.cam2.rotation.y).toBeCloseTo(0.2, 12)
+    const expectedB = swept('x', 5 * DEG2RAD * Math.sin((2 * Math.PI * 1.25) / 10 + (Math.PI / 2)))
+    expect(cams.cam2.quaternion.angleTo(expectedB)).toBeLessThan(1e-6)
 
     // cam1/cam3 driven by the regex spec.
-    const expectedR = 0.2 + 10 * DEG2RAD * Math.sin((2 * Math.PI * 1.25) / 20)
-    expect(cams.cam1.rotation.y).toBeCloseTo(expectedR, 12)
-    expect(cams.cam3.rotation.y).toBeCloseTo(expectedR, 12)
-    expect(cams.cam1.rotation.x).toBeCloseTo(0.1, 12)
+    const expectedR = swept('y', 10 * DEG2RAD * Math.sin((2 * Math.PI * 1.25) / 20))
+    expect(cams.cam1.quaternion.angleTo(expectedR)).toBeLessThan(1e-6)
+    expect(cams.cam3.quaternion.angleTo(expectedR)).toBeLessThan(1e-6)
   })
 
   it('a spec matching several parts gives every match the same (its own) spec', () => {
@@ -593,13 +599,13 @@ describe('oscillator ownership', () => {
     const entries = resolveOscillators(root, [specRegex])
     expect(entries).toHaveLength(2)
     applyOscillators(entries, 3)
-    const expected = 0.2 + 10 * DEG2RAD * Math.sin((2 * Math.PI * 3) / 20)
-    expect(cams.cam1.rotation.y).toBeCloseTo(expected, 12)
-    expect(cams.cam3.rotation.y).toBeCloseTo(expected, 12)
+    const expected = swept('y', 10 * DEG2RAD * Math.sin((2 * Math.PI * 3) / 20))
+    expect(cams.cam1.quaternion.angleTo(expected)).toBeLessThan(1e-6)
+    expect(cams.cam3.quaternion.angleTo(expected)).toBeLessThan(1e-6)
   })
 
   it('removing an earlier target does not re-map the remaining entries', () => {
-    const expectedB = 0.1 + 5 * DEG2RAD * Math.sin((2 * Math.PI * 0.5) / 10 + (Math.PI / 2))
+    const expectedB = swept('x', 5 * DEG2RAD * Math.sin((2 * Math.PI * 0.5) / 10 + (Math.PI / 2)))
 
     const { root: rootA, cams: camsA } = makeCameras()
     const withMissing = resolveOscillators(rootA, [
@@ -608,12 +614,56 @@ describe('oscillator ownership', () => {
     ])
     expect(withMissing).toHaveLength(1)
     applyOscillators(withMissing, 0.5)
-    expect(camsA.cam2.rotation.x).toBeCloseTo(expectedB, 12)
+    expect(camsA.cam2.quaternion.angleTo(expectedB)).toBeLessThan(1e-6)
 
     const { root: rootB, cams: camsB } = makeCameras()
     const withoutMissing = resolveOscillators(rootB, [specB])
     applyOscillators(withoutMissing, 0.5)
-    expect(camsB.cam2.rotation.x).toBeCloseTo(expectedB, 12)
+    expect(camsB.cam2.quaternion.angleTo(expectedB)).toBeLessThan(1e-6)
+  })
+})
+
+describe('oscillator pivot', () => {
+  /** A 0.5 m camera box whose node origin sits `offset` metres away along X. */
+  function cameraWithOrigin(offset: number): { root: THREE.Group; pan: THREE.Object3D; box: THREE.Mesh } {
+    const root = new THREE.Group()
+    const pan = new THREE.Object3D()
+    pan.name = 'Cam_Pan'
+    pan.position.set(5, 0, 0)
+    pan.rotation.set(0.3, -0.4, 0.2)
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5))
+    box.position.set(offset, 0, 0)
+    pan.add(box)
+    root.add(pan)
+    return { root, pan, box }
+  }
+  const spec = { target: 'Cam_Pan', axis: 'y' as const, amplitudeDeg: 7, periodSec: 60 }
+
+  it('turns about the camera when the authored origin lies off it (ELP/SHP pan nodes)', () => {
+    const { root, box } = cameraWithOrigin(4.5)
+    const entries = resolveOscillators(root, [spec])
+    const before = box.getWorldPosition(new THREE.Vector3())
+    for (const t of [0, 7.5, 15, 30, 45]) {
+      applyOscillators(entries, t)
+      root.updateMatrixWorld(true)
+      expect(box.getWorldPosition(new THREE.Vector3()).distanceTo(before)).toBeLessThan(1e-9)
+    }
+  })
+
+  it('keeps the authored origin as the pivot when it lies on the part', () => {
+    const { root, pan } = cameraWithOrigin(0.05)
+    const entries = resolveOscillators(root, [spec])
+    const origin = pan.position.clone()
+    applyOscillators(entries, 15) // quarter period: full amplitude
+    expect(pan.position.distanceTo(origin)).toBeLessThan(1e-9)
+    expect(pan.quaternion.angleTo(entries[0].baseQuaternion)).toBeCloseTo(7 * DEG2RAD, 9)
+  })
+
+  it('oscillatorPivot falls back to the origin without geometry', () => {
+    const origin = new THREE.Vector3(1, 2, 3)
+    expect(oscillatorPivot(origin, null, 0).equals(origin)).toBe(true)
+    expect(oscillatorPivot(origin, new THREE.Vector3(1, 2, 3.2), 0.5).equals(origin)).toBe(true)
+    expect(oscillatorPivot(origin, new THREE.Vector3(1, 2, 7), 0.5).z).toBe(7)
   })
 })
 

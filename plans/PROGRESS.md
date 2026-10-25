@@ -6,6 +6,23 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## ISS animation audit (2026-10-25)
+
+The rig was measured instead of eyeballed: the per-frame step moved out of
+React into `ISSRigAnimator.ts`, the attitude into `stationAttitude.ts`, and
+`ISSRigSimulation.test.ts` flies the published assets through real orbits.
+
+- **Correct, now under test**: all eight wings keep their cell face (+Y,
+  verified from the texture) on the sun through daylight at three seasons;
+  the radiators run edge-on in daylight and face Earth in eclipse within the
+  ±105° travel; model +X is forward (Node 2 ahead of Zvezda), +Z starboard
+  (Columbus), Cupola nadir; every SARJ/TRRJ/BGA origin lies on its shaft.
+- **Fixed**: the ELP/SHP camera pan nodes have authored origins 2.7 m / 4.5 m
+  from their 0.5 m cameras, so the idle pan swung each camera ~0.3 m off its
+  mount; sweeps now pivot on the part when the origin lies outside it, and
+  turn about the part's own local axis (the old code wrote one Euler
+  component).
+
 ## IGOAL source-material + KTX2 rebuild (2026-10-25)
 
 With both NASA IGOAL sources available (the owner's `ISSTEST.zip`), the model

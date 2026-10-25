@@ -1,7 +1,8 @@
 // ─── ISSAnimations — Procedural Part Animation (IGOAL model) ─────────────────
 //
-// Frame-loop orchestration only: every mechanism calculation lives in
-// ISSJointKinematics.ts (pure, unit-tested without a WebGL tree). Behavior:
+// Lifecycle only: the per-frame step lives in ISSRigAnimator.ts and every
+// mechanism calculation in ISSJointKinematics.ts (both free of React, driven
+// by tests against the real asset's node tree). Behavior:
 //   - Solar Alpha Rotary Joints (PORT/STBD_ALPHA_ROT): full-revolution solar
 //     tracking about the truss axis — one revolution per orbit, verified
 //     numerically in the 2026-09-27 follow-up audit.
@@ -19,7 +20,8 @@
 //     SARJ is applied this frame); the 2026-09-28 attempt read as broken
 //     because a mount-time frame made the target sweep once per orbit.
 //     Slew-limited, so seeks and singularity holds never snap.
-//   - Pan/tilt TV cameras sweep with a slow sinusoidal idle.
+//   - Pan/tilt TV cameras sweep with a slow sinusoidal idle about their own
+//     local axis, pivoting on the camera when the authored origin is off it.
 //
 // Only the VISIBLE detail model animates; it publishes each joint's state so
 // the next tier (Locate LOD ⇄ full model) continues the same pose — a swap in
@@ -41,45 +43,22 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { isSunlit } from '@/core/orbital/SunVisibility'
 import type { DetailQuality } from '@/stores/loadingStore'
 import {
-  BGA_SLEW_DEG_PER_SIM_SECOND,
   IGOAL_JOINT_DEFS,
   IGOAL_OSCILLATOR_SPECS,
   IGOAL_TRRJ_LIMITS,
-  advanceToward,
-  applyJointAngle,
-  applyOscillators,
-  bgaTargetAngle,
-  freshHandoff,
-  resolveJoint,
-  resolveOscillators,
-  sarjTargetAngle,
-  trrjAdvance,
-  trrjTargetAngle,
-  wrapPi,
-  type JointDefinition,
-  type OscillatorSpec,
-  type ResolvedJoint,
   type RigMetadataParse,
-  type SharedJointState,
-  type TrrjLimits,
 } from './ISSJointKinematics'
+import { RigAnimator, type RigConfig } from './ISSRigAnimator'
 
-interface ModelAnimationConfig {
-  joints: JointDefinition[]
-  oscillators: OscillatorSpec[]
-  limits: TrrjLimits
-}
-
-const STATIC_CONFIG: ModelAnimationConfig = {
+const STATIC_CONFIG: RigConfig = {
   joints: [],
   oscillators: [],
   limits: IGOAL_TRRJ_LIMITS,
 }
 
-function configForQuality(quality: DetailQuality, rigMetadata: RigMetadataParse | undefined): ModelAnimationConfig {
+function configForQuality(quality: DetailQuality, rigMetadata: RigMetadataParse | undefined): RigConfig {
   // A rebuilt asset embeds its rig contract in scene extras; use it when it
   // validates (it mirrors the built-in definitions, which remain the
   // fallback for pre-rebuild assets). Invalid metadata never reaches here:
@@ -102,16 +81,6 @@ function configForQuality(quality: DetailQuality, rigMetadata: RigMetadataParse 
   }
 }
 
-interface JointRuntime {
-  joint: ResolvedJoint
-  /** Applied shaft angle (radians). SARJ: wrapped to [−π,π); TRRJ: bounded. */
-  applied: number
-  initialized: boolean
-  /** Simulation epoch of the last TRRJ slew integration (epoch deltas, not
-   * render tick deltas — the clock can repeat one tick across frames). */
-  lastEpochMs: number | null
-}
-
 export interface IssAnimationsProps {
   rootRef: React.RefObject<THREE.Group | null>
   quality: DetailQuality
@@ -124,212 +93,45 @@ export interface IssAnimationsProps {
   onError: () => void
 }
 
-const DEG2RAD = Math.PI / 180
-
-/** Joint state published by the visible detail model, keyed by joint id. */
-const sharedJointStates = new Map<string, SharedJointState>()
-
-function publishJointState(state: JointRuntime, wallMs: number): void {
-  const id = state.joint.def.id
-  const shared = sharedJointStates.get(id)
-  if (shared) {
-    shared.applied = state.applied
-    shared.lastEpochMs = state.lastEpochMs
-    shared.wallMs = wallMs
-  } else {
-    sharedJointStates.set(id, { applied: state.applied, lastEpochMs: state.lastEpochMs, wallMs })
-  }
-}
-// Slew limits are in simulation seconds; at 300× that alone would let the
-// BGAs (2°/sim-s) and TRRJs (0.75°/sim-s) sweep 225–600°/s on screen after a
-// seek or an eclipse transition. This caps the on-screen rate too, so every
-// catch-up reads as a glide.
-const MAX_WALL_DEG_PER_SECOND = 12
-// The TRRJ law switches at the penumbra midpoint (sunVisibility = 0.5), the
-// same edge the old cylinder test used.
-
 export function ISSAnimations({ rootRef, quality, active, rigMetadata, onError }: IssAnimationsProps): null {
   const config = useMemo(() => configForQuality(quality, rigMetadata), [quality, rigMetadata])
-  const jointsRef = useRef<JointRuntime[]>([])
-  const oscillatorsRef = useRef<ReturnType<typeof resolveOscillators>>([])
+  const animatorRef = useRef<RigAnimator | null>(null)
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
-
-  const _rootQuat = useRef(new THREE.Quaternion())
-  const _worldPos = useRef(new THREE.Vector3())
   const _sunWorld = useRef(new THREE.Vector3())
-  const _sunLocal = useRef(new THREE.Vector3())
-  const _nadirLocal = useRef(new THREE.Vector3())
-  const _sunParent = useRef(new THREE.Vector3())
-  const _nadirParent = useRef(new THREE.Vector3())
-  const _deltaQuat = useRef(new THREE.Quaternion())
-  const _parentQuat = useRef(new THREE.Quaternion())
 
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
-
-    const runtimes: JointRuntime[] = []
-    const failures: string[] = []
-    root.updateWorldMatrix(true, true)
-    for (const def of config.joints) {
-      const result = resolveJoint(root, def)
-      if (result.ok) {
-        runtimes.push({ joint: result.joint, applied: 0, initialized: false, lastEpochMs: null })
-      } else {
-        failures.push(`${result.nodeName}: ${result.reason}`)
-      }
-    }
-    if (failures.length > 0) {
+    const animator = new RigAnimator(root, config)
+    if (animator.failures.length > 0) {
       // A required joint is missing or unresolvable — do not animate a
       // half-rig (plan 001 stop condition: no silent skipping).
-      console.error('[ISSAnimations] rig resolution failed:', failures)
+      console.error('[ISSAnimations] rig resolution failed:', animator.failures)
       onErrorRef.current()
       return
     }
-
-    jointsRef.current = runtimes
-    oscillatorsRef.current = resolveOscillators(root, config.oscillators)
-    return () => {
-      jointsRef.current = []
-      oscillatorsRef.current = []
-    }
+    animatorRef.current = animator
+    return () => { animatorRef.current = null }
   }, [config, rootRef])
 
   useFrame((_, delta) => {
-    const root = rootRef.current
-    if (!root) return
+    const animator = animatorRef.current
+    if (!animator) return
     if (!active) {
-      // Re-enter through the hand-off (or the target) when shown again.
-      for (const state of jointsRef.current) state.initialized = false
+      animator.deactivate()
       return
     }
-    const nowWallMs = performance.now()
-
     const simTime = simulationClock.now()
-    const epochMs = simTime.epochMs
-
-    // Camera idle sweeps run for the visible detail model (empty config on
-    // the static fallbacks).
-    applyOscillators(oscillatorsRef.current, epochMs / 1000)
-    if (jointsRef.current.length === 0) return
-
     // One solar ephemeris per frame feeds tracking, the eclipse test, and the
     // eclipse target; the same sun vector the lighting consumers use.
-    const sunWorld = sunDirectionWorld(simTime.julianDate)
-    root.getWorldQuaternion(_rootQuat.current)
-    root.getWorldPosition(_worldPos.current)
-    _sunWorld.current.set(sunWorld.x, sunWorld.y, sunWorld.z).normalize()
-    const sunlit = isSunlit(_worldPos.current, _sunWorld.current)
-
-    // Sun/nadir in model space: the pivot root carries the normalization
-    // pre-rotation and the live LVLH attitude, both cancelled by its inverse.
-    _rootQuat.current.invert()
-    _sunLocal.current.copy(_sunWorld.current).applyQuaternion(_rootQuat.current)
-    _nadirLocal.current
-      .copy(_worldPos.current)
-      .multiplyScalar(-1)
-      .normalize()
-      .applyQuaternion(_rootQuat.current)
-
-    const limitRad = config.limits.softwareLimitDeg * DEG2RAD
-    const slewRadPerSimSec = config.limits.slewDegPerSimSecond * DEG2RAD
-    const bgaSlewRadPerSimSec = BGA_SLEW_DEG_PER_SIM_SECOND * DEG2RAD
-
-    for (const state of jointsRef.current) {
-      const { joint } = state
-      if (!state.initialized) {
-        const handoff = freshHandoff(sharedJointStates.get(joint.def.id), nowWallMs)
-        if (handoff) {
-          state.applied = handoff.applied
-          state.lastEpochMs = handoff.lastEpochMs
-          state.initialized = true
-        }
-      }
-
-      if (joint.def.role === 'bga') {
-        // Live parent frame: the SARJ above this BGA was applied earlier in
-        // this loop (joint order), so refresh the ancestor matrices first.
-        const parent = joint.node.parent
-        if (!parent) continue
-        parent.updateWorldMatrix(true, false)
-        parent.getWorldQuaternion(_parentQuat.current).invert()
-        _sunParent.current.copy(_sunWorld.current).applyQuaternion(_parentQuat.current)
-        const dtSim =
-          state.lastEpochMs === null ? 0 : Math.max(0, (epochMs - state.lastEpochMs) / 1000)
-        state.lastEpochMs = epochMs
-        // Track through eclipse too: holding there and re-adopting the target
-        // at sunrise snapped the wings by up to |β| in one frame.
-        const target = bgaTargetAngle(joint, _sunParent.current)
-        if (target === null) continue
-        if (!state.initialized) {
-          state.applied = target
-          state.initialized = true
-        } else {
-          const step = Math.min(
-            bgaSlewRadPerSimSec * dtSim,
-            MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
-          )
-          state.applied = advanceToward(state.applied, target, step)
-        }
-        applyJointAngle(joint, state.applied, _deltaQuat.current)
-        publishJointState(state, nowWallMs)
-        continue
-      }
-
-      _sunParent.current.copy(_sunLocal.current).applyQuaternion(joint.modelToParent)
-
-      if (joint.def.role === 'sarj') {
-        const target = sarjTargetAngle(joint, _sunParent.current)
-        if (target === null) continue // gimbal singularity: hold
-        if (!state.initialized) {
-          // Adopt the first valid target directly: the authored pose is only
-          // on screen for the mount frame, and unwinding from it would spin
-          // the assembly across up to half a revolution for nothing.
-          state.applied = wrapPi(target)
-          state.initialized = true
-        } else {
-          // Shortest-path unwrap keeps the sweep continuous across ±π while
-          // the applied value stays wrapped to [−π,π).
-          state.applied = wrapPi(state.applied + wrapPi(target - state.applied))
-        }
-        applyJointAngle(joint, state.applied, _deltaQuat.current)
-        publishJointState(state, nowWallMs)
-        continue
-      }
-
-      // Bounded illustrative TRRJ law (see module header).
-      _nadirParent.current.copy(_nadirLocal.current).applyQuaternion(joint.modelToParent)
-      const target = trrjTargetAngle(
-        joint,
-        state.applied,
-        _sunParent.current,
-        _nadirParent.current,
-        sunlit,
-        limitRad,
-      )
-      const dtSim =
-        state.lastEpochMs === null ? 0 : Math.max(0, (epochMs - state.lastEpochMs) / 1000)
-      state.lastEpochMs = epochMs
-      if (target === null) continue // gimbal singularity: hold
-      if (!state.initialized) {
-        state.applied = target
-        state.initialized = true
-      } else {
-        // Slew in simulation seconds via epoch deltas: PAUSED advances the
-        // epoch by 0 (no repeated integration), 120× advances it faster, and
-        // a repeated tick inside one frame yields dtSim = 0, never a doubled
-        // rate. trrjAdvance relabels the two-sided branch at a travel stop
-        // instead of slewing the equivalent antipode.
-        const step = Math.min(
-          slewRadPerSimSec * dtSim,
-          MAX_WALL_DEG_PER_SECOND * DEG2RAD * Math.min(delta, 0.1),
-        )
-        state.applied = trrjAdvance(state.applied, target, step, limitRad)
-      }
-      applyJointAngle(joint, state.applied, _deltaQuat.current)
-      publishJointState(state, nowWallMs)
-    }
+    const sun = sunDirectionWorld(simTime.julianDate)
+    animator.step({
+      sunWorld: _sunWorld.current.set(sun.x, sun.y, sun.z).normalize(),
+      epochMs: simTime.epochMs,
+      wallDeltaSec: delta,
+      nowWallMs: performance.now(),
+    })
   })
 
   return null

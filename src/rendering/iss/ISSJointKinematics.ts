@@ -414,9 +414,14 @@ export function freshHandoff(
 
 export interface OscillatorEntry {
   part: THREE.Object3D
-  /** Authored rotation value the sweep composes onto. */
-  base: number
   spec: OscillatorSpec
+  /** Authored pose the sweep composes onto (immutable). */
+  baseQuaternion: THREE.Quaternion
+  basePosition: THREE.Vector3
+  /** The part's own local `spec.axis`, in its PARENT frame (unit). */
+  axisParent: THREE.Vector3
+  /** Point the sweep turns about, in the parent frame. */
+  pivotParent: THREE.Vector3
 }
 
 function specMatches(spec: OscillatorSpec['target'], name: string): boolean {
@@ -424,34 +429,82 @@ function specMatches(spec: OscillatorSpec['target'], name: string): boolean {
   return spec.test(name)
 }
 
+const LOCAL_AXES: Record<Axis, THREE.Vector3> = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1),
+}
+
 /**
- * Resolve oscillator targets. Every entry carries its OWN spec, so a missing
- * target contributes no entries and a multi-match target contributes one
- * entry per match — neither can borrow another camera's axis or period.
+ * Where a camera sweep should pivot (world space). The authored origin is
+ * right for most parts (the JEM cameras sit within 3–9 cm of it), but the
+ * ELP/SHP pan nodes carry an origin 2.7 m / 4.5 m away from their 0.5 m
+ * cameras — rotating about it swung each camera off its mount. When the
+ * origin lies outside the part (farther from the geometry centre than half
+ * its largest extent), the sweep turns about the geometry centre instead.
+ */
+export function oscillatorPivot(
+  originWorld: THREE.Vector3,
+  geometryCenterWorld: THREE.Vector3 | null,
+  geometryMaxExtent: number,
+): THREE.Vector3 {
+  if (!geometryCenterWorld || !(geometryMaxExtent > 0)) return originWorld.clone()
+  return originWorld.distanceTo(geometryCenterWorld) > geometryMaxExtent / 2
+    ? geometryCenterWorld.clone()
+    : originWorld.clone()
+}
+
+/**
+ * Resolve oscillator targets at mount (authored pose). Every entry carries
+ * its OWN spec, so a missing target contributes no entries and a multi-match
+ * target contributes one entry per match — neither can borrow another
+ * camera's axis or period.
  */
 export function resolveOscillators(root: THREE.Object3D, specs: OscillatorSpec[]): OscillatorEntry[] {
   const entries: OscillatorEntry[] = []
+  root.updateWorldMatrix(true, true)
   for (const spec of specs) {
     root.traverse((object) => {
-      if (specMatches(spec.target, object.name)) {
-        entries.push({ part: object, base: object.rotation[spec.axis], spec })
-      }
+      if (!specMatches(spec.target, object.name) || !object.parent) return
+      const box = new THREE.Box3().setFromObject(object)
+      const size = box.getSize(new THREE.Vector3())
+      const pivotWorld = oscillatorPivot(
+        object.getWorldPosition(new THREE.Vector3()),
+        box.isEmpty() ? null : box.getCenter(new THREE.Vector3()),
+        Math.max(size.x, size.y, size.z),
+      )
+      entries.push({
+        part: object,
+        spec,
+        baseQuaternion: object.quaternion.clone(),
+        basePosition: object.position.clone(),
+        axisParent: LOCAL_AXES[spec.axis].clone().applyQuaternion(object.quaternion).normalize(),
+        pivotParent: object.parent.worldToLocal(pivotWorld),
+      })
     })
   }
   return entries
 }
 
-/** Advance the idle sweep for every entry at simulation time `epochSec`. */
+const _sweep = new THREE.Quaternion()
+const _offset = new THREE.Vector3()
+
+/**
+ * Advance the idle sweep for every entry at simulation time `epochSec`: a
+ * rotation about the part's own local axis (pre-multiplied in the parent
+ * frame), turning about the entry's pivot.
+ */
 export function applyOscillators(entries: OscillatorEntry[], epochSec: number): void {
   for (const entry of entries) {
     const phaseRad = (entry.spec.phaseDeg ?? 0) * DEG2RAD
     const amplitudeRad = entry.spec.amplitudeDeg * DEG2RAD
-    entry.part.rotation[entry.spec.axis] =
-      entry.base + amplitudeRad * Math.sin((2 * Math.PI * epochSec) / entry.spec.periodSec + phaseRad)
+    const angle = amplitudeRad * Math.sin((2 * Math.PI * epochSec) / entry.spec.periodSec + phaseRad)
+    _sweep.setFromAxisAngle(entry.axisParent, angle)
+    entry.part.quaternion.copy(entry.baseQuaternion).premultiply(_sweep)
+    _offset.copy(entry.basePosition).sub(entry.pivotParent).applyQuaternion(_sweep)
+    entry.part.position.copy(entry.pivotParent).add(_offset)
   }
 }
-
-// ─── Asset-embedded rig metadata (extras.orbitalRig) ─────────────────────────
 
 export interface ValidatedRigMetadata {
   joints: JointDefinition[]
