@@ -123,3 +123,34 @@ cold-Locate path were not measured — run the checklist below for those.
 3. Inspect the Earth day side, city lights on the night side, the terminator, cloud
    limb, atmosphere limb, sun disc, and lens ring for gross visual regressions.
 4. Record the browser, WebGL version, and renderer class with the smoke result.
+
+## Penumbra and countdown
+
+1. Open the production preview and raise the clock to 300x (Follow the station).
+   Wait for a terminator crossing (one every 30 to 60 simulated minutes).
+2. Through the crossing the ISS lighting (key light, ambient, earthshine) and the
+   glint tint must fade over several frames, not switch in one. The TRRJ law
+   switches at the midpoint of that fade; radiators must not jump.
+3. The line under the gauges reads "Daylight · sunset in mm:ss" or "Eclipse ·
+   sunrise in mm:ss", counts down, and hits 00:00 at the crossing, then flips to
+   the opposite phase with a fresh countdown. After a seek it recomputes at once.
+
+## Ground track
+
+1. HUD globe: the track is dotted behind the station and solid ahead, and it is a
+   sine-like curve (the Earth turns under the orbit), not a great circle.
+2. Open Render settings and switch "Ground track" on (default off). At 25,000 km,
+   13,600 km and in Follow the 3D track and the footprint ring must not flicker or
+   z-fight with the surface. The limb must hide the far side of the track, and the
+   station model must occlude the track where it passes in front.
+3. Switch it off again: the track and footprint disappear and the scene matches
+   the calibrated default look.
+
+## Automated smoke
+
+`npm run test:e2e` builds the production bundle, serves it with `vite preview`
+and runs the Playwright smoke specs in `tests/e2e/` on software WebGL, with the
+network stubbed. It covers a clean boot, Locate reaching "Follow · Locked",
+Space pausing, `H` hiding the HUD, settings surviving a reload, and a TLE failure
+degrading to Cached, Recovery or Fallback. CI runs it as the `e2e` job after
+`verify`. It does not replace the visual checks above.

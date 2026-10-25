@@ -5,69 +5,88 @@
 > (see CLAUDE.md). Keep the Current state section fresh in the same commit as
 > behavior changes - never ship an errata banner, fix the stale text instead.
 
-## Current state (2026-10-23)
+## Current state (2026-10-25)
 
-- **PRs #14 and #15 merged 2026-10-23**, in that order (#15 was stacked on
-  #14). Merge commits `4d45d64` and `b314bac`; `verify` and `npm audit` are
-  green on both. The live deployment still needs the post-merge check below.
-- **#14 `feat/tier0-gains`** (`f26f72a`, `c1bc242`, `013331e`): batched
-  texture uploads (C.6a), build-id-versioned immutable asset URLs (D.2),
-  Hide-HUD toggle on `H`, safe-area insets + `viewport-fit=cover` (D.6 CSS
-  half), OG/Twitter metadata + `robots.txt` + `sitemap.xml` + a generated
-  `og-image.png` (D.5), and `LICENSE` + `NOTICE.md` + the fonts' OFL (D.4).
-- **#15 `fix/orbit-line-dashes`** (`a75f8fe`, `4e5a335`): the orbit ring now
-  spans the live period (the 214 km seam is down to the 11–16 km SGP4
-  residual) and the dash pattern is phased from the clock instead of the
-  moving arc edge; 5 new predictor tests.
-- **Locate LOD + two-tier detail landed 2026-10-23** (`feat/locate-lod`):
-  `public/models/iss_igoal_locate.glb` is derived from the high asset by
-  `scripts/build-iss-locate-lod.mjs` — 5.27 MiB, 784k triangles, 703 nodes and
-  the full 12-joint rig, 512 px textures. Locate/Follow loads this tier; the
-  full 20.5 MB `iss_igoal.glb` loads only inside the 200/220 km Inspect band.
-  A 5 s boot-idle prefetch warms the LOD (connection-gated), and `__BUILD_ID__`
-  is now an asset-content hash instead of the commit SHA, so docs/code deploys
-  no longer invalidate the model cache. Full-high failure keeps the LOD;
-  LOD failure demotes to legacy. Browser-verified 2026-10-23 (headless Chrome,
-  live): Locate requested only the LOD and reached `Follow · Locked`; Inspect
-  requested the full asset once; no console errors. A human visual/hitch pass
-  and a throttled cold run remain.
-- Measured on the C.6a change: `iss_igoal.glb` carries 73 WebP textures;
-  uploading them costs 178 ms of GL work on this machine (2.44 ms each).
-  The old loop yielded one frame per texture (73 frames ≈ 1.2 s at 60 Hz);
-  the budgeted loop finishes in 30 frames (≈0.5 s).
-- Found in review of the deployed preview and fixed in `c1bc242`: `/draco`
-  had been switched to `immutable` although `useGLTF.setDecoderPath` builds
-  its own URLs with no `?v=`. It stays `max-age=3600`; only `/models` and
-  `/textures` are immutable, and both are versioned.
-- Green on merged main: `npm run verify` (246 unit tests + build) and CI on
-  the merge commits.
-- Prior: PR #12 (tooling + CI, guarded `/api/tle`, CSP + self-hosted fonts,
-  DPR governor, ISS wing gimbals, Nauka hull fix, lens flare rework). Details:
-  `plans/PROGRESS.md`.
-- Docs-only 2026-10-19: read `berkcomba/youreyesinspace` and added the
-  comparison + borrow list (D.1-D.9) below.
+- **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
+  lint (0 warnings), 397 unit tests in 43 files, production build. CI
+  (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
+  an `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
+  `vite preview`). Node 22 (`.nvmrc`).
+- **Improve-skill audit, waves 1-2 landed 2026-10-24/25** (plans 002-015; the
+  index is `plans/README.md`, the per-plan results are in `plans/PROGRESS.md`):
+  - *Data and toolchain.* The packaged fallback TLE has epoch 2026-10-24, and
+    `.github/workflows/refresh-tle.yml` opens a fallback-TLE PR Mon/Thu (it
+    needs the repo setting "Allow GitHub Actions to create and approve pull
+    requests"). The dev toolchain is patched within its majors; CI actions are
+    pinned to SHAs with `persist-credentials: false`.
+  - *Telemetry.* Offline starts recover on reconnect; confidence is scored on
+    the magnitude of the TLE age; the clock clamp is 1000 ms per tick (it was
+    100, which dropped accelerated time on slow ticks); `X-TLE-Stale` is
+    honoured; a cache bootstrap never replaces a network TLE; TLE swaps blend
+    from the old set at the same instant; `/api/tle` caps upstream bodies at
+    16 KiB.
+  - *Geo.* Place and weather freshness are tracked separately, weather is
+    hidden after 1 h, the local time is null (never another cell's clock) without a UTC offset, and
+    persisted rows are validated (`isGeoSnapshot`).
+  - *Rendering.* Stable glint uniforms (the fade and tint work again); detail
+    preparation compiles the composer's shader variant; the flare's Earth mask
+    is off when Earth's centre is behind the camera; the PMREM target is
+    disposed; 4x MSAA on the bloom composer target; the Locate sweep angle is
+    signed, so close departures land on the planned standoff.
+  - *Tests and hygiene.* Known-answer tests for `OrbitalEngine` vs raw
+    `satellite.js`, GMST vs `gstime`, formatters, `periodMsOf`, the mode
+    vocabulary and `ApiRateLimiter`; orbit-tape math lives in
+    `src/ui/clusters/orbitTapeMath.ts`; the production crash screen shows no
+    stack; HUD strings are sentence case.
+- **Features landed**: **D.1** penumbra (`src/core/orbital/SunVisibility.ts`;
+  lighting follows `sunVisibility` through `eclipseLighting.ts`; the TRRJ law
+  switches at the 0.5 edge). **B.1** day/night countdown
+  (`src/core/orbital/EclipseForecast.ts`; store fields `sunlit` and
+  `shadowTransitionInMs`; the line under the gauges reads "Daylight · sunset in
+  mm:ss" or "Eclipse · sunrise in mm:ss"). **A.3** Playwright smoke suite.
+  **B.2** ground track (`src/core/orbital/GroundTrack.ts`; the HUD globe draws
+  it dotted behind the station and solid ahead; an optional 3D track and
+  visibility footprint behind the "Ground track" setting, default off, with a
+  constant clip-space depth bias) — this also supersedes D.3's options.
+- **Reviewer browser checks (dev build, headless Chromium on SwiftShader)**:
+  Locate reaches `Follow · Locked`; the glint fades (opacity 0.077 at the
+  Follow standoff); Bloom-mode edges are antialiased; the countdown reads and
+  counts down; the mobile gauge gap is 10 px; the 3D track and footprint
+  render with limb occlusion; no console errors except an external BigDataCloud
+  400. No human visual pass yet.
+- **Locate LOD + two-tier detail (2026-10-23)**: Locate/Follow load
+  `iss_igoal_locate.glb` (5.27 MiB, 784k triangles, 703 nodes, full rig); the
+  full 20.5 MB `iss_igoal.glb` loads only inside the 200/220 km Inspect band;
+  `__BUILD_ID__` is an asset-content hash. Earlier the same week: PRs #14
+  (texture-upload batching, immutable versioned assets, `H` HUD toggle,
+  safe-area insets, OG metadata, LICENSE/NOTICE) and #15 (orbit-ring closure,
+  clock-phased dashes). Details: `plans/PROGRESS.md`.
 
 ## Next (ranked)
 
-1. Re-check the live deployment after the #14/#15 and Locate-LOD merges:
-   console free of CSP errors; `/api/tle` 200 with its cache header;
-   `/api/tle?x=1` 404; Nauka, wing tilt and flare up close; `/models/*` and
-   `/textures/*` answering `immutable` with `?v=<asset hash>`;
-   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200; `H` hides the
-   HUD; safe-area insets on a notched phone; the orbit ring closes at the
-   station's antipode and the dashes hold across refreshes; on a throttled
-   connection, Locate departs with the detailed LOD (not the schematic) at
-   Follow and the full model appears only below 200 km.
-2. **D.1 - penumbra eclipse** (comparison section below). The largest
-   fidelity gap left, and it pays for B.1's countdown at the same time.
-3. Roadmap B.1-B.3: orbital day/night countdown, ground track + footprint,
-   next visible pass from a location. B.2 must adopt D.3's depth-independent
-   draw first.
-4. Playwright smoke suite (needs install; postponed twice).
-5. Optional realism: park/feather arrays mode (BGAs hold in eclipse), TRRJ
-   thermal profile (P2).
-6. Remaining borrow items: C.6b (network warm on Locate intent) and D.7
-   (save-frame). D.8 (GIBS tiles) only after A.2's measured baseline.
+1. Re-check the live deployment after the wave 1-2 merges: console free of CSP
+   errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404;
+   `/models/*` and `/textures/*` answering `immutable` with `?v=<asset hash>`;
+   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200. Then a human
+   visual pass on the penumbra fade at a terminator crossing (300x), the
+   countdown, the ground track (HUD globe and the 3D setting) and the Bloom
+   MSAA edges; on a throttled connection, Locate departs with the detailed LOD
+   (not the schematic) at Follow and the full model appears only below 200 km.
+2. **B.3 next visible pass.** Reuse `isSunlit` and the forecaster pattern. It
+   needs CSP and `Permissions-Policy` changes for city search and browser
+   geolocation.
+3. **C.5**: a short `CHANGELOG.md` and Dependabot (the scheduled fallback-TLE
+   refresh is done).
+4. **D.6 remainder** (coarse-pointer hit areas, render-scale override) and
+   **C.4** accessibility.
+5. Deferred majors: React 19 + R3F 9 + drei 10, then three r18x, Vite 7/8, and
+   satellite.js 7. The "investigate visually first" list is in
+   `plans/README.md`.
+6. Remaining roadmap and borrow items: A.2 measured perf run, B.4-B.8,
+   C.1-C.3, **D.7** save-frame (a positive-priority `useFrame` disables R3F
+   auto-render, so the capture must not mount while Bloom is off), D.8 (GIBS
+   tiles, only after A.2's baseline), D.9. Optional realism: a park/feather
+   arrays mode and a parked-TRRJ operations profile.
 
 ## Roadmap (2026-10-04, after the gcdatlas comparison)
 
@@ -84,35 +103,36 @@ can be extended. "Touches" lists the files expected to change.
    planetary × Bloom on/off × flare on/off × model quality, plus 300×.
    Record p50/p95/p99 and `renderer.info.memory` after 5 Bloom toggles and
    3 model switches (leak check). Table goes in PROGRESS before any cut.
-3. **Browser smoke suite (Playwright).** `tests/e2e/smoke.spec.ts`, Chromium
-   only, `page.clock` fixed, `vite preview` as the web server. Cases: boots
-   with no console errors; camera position finite after 5 s; Locate reaches
-   "Follow · Locked"; Space pauses; settings survive reload; `?failAssets`
-   style TLE failure ends in OFFLINE/RECOVERY. `npm run test:e2e`, wired into
-   CI after `verify`.
-4. **Unit tests for untested frame-math modules** (CoordinateConversions,
-   OrbitalEngine edge cases): known-answer vectors (GMST at J2000, sun
-   direction at an equinox, ECI→geodetic round trip).
+3. **Browser smoke suite (Playwright).** LANDED 2026-10-25 (plan 013):
+   `tests/e2e/smoke.spec.ts` + `fixtures.ts`, `playwright.config.ts`, Chromium
+   on software WebGL against `vite preview` with the network stubbed, `npm run
+   test:e2e`, and an `e2e` CI job after `verify`. Six specs: boots clean;
+   Locate reaches "Follow · Locked"; Space toggles pause; `H` hides the HUD;
+   settings survive reload; a TLE failure degrades to Cached, Recovery or
+   Fallback. A 390x844 mobile case is still open (C.3).
+4. **Unit tests for untested frame-math modules.** LANDED (plans 009 and
+   earlier): `CoordinateConversions` (equinox and solstice sun directions,
+   ECEF round trip), `OrbitalEngine` vs raw `satellite.js`, GMST vs `gstime`,
+   `SimulationTime`.
 
 ### B. Features
 
-1. **Orbital day/night + countdown.** Pure function
-   `eclipseState(posEciKm, sunDir)` using the cylindrical shadow model
-   (in shadow when `dot(r, s) < 0` and `|r − (r·s)s| < R⊕`). Countdown: step
-   the propagator forward at 10 s, then bisect the transition to 1 s; recompute
-   once per transition, not per frame. HUD line "Daylight · sunset in 12:41".
-   Touches: new `core/orbital/Eclipse.ts`, telemetry store, one HUD cluster.
-   Optional second cut: tint the orbit line's shadowed span.
-2. **Ground track + footprint.** Sample ±1 orbit at 30 s steps (≈190 points)
-   on each TLE swap and every 60 s; draw as a Line2 on the globe surface
-   (r = R⊕ + 2 km, in the EarthGroup/ECEF frame). Footprint: circle of
-   half-angle `acos(R⊕/(R⊕+h))` around the sub-satellite point, 64 segments.
-   **Depth: do NOT rely on the 2 km offset alone** — at `near = 1 km` and
-   24-bit depth the smallest resolvable gap is 20.7 km from the home view and
-   11.1 km from orbital altitude (14 m only at close range), so the track
-   z-fights where it matters most. Render with `depthTest: false` plus an
-   analytic Earth-horizon discard (comparison D.3 option a).
-   Touches: new `rendering/earth/GroundTrack.tsx`, settings toggle.
+1. **Orbital day/night + countdown.** LANDED 2026-10-25 (plan 012), on the
+   penumbra model of D.1 rather than the cylinder test originally specified:
+   `forecastShadowTransition` steps forward at 10 s and bisects the flip to
+   1 s, and `ShadowForecaster` recomputes only per element set, on a seek, or
+   at the cached transition. The HUD line sits under the gauges. Still open:
+   tint the orbit line's shadowed span (the optional second cut).
+2. **Ground track + footprint.** LANDED 2026-10-25 (plans 014 and 015).
+   `sampleGroundTrack` samples +/- half an orbit (about 186 points at 30 s
+   steps, refreshed every 60 s) on the HUD globe (dotted past, solid future)
+   and, behind the "Ground track" setting (default off), as a line at
+   R + 2 km plus a 64-segment footprint ring on the 3D globe. The original
+   note stands as the reason for the depth design: at `near = 1 km` and 24-bit
+   depth the smallest resolvable gap is 20.7 km from the home view and 11.1 km
+   from orbital altitude (14 m at close range), so a 2 km offset alone
+   z-fights. What landed (see D.3) is a constant clip-space depth bias, not
+   `depthTest: false`.
 3. **Next visible pass.** Observer from a typed lat/lon or a city search
    (default), with optional browser geolocation (needs `Permissions-Policy`
    `geolocation=(self)`). Scan 48 h at 30 s with `satellite.ecfToLookAngles`;
@@ -180,8 +200,9 @@ can be extended. "Touches" lists the files expected to change.
       KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2).
       This does not reduce the LOD's cold-network path.
 
-Suggested order: A.1 → A.3 → B.1 + B.2 → B.3 → A.2 → C.2 (C.6a/C.6b and the
-Locate LOD landed 2026-10-23; C.2 remains for the full-asset decode/VRAM path).
+Suggested order now: B.3 → A.2 → C.2 (A.3, B.1 and B.2 landed 2026-10-25;
+C.6a/C.6b and the Locate LOD landed 2026-10-23; C.2 remains for the
+full-asset decode/VRAM path).
 
 ## Reference comparison - berkcomba/youreyesinspace (2026-10-19)
 
@@ -206,7 +227,7 @@ engineering. Items marked **(architectural)** would hold at any scope.
 | Telemetry | Live TLE; 4-mode LIVE/HYBRID/OFFLINE/RECOVERY; server proxy with checksum + epoch validation + memo + dedupe + stale-on-error; IndexedDB cache; packaged fallback; transactional swap | The ISS is a static Keplerian element set (`spacecraft.ts`: `orbit(6789, 0.0006, 51.64, ...)`). No TLE, no live position |
 | ISS fidelity | LVLH/TEA attitude, SARJ/TRRJ/BGA on the authored rig, live-parent-frame targets, slew caps, eclipse hold, 576-line pure kinematics module + tests | A glTF prop fitted to a sphere radius; no articulation, no attitude law |
 | Camera | 6-mode state machine with hysteresis, station-relative flights, horizon transport, clearance constraint, deviation-based Reset **(architectural)** | Competent free/orbit camera + autopilot; no mode machine, no flight/constraint separation |
-| Verification | Unit suite, asset budget, shader-ramp gate, lint 0 warnings, CI | No test runner, no lint, no asset gate; CI is typecheck + build + a Docker health curl |
+| Verification | Unit suite, Playwright smoke suite, asset budget, shader-ramp gate, lint 0 warnings, CI | No test runner, no lint, no asset gate; CI is typecheck + build + a Docker health curl |
 | HUD | Bespoke design system (`index.css` tokens), honest-instrument rule, 1 Hz throttled stores | 940-line `UI` class over a static DOM skeleton; functional, not a system |
 | Post | Bloom off = bit-for-bit direct pipeline (contract) | `Engine.useComposer` exists but is never set false; bloom can be disabled, the composer (RenderPass + lensing + OutputPass) always runs |
 | Resilience | Per-subtree error boundaries, WebGL diagnostic screen, `webglcontextlost/restored` rebuild, DPR governor with hitch exclusion and per-session caps | No context-loss handling at all; fixed DPR cap + manual scale |
@@ -220,36 +241,31 @@ access, not log integrity.
 
 ### Genuinely borrowable - ranked
 
-Status roll-up (2026-10-19): **D.2, D.4, D.5 landed; D.6 landed for the CSS
-half.** All five shipped in PR #14 together with C.6a. Still open: D.1, D.3,
-D.7, D.8, D.9, plus the coarse-pointer and render-scale halves of D.6.
+Status roll-up (2026-10-25): **D.1, D.2, D.4, D.5 landed; D.3 superseded;
+D.6 landed for the CSS half.** D.2, D.4, D.5 and D.6's CSS half shipped in
+PR #14 together with C.6a; D.1 and D.3 shipped with plans 011 and 015. Still
+open: D.7, D.8, D.9, plus the coarse-pointer and render-scale halves of D.6.
 
-#### D.1 - Penumbra instead of a binary eclipse test
+#### D.1 - Penumbra instead of a binary eclipse test - LANDED 2026-10-24/25 (plan 011)
 
-Their `common.glsl` `sphereShadow` smoothsteps over the occluder's angular
-radius +/- the sun's angular radius (`sunAng = R_sun / |sunPos - P|`), so a
-shadow edge is a gradient, not a step. Ours is binary in three places:
-`ISSModel.tsx` (`isShadowed = p < 0 && perpSq < R^2`), `ISSAnimations.tsx`
-(the same expression, passed to the TRRJ law as `sunlit`), and
-`ISSJointKinematics.trrjTargetAngle` takes `sunlit: boolean`. The Sun's
-angular radius is 0.266 deg, so the real penumbra at the station is
-`2 * 6,779 km * 0.00465 rad ≈ 63 km` wide — roughly 8 s of flight. Our test
-collapses that into one frame, and that frame switches a 2.3x key-light
-boost, ambient 0.24 -> 0.42, the earthshine key light and the glint colour.
-Visible pop; the same boolean also flips the TRRJ target law.
+**Problem (as of 2026-10-19, now fixed):** their `common.glsl` `sphereShadow`
+smoothsteps over the occluder's angular radius +/- the sun's angular radius,
+so a shadow edge is a gradient. Ours was binary in three places
+(`ISSModel.tsx`, `ISSAnimations.tsx` and `trrjTargetAngle`'s `sunlit`
+boolean). The Sun's angular radius is 0.266 deg, so the real penumbra at the
+station is `2 * 6,779 km * 0.00465 rad ≈ 63 km` wide — roughly 8 s of flight —
+and the binary test collapsed that into one frame that switched a 2.3x
+key-light boost, ambient 0.24 -> 0.42, the earthshine key light and the glint
+colour.
 
-First cut: one pure function in `src/core/orbital/` -
-`sunVisibility(positionKm, sunDir): number` in [0,1] with a ~63 km penumbra
-band at ISS altitude. Feed the continuous value to the three light
-intensities and the glint tint; keep the boolean at a 0.5 threshold for the
-TRRJ law so joint behaviour is unchanged. Reuse it for B.1's countdown
-(bisect the 0.5 crossing instead of a second shadow model).
-
-Touches: new `core/orbital/SunVisibility.ts` + test, `ISSModel.tsx`,
-`ISSAnimations.tsx`, the `ISSJointKinematics` call site.
-Check: unit vectors at umbra / penumbra / full sun; browser pass through the
-terminator at 300x shows no single-frame exposure step; joint tests unchanged.
-Cost: ~1 session. No shader work, no dependency.
+**Landed:** `sunVisibility(positionKm, sunDir)` in `src/core/orbital/
+SunVisibility.ts` returns the visible fraction of the solar disc in [0, 1]
+(circular-segment area across the penumbra); `isSunlit` is `>= 0.5`, which is
+exactly the old cylinder edge. `ISSModel.tsx` feeds `1 - sunVisibility`
+through `eclipseLighting()` (`src/rendering/iss/eclipseLighting.ts`; the
+endpoints reproduce the old sunlit and eclipse values) and the glint tint;
+`ISSAnimations.tsx` calls `isSunlit` for the TRRJ law, so joint behaviour is
+unchanged. B.1's countdown bisects the same 0.5 crossing.
 
 #### D.2 - Build-id-versioned, immutable static assets - LANDED 2026-10-19
 
@@ -290,7 +306,7 @@ Check: `npm run verify`; a preview deploy shows `?v=` in the network panel
 and `immutable` on the response; a reload serves from disk cache.
 Cost: under an hour.
 
-#### D.3 - Fix the ground-track depth budget before implementing B.2
+#### D.3 - Fix the ground-track depth budget before implementing B.2 - SUPERSEDED (landed with B.2, plan 015)
 
 B.2 specifies `r = R_earth + 2 km` in the EarthGroup frame. With the current
 camera (`near = 1 km`, `far = 2,000,000 km`, 24-bit depth) the smallest
@@ -302,22 +318,31 @@ orbital altitude — where the track is most useful.
 
 They set `logarithmicDepthBuffer: true` with `near = 1 m`, `far = 1e13 km`,
 which removes the problem - but they need it for a 10^13 km scene; we do not.
-Options, cheapest first:
+**What landed instead:** none of options a-c below. The track's vertex shader
+pulls clip-space depth toward the camera by a constant NDC amount
+(`GROUND_TRACK_DEPTH_BIAS_NDC = 4e-7`, about 3 ulps of a 24-bit buffer, in
+`src/rendering/earth/groundTrackDepth.ts`). The world-space pull grows with
+the square of the view distance (about 70 km at the home view, 37 km at
+13,600 km, 0.05 km at Follow range), so the track wins against the globe it
+sits on at every zoom, while real depth testing still lets the limb hide the
+far side and the station occlude the track. Option (a) would have drawn the
+track over the ISS model at close range.
+
+Options considered, cheapest first (history):
 
 a. Draw the track in a second pass with `depthTest: false` and an analytic
    Earth-horizon discard in the fragment shader (keeps limb occlusion, no
-   global change). Recommended.
+   global change). Was recommended; replaced by the bias above.
 b. Raise the offset to ~40 km and accept a floating track at close range -
    visibly wrong at INSPECT range. Not recommended.
 c. Adopt `logarithmicDepthBuffer` - every custom shader needs the
    `logdepthbuf_*` chunks and the bloom-off parity contract must be
    re-verified. Only if other depth artifacts appear.
 
-Touches (a): new `rendering/earth/GroundTrack.tsx` with `depthTest: false`,
-`renderOrder` after EarthGroup, horizon-discard uniform.
-Check: at 25,000 / 13,629 / 6,849 km camera Earth-centre distance the track
-never flickers; the far limb is hidden behind the globe.
-Cost: folded into B.2, not extra.
+Check used for the landed version: at 25,000 / 13,600 km camera
+Earth-centre distance and at Follow range the track never flickers, the far
+limb is hidden behind the globe and the station occludes the track
+(`docs/verification.md`, "Ground track").
 
 #### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line pending B.7)
 
@@ -490,10 +515,10 @@ Cost: one session. Low value for a tracker; listed for completeness.
   endorsement); the GIBS layer ids are facts.
 - **Brand: no borrowing.** The name and logo are trademarks of BigBrains.
 
-**Net:** D.1 and D.2 are the two changes with real user-visible payoff for
-under a session each. D.3 is a correction to our own B.2 spec and must land
-before that feature starts. D.8 is the only large borrow worth doing, and only
-after the perf baseline.
+**Net:** D.1 and D.2 were the two changes with real user-visible payoff for
+under a session each, and both have landed. D.3 corrected our own B.2 spec and
+landed with it. D.8 is the only large borrow left worth doing, and only after
+the perf baseline.
 
 ## Older items - status folded into the roadmap
 
@@ -512,12 +537,14 @@ after the perf baseline.
   shortcuts -> roadmap C.4 (`H` is now the HUD toggle).
 - **ISS attitude (old item 3).** DONE - LVLH/TEA in `ISSGroup`, SARJ
   tracking, BGA beta tilt landed 2026-10-04, TRRJ illustrative mode.
-  Optional remains: a faithful TRRJ thermal profile (P2) and Canadarm2/ERA
-  poses (needs rig work; no dedicated nodes).
+  The TRRJ law (edge-to-Sun in daylight, face-to-Earth in eclipse) is
+  implemented as an illustrative autotrack. Optional remains: a parked-TRRJ
+  operations profile and Canadarm2/ERA poses (needs rig work; no dedicated
+  nodes).
 - **Module explorer (old item 4).** Future. The asset-budget collision is
   solved: IGOAL streams on demand; `check-asset-budget.mjs` gates only the
   initial load. Per-module raycasting/selection/exploded view remain.
-- **Ground track + passover (old item 5).** = roadmap B.2 + B.3.
+- **Ground track + passover (old item 5).** = roadmap B.2 (landed) + B.3.
 - **Responsive audit (old item 6).** Still open. Keep sizing in the
   stylesheet: inline styles beat media queries (historical bug twice).
 - **Geo proxy (old item 7).** Conditional on field reports; follow the

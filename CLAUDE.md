@@ -25,6 +25,7 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 
 - `npm run dev` - Vite; serves `/api/tle` through the real handler
 - `npm test` - Vitest watch
+- `npm run test:e2e` - Playwright smoke suite (production preview)
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (before releases)
 - `npm run preview` - production bundle locally
 - `npm run verify` - the gate (see Rule 1)
@@ -34,7 +35,7 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `api/tle.ts` - Vercel function; guarded (GET/HEAD only, query-refusal,
   warm memo + dedupe, stale-on-error)
 - `src/core/` - simulation truth: clock, runtime, SGP4, telemetry manager,
-  geo lookup. No React, no three.
+  geo lookup, sun visibility / eclipse forecast / ground track. No React, no three.
 - `src/interaction/` - camera state machine, flights, constraint, sensitivity
 - `src/rendering/` - scene graph: `earth/`, `iss/` (model + joints),
   `post/` (bloom + flare), `shaders/` (GLSL), `scene/`

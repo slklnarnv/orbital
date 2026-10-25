@@ -14,6 +14,8 @@ Orbital propagates public Two-Line Element sets with SGP4 and renders the result
 - Validated TLE acquisition through a CDN-cached Vercel function, IndexedDB cache, and packaged fallback
 - Custom GLSL for the day/night terminator, ocean response, clouds, atmosphere, Sun, and orbit trail
 - HDR bloom compositing with an optional Earth-occluded lens flare, toggleable in render settings
+- Day/night countdown with a modelled penumbra: a sunset or sunrise timer under the gauges, and ISS lighting that fades through the terminator
+- Ground track on the HUD globe, plus an optional 3D track and visibility footprint
 - Multi modal camera system with distance aware sensitivity and ISS tracking
 - Animated ISS parts (sun-tracking arrays, radiators, cameras) on the authored joint hierarchy
 - Ground context with place, local time, and weather
@@ -87,7 +89,7 @@ npm run build:iss-lod
 
 ## Render settings
 
-The gear popover switches the ISS model quality, the orbit-line style (continuous or dashed with an on-screen-constant dash pitch), and HDR bloom. Bloom composites the frame through UnrealBloom and an output pass; with it off, rendering is exactly the direct pipeline. When bloom is on, a lens-flare pass — a warm halo and faint iris ghosts, gated by Earth occlusion and the frame edge — is available and defaults to off.
+The gear popover switches the ISS model quality, the orbit-line style (continuous or dashed with an on-screen-constant dash pitch), HDR bloom, and the "Ground track" switch (an optional 3D track and visibility footprint on the globe, off by default). Bloom composites the frame through UnrealBloom and an output pass; with it off, rendering is exactly the direct pipeline. When bloom is on, a lens-flare pass — a warm halo and faint iris ghosts, gated by Earth occlusion and the frame edge — is available and defaults to off.
 
 ## Camera controls
 

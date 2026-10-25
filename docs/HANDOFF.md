@@ -21,10 +21,36 @@ npm run verify     # asset budget + shader ramps + tsc + lint (0 warnings) + uni
 
 All green at handoff.
 
+## Session log — 2026-10-24/25 (improve-skill audit, waves 1-2)
+
+Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
+
+- **Locate sweep angle is signed** (`CameraFlightPath`), so close departures
+  land on the planned standoff; duration formula in the camera facts below.
+- **Eclipse countdown** = the line under the gauges (`GaugesCluster.tsx`), fed
+  by `telemetryStore.sunlit` / `shadowTransitionInMs` (`ShadowForecaster`,
+  `core/orbital/EclipseForecast.ts`). It bisects the 0.5 penumbra crossing
+  (`isSunlit`), the edge the TRRJ law uses; ISS lighting fades with
+  `sunVisibility`.
+- **Ground track**: the HUD globe (`GroundTrackGlobe.tsx`) draws +/- half an
+  orbit, dotted behind and solid ahead. The 3D track + footprint
+  (`rendering/earth/GroundTrack.tsx`) is the "Ground track" setting, default
+  off; depth is a constant clip-space bias (`groundTrackDepth.ts`), not
+  `depthTest: false`; keep its colours <= 1.0 (bloom threshold).
+- **Geo freshness** (`GeoLookupService.ts`): place 30 days; weather refreshes
+  after 15 min and is hidden past 1 h; local time is null without a UTC offset,
+  never another cell's clock; persisted rows must pass `isGeoSnapshot`.
+- **Playwright hooks** (`npm run test:e2e`, production preview, network stubbed
+  with `page.route`): `#btn-locate-iss`; `[role="status"]` ("Follow · Locked");
+  `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
+  "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
+  `orbital-settings` localStorage key. The loading overlay swallows pointer
+  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
-Read this block before the older chronological list below; it is the current
-state. The 2026-10-19 PR block follows it.
+Read this block before the older chronological list below. The 2026-10-19 PR
+block follows it.
 
 **The report:** a cold Locate on slow wifi loaded the first tier, departed,
 and then showed the schematic Model A before swapping to IGOAL mid-flight with
