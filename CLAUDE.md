@@ -40,7 +40,8 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
   `post/` (bloom + flare), `shaders/` (GLSL), `scene/`
 - `src/stores/` - zustand UI projection (throttled, never per-frame)
 - `src/ui/` - HUD clusters; `src/index.css` is the HUD design system
-- `scripts/` - GLB build pipeline (`build-iss-model.mjs`) + asset/shader gates
+- `scripts/` - GLB build pipeline (`build-iss-model.mjs`, `build-iss-locate-lod.mjs`),
+  `refresh-fallback-tle.mjs`, asset/shader gates
 - `docs/` - deep docs; `plans/` - ledger + plan 001 + history
 
 ## Hard invariants (breaking any of these is a bug)

@@ -45,12 +45,14 @@ A few invariants define the scene:
 
 The `/api/tle` function races CelesTrak's two domains and `wheretheiss.at`, validates the first successful response, and serves it with CDN caching. If the function is unreachable, the browser makes one direct request to `wheretheiss.at` before falling back to local data. Successful responses are validated again and cached in IndexedDB.
 
-| State | Meaning |
-| --- | --- |
-| `LIVE` | An element set less than 24 hours old is available while online |
-| `HYBRID` | An element set between one and seven days old is available while online |
-| `OFFLINE` | Local data is being propagated while the browser is offline |
-| `RECOVERY` | Data is missing or stale and bounded retries are in progress |
+| State | HUD label | Meaning |
+| --- | --- | --- |
+| `LIVE` | Live | A CelesTrak element set fetched less than 24 hours ago is available while online |
+| `HYBRID` | Cached | An element set fetched less than seven days ago is available while online but does not qualify as Live (older than a day, or not from CelesTrak) |
+| `OFFLINE` | Fallback | Local data is being propagated while the browser is offline |
+| `RECOVERY` | Recovery | Data is missing or stale and bounded retries are in progress |
+
+LIVE and HYBRID age is measured from when the element set was fetched, not from its epoch (the packaged fallback is aged from its epoch). This is deliberate: CelesTrak sets are routinely 12 to 36 hours old at download, so epoch age would make a fresh fetch read as Cached.
 
 The packaged TLE seeds propagation synchronously. Cached entries expire after seven days; the packaged fallback remains available when no valid cache or network response exists. TLE replacement is transactional and blended over two seconds to avoid a visible position discontinuity.
 
@@ -68,7 +70,7 @@ The clock can be paused, accelerated up to 300×, or returned to the wall clock 
 
 Orbital is a visualization, not a navigation or conjunction-analysis tool. Positions are SGP4 estimates derived from public TLEs rather than spacecraft telemetry, and accuracy degrades as an element set ages.
 
-The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Close-range detail is two-tier: a derived ~5 MiB Locate LOD (`public/models/iss_igoal_locate.glb`, 784k triangles) loads on Locate hover/focus, a Locate request, or near-range entry and covers Follow; the full 20.5 MiB IGOAL model (2.67M triangles) loads only when the camera enters Inspect (below about 200 km). Neither is part of the initial download. Locate waits for the fast tier's decoding, GPU uploads, and shader preparation before departure, for at most 8 seconds — a stalled download departs on the committed model and the tier swap happens whenever it finishes. Every Locate flight is a single great-circle sweep onto the station with no pullback detour; its duration scales with the sweep angle (350 ms/rad) plus up to two extra seconds for departures far beyond the 20,000 km overview, so distant approaches take longer without compressing into a blink. Failed full-detail loads keep the committed detailed tier; a failed first tier retains the fallback and can be retried with Locate. The visualization propagates position, not spacecraft attitude.
+The Earth renderer uses a spherical `6,371 km` radius while the project computes telemetry coordinates against WGS84. The ISS model is intentionally enlarged by roughly `1,000×` so it remains legible at orbital scale. Close-range detail is two-tier: a derived ~5 MiB Locate LOD (`public/models/iss_igoal_locate.glb`, 784k triangles) loads on Locate hover/focus, a Locate request, or near-range entry and covers Follow; the full 20.5 MB IGOAL model (2.67M triangles) loads only when the camera enters Inspect (below about 200 km). Neither is part of the initial download. Locate waits for the fast tier's decoding, GPU uploads, and shader preparation before departure, for at most 8 seconds — a stalled download departs on the committed model and the tier swap happens whenever it finishes. Every Locate flight is a single great-circle sweep onto the station with no pullback detour; its duration is a 2 s base, plus 350 ms/rad of sweep angle, plus up to two extra seconds for departures far beyond the 20,000 km overview (so roughly 2 to 5 s), and distant approaches take longer without compressing into a blink. Under `prefers-reduced-motion` the same path flies in 35% of the time. Failed full-detail loads keep the committed detailed tier; a failed first tier retains the fallback and can be retried with Locate. The visualization propagates position, not spacecraft attitude.
 
 ## ISS model
 
@@ -91,7 +93,7 @@ The gear popover switches the ISS model quality, the orbit-line style (continuou
 
 - Drag to orbit; scroll or pinch to zoom. Response becomes finer near Earth and in ISS close-ups.
 - Right-drag or two-finger pan moves the pivot and releases tracking into Free mode. Ordinary orbiting and centered pinches keep the ISS locked. Zooming well out of a Free pan hands navigation back to Earth view — after about the same gesture that would leave Inspect (~1.5× at close range), never a huge zoom demand.
-- **Reset View** appears as soon as the view leaves its home framing — any orbit, zoom, or pan, in any mode — and uses a 2.2-second eased transition to a 25,000 km Earth overview, moving farther out on narrow screens so the globe and orbit fit. It keeps the current viewing side, turns smoothly even from an outward-facing Free view, does not wait for ISS detail loading, and hides again once it arrives.
+- **Reset View** appears as soon as the view leaves its home framing — any orbit, zoom, or pan, in any mode — and uses a 2.2 s eased transition (plus up to ~0.8 s to settle roll) to a 25,000 km Earth overview, moving farther out on narrow screens so the globe and orbit fit. It keeps the current viewing side, turns smoothly even from an outward-facing Free view, does not wait for ISS detail loading, and hides again once it arrives.
 - **Locate ISS** always re-flies to the station, including while already tracking it or mid-flight — a new press re-captures the flight from the current pose (from the canonical tracking framing it is visually a no-op). Flights turn the view onto the station and approach at the same time — once the station is centered it stays pinned — and hand their orientation back to manual navigation without a roll snap. Under accelerated time the flight path is carried with the station's motion, so Locate still lands on it at 300×.
 - Zoom labels describe the current view, with hysteresis at their boundaries. All manual ISS modes share a 70 km model-clearance limit.
 - Manual navigation stays outside a 6,500 km Earth-center radius. Collisions slide along that boundary; blocked pans keep the camera and pivot together. Rotation orbits over both poles Google-Earth style, without gimbal stops. Close-Earth Locate arcs around the globe at low altitude while the view sweeps across the surface onto the station, so the ground fills the frame until the station crests into view — no pullback detour.
@@ -110,18 +112,25 @@ The gear popover switches the ISS model quality, the orbit-line style (continuou
 
 ```text
 api/                    Vercel TLE function
-public/                 Runtime textures, ISS models, Draco decoder
-docs/                   Model context/audit, handoff notes
-plans/                  Repair plan and status records
-scripts/                Model build pipeline, asset-budget and shader checks
+public/                 Runtime textures, ISS models, fonts, Draco decoder
+docs/                   Model context/audit, handoff notes, roadmap
+plans/                  Plan ledger, plans and status records
+scripts/                Model/LOD build pipeline, fallback-TLE refresh, asset-budget and shader checks
+.github/workflows/      CI verify (plus e2e) and the scheduled fallback-TLE refresh
 src/
 ├── core/               Runtime, clock, propagation, telemetry, geo lookup
+├── data/               Packaged fallback TLE
+├── hooks/              React bindings to the runtime and HUD state
 ├── interaction/        Camera state machine, tracking, sensitivity
 ├── rendering/          Scene graph, Earth, ISS, interpolation, shaders
 ├── stores/             UI-facing Zustand stores
+├── types/              Shared domain types
 ├── ui/                 Mission clock, gauges, ground track, orbit tape
-└── types/               Shared domain types
-tests/unit/              Core, API, camera, rendering, and shader tests
+└── utils/              Constants, formatters, math, asset URLs
+tests/
+├── unit/               api, build, camera, clock, geo, orbital, rendering, runtime,
+│                       shaders, stores, telemetry, ui, utils (Vitest, node env)
+└── e2e/                Playwright smoke suite
 ```
 
 ## Development
@@ -136,11 +145,12 @@ npm run dev
 ```
 
 ```bash
-npm run verify      # Assets, shaders, types, tests, and production build
+npm run verify      # Assets, shaders, types, lint (0 warnings), unit tests, and production build
 npm run test        # Vitest in watch mode
+npm run test:e2e    # Playwright smoke suite against the production preview
 npm run preview     # Serve the production bundle locally
 ```
 
-`npm run verify` is the release gate. It enforces a 5 MiB initial visual-asset budget, validates shader ramps, runs TypeScript and unit tests, and builds the production bundle.
+`npm run verify` is the release gate. It enforces a 5 MiB initial visual-asset budget, validates shader ramps, runs TypeScript, ESLint (zero warnings) and the unit tests, and builds the production bundle.
 
 Vercel deploys `api/tle.ts` as the `/api/tle` function, applies immutable caching to fingerprinted build assets, and sends baseline security headers (`nosniff`, frame denial, referrer and permissions policies) on every route. On other static hosts, the browser can use its direct `wheretheiss.at` fallback plus cached or packaged TLE data.

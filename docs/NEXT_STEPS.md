@@ -23,7 +23,7 @@
   `public/models/iss_igoal_locate.glb` is derived from the high asset by
   `scripts/build-iss-locate-lod.mjs` — 5.27 MiB, 784k triangles, 703 nodes and
   the full 12-joint rig, 512 px textures. Locate/Follow loads this tier; the
-  full 20.5 MiB `iss_igoal.glb` loads only inside the 200/220 km Inspect band.
+  full 20.5 MB `iss_igoal.glb` loads only inside the 200/220 km Inspect band.
   A 5 s boot-idle prefetch warms the LOD (connection-gated), and `__BUILD_ID__`
   is now an asset-content hash instead of the commit SHA, so docs/code deploys
   no longer invalidate the model cache. Full-high failure keeps the LOD;
@@ -158,7 +158,7 @@ can be extended. "Touches" lists the files expected to change.
    departure gate expired, so the camera departed on Model A and swapped
    mid-flight. **LANDED 2026-10-23: the Locate LOD + two-tier detail.**
    Locate/Follow now fetches `iss_igoal_locate.glb` (5.27 MiB, 784k triangles,
-   512 px textures) instead of the 20.5 MiB full asset; `iss_igoal.glb` loads
+   512 px textures) instead of the 20.5 MB full asset; `iss_igoal.glb` loads
    only inside the 200/220 km Inspect band, where its fine detail resolves.
    Measured LOD chain: ~0.2 s Draco + ~0.5 s WebP decode (Node; browser similar)
    + GPU preparation, versus ~3.6 s of CPU decode for the full asset. The LOD
@@ -206,7 +206,7 @@ engineering. Items marked **(architectural)** would hold at any scope.
 | Telemetry | Live TLE; 4-mode LIVE/HYBRID/OFFLINE/RECOVERY; server proxy with checksum + epoch validation + memo + dedupe + stale-on-error; IndexedDB cache; packaged fallback; transactional swap | The ISS is a static Keplerian element set (`spacecraft.ts`: `orbit(6789, 0.0006, 51.64, ...)`). No TLE, no live position |
 | ISS fidelity | LVLH/TEA attitude, SARJ/TRRJ/BGA on the authored rig, live-parent-frame targets, slew caps, eclipse hold, 576-line pure kinematics module + tests | A glTF prop fitted to a sphere radius; no articulation, no attitude law |
 | Camera | 6-mode state machine with hysteresis, station-relative flights, horizon transport, clearance constraint, deviation-based Reset **(architectural)** | Competent free/orbit camera + autopilot; no mode machine, no flight/constraint separation |
-| Verification | 227 unit tests, asset budget, shader-ramp gate, lint 0 warnings, CI | No test runner, no lint, no asset gate; CI is typecheck + build + a Docker health curl |
+| Verification | Unit suite, asset budget, shader-ramp gate, lint 0 warnings, CI | No test runner, no lint, no asset gate; CI is typecheck + build + a Docker health curl |
 | HUD | Bespoke design system (`index.css` tokens), honest-instrument rule, 1 Hz throttled stores | 940-line `UI` class over a static DOM skeleton; functional, not a system |
 | Post | Bloom off = bit-for-bit direct pipeline (contract) | `Engine.useComposer` exists but is never set false; bloom can be disabled, the composer (RenderPass + lensing + OutputPass) always runs |
 | Resilience | Per-subtree error boundaries, WebGL diagnostic screen, `webglcontextlost/restored` rebuild, DPR governor with hitch exclusion and per-session caps | No context-loss handling at all; fixed DPR cap + manual scale |

@@ -73,10 +73,10 @@ intentional and the entire camera/LOD system is calibrated to it. **Never
 172 MB FBX ("International Space Station (ISS) (D) (IGOAL)").
 
 **FBX SOURCE — local disk, NOT in the repo**:
-`C:\Users\Arnav\Downloads\ISSTEST\` — rebuild recipe in §1.1 below. If the
-folder has moved, ask the user rather than guessing.
+a local copy of the IGOAL FBX (not in the repo; ask the owner) — rebuild
+recipe in §1.1 below. Do not guess a path.
 
-| File in that folder | What it is |
+| File in the owner's source folder | What it is |
 |:--|:--|
 | `International Space Station (ISS) (D) (IGOAL).fbx` (172 MB) | **THE source of record** — the only file `build-iss-model.mjs` accepts |
 | `International Space Station (ISS) (D) (IGOAL).glb` (65 MB) | Sketchfab-style export of the same art — **DECOY: single merged mesh, no part hierarchy**; the FBX pipeline exists precisely because of this |
@@ -91,7 +91,7 @@ optimization stage can be studied without re-converting.
 ### 1.1 Full rebuild recipe (from the FBX)
 
 ```bash
-node scripts/build-iss-model.mjs "C:\Users\Arnav\Downloads\ISSTEST\International Space Station (ISS) (D) (IGOAL).fbx"
+node scripts/build-iss-model.mjs "path/to/International Space Station (ISS) (D) (IGOAL).fbx"
 ```
 
 What it does (all steps are in `scripts/build-iss-model.mjs`):
@@ -121,7 +121,7 @@ but that also means a silently changed hierarchy would only show at runtime).
 - `public/models/international_space_station.glb` — "legacy" detailed model,
   selectable fallback, DELIBERATELY static (no animation).
 - `public/models/International Space Station (ISS) (A).glb` — "Model A",
-  37 KB always-mounted far-range schematic, single merged mesh.
+  40 KB always-mounted far-range schematic, single merged mesh.
 
 ### 1.2 Locate-tier LOD (2026-10-23)
 
@@ -411,8 +411,8 @@ silent in code and obvious only in render.
 
 ## 7. Verification protocol (do this before claiming anything)
 
-1. **Static**: `npm run verify` = asset budget + shader ramps + tsc + 111
-   unit tests + production build. All green is the baseline.
+1. **Static**: `npm run verify` = asset budget + shader ramps + tsc + lint +
+   the unit suite + production build. All green is the baseline.
 2. **Measure**: `node scripts/iss-model-manifest.mjs public/models/iss_igoal.glb .tmp-iss-build/audit-out`
    → check `summary.worldBounds` ≈ §2 numbers and `staleAccessorBoundsNodes: 0`.
    The manifest now reads vertices correctly; if your numbers differ from
