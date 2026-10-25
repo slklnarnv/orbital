@@ -77,3 +77,20 @@ describe('AttitudeFollower', () => {
     expect(current.angleTo(goal) / DEG).toBeLessThan(1)
   })
 })
+
+describe('AttitudeFollower.snap', () => {
+  it('shows the target at once and drops any easing in progress', () => {
+    const current = new THREE.Quaternion()
+    const follower = new AttitudeFollower(current, 2)
+    const a = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0)
+    const b = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 1.2)
+    follower.step(a, 0.016)
+    follower.step(b, 0.016) // a jump: eased, so not yet at b
+    expect(current.angleTo(b)).toBeGreaterThan(0.5)
+    follower.snap(b)
+    expect(current.angleTo(b)).toBeLessThan(1e-9)
+    // Easing does not resume after a snap.
+    follower.step(b, 0.016)
+    expect(current.angleTo(b)).toBeLessThan(1e-9)
+  })
+})

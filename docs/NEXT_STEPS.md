@@ -7,6 +7,19 @@
 
 ## Current state (2026-10-26)
 
+- **Orbit-tape scrub in Follow/Inspect fixed (2026-10-26)**: recorded on the
+  production build, a half-revolution scrub swung Earth's limb from the left
+  edge to the bottom of the frame and turned the station against the camera:
+  tracking held a fixed inertial offset while the station's Earth-facing
+  frame turned, the station trailed the clock through 10 Hz snapshots
+  (per-frame steps of 0–340 km at an even scrub rate) and its attitude eased
+  after every seek. Tracking is now station-locked (`StationFrameCarry.ts`);
+  a paused clock propagates exactly each frame and snaps the attitude;
+  shadow redraws are capped while seeking. After: the limb holds its place
+  and the ground flows beneath through the same scrub. Follow scrubs ran at
+  60 fps before and after; Inspect scrubs (full model) were 44.5 fps with 57
+  shadow redraws per 3.5 s — the cap halves the redraws, and the fps re-run
+  is pending (the GPU was busy during the last measurement).
 - **B.3 visible passes landed (2026-10-26)**: a "Passes" control beside the
   settings gear. The observer comes from an offline city search (Natural
   Earth 10m populated places, `src/data/city-index.json`, 7,342 places,
@@ -68,7 +81,7 @@
   requires every point of the ISS band to resolve. The geo cache also no
   longer fails a good lookup when IndexedDB is missing entirely.
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 482 unit tests in 55 files, production build. CI
+  lint (0 warnings), 490 unit tests in 56 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).

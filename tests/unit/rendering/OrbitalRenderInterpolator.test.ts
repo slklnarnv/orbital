@@ -258,3 +258,24 @@ describe('OrbitalRenderInterpolator', () => {
     expect(interpolator.sampleVelocity(0.1, velocity).toArray()).toEqual([0, 0, 7.66])
   })
 })
+
+describe('OrbitalRenderInterpolator.snapTo (paused clock)', () => {
+  it('shows a scrubbed state exactly, even a step small enough to blend', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const result = new THREE.Vector3()
+    interpolator.sample(orbitalState(1_000, { x: 6800, y: 0, z: 0 }, { x: 0, y: 7.66, z: 0 }), 1, result)
+    // 20 s of orbit (~150 km) would otherwise blend over the sample interval.
+    interpolator.snapTo(orbitalState(21_000, { x: 6798, y: 153, z: 0 }, { x: -0.17, y: 7.66, z: 0 }), 1.016, result)
+    expect(result.toArray()).toEqual([6798, 0, -153])
+    expect(interpolator.sampleVelocity(1.016, new THREE.Vector3()).toArray()).toEqual([-0.17, 0, -7.66])
+  })
+
+  it('resumes blending from the snapped state when snapshots return', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const result = new THREE.Vector3()
+    interpolator.snapTo(orbitalState(1_000, { x: 6800, y: 0, z: 0 }, { x: 0, y: 7.66, z: 0 }), 1, result)
+    interpolator.sample(orbitalState(1_100, { x: 6800, y: 0.766, z: 0 }, { x: 0, y: 7.66, z: 0 }), 1.1, result)
+    // Continuous with the snapped state: no reseed, so the blend starts there.
+    expect(result.distanceTo(new THREE.Vector3(6800, 0, 0))).toBeLessThan(1e-9)
+  })
+})

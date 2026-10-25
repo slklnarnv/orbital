@@ -70,6 +70,9 @@ export function aimSunLightAt(
  * At 1× the sun crosses the threshold every ~2 s; at 300× the minimum
  * interval caps redraws at 20 Hz.
  */
+/** Redraw floor while the clock is being sought (scrub, nudges): ~6.7 Hz. */
+export const SEEK_MIN_INTERVAL_MS = 150
+
 export class ShadowRefreshScheduler {
   private readonly lastSun = new THREE.Vector3()
   private lastJoints: number[] = []
@@ -87,10 +90,17 @@ export class ShadowRefreshScheduler {
     this.primed = false
   }
 
-  shouldRefresh(nowMs: number, sunInStation: THREE.Vector3, jointAngles: readonly number[]): boolean {
+  /**
+   * `seeking`: time is being scrubbed or sought while paused. Every seek
+   * swings the sun in the station frame, so the 50 ms floor would redraw the
+   * full 2.7M-triangle model at 20 Hz (Inspect scrubs fell to ~44 fps on an
+   * integrated GPU); while seeking the floor is SEEK_MIN_INTERVAL_MS.
+   */
+  shouldRefresh(nowMs: number, sunInStation: THREE.Vector3, jointAngles: readonly number[], seeking = false): boolean {
     const elapsed = nowMs - this.lastMs
+    const minIntervalMs = seeking ? Math.max(this.minIntervalMs, SEEK_MIN_INTERVAL_MS) : this.minIntervalMs
     let refresh = !this.primed || elapsed >= this.maxIntervalMs
-    if (!refresh && elapsed >= this.minIntervalMs) {
+    if (!refresh && elapsed >= minIntervalMs) {
       refresh = this.lastSun.angleTo(sunInStation) > this.thresholdRad
         || jointAngles.length !== this.lastJoints.length
         || jointAngles.some((angle, i) => Math.abs(angle - this.lastJoints[i]) > this.thresholdRad)

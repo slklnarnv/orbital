@@ -6,6 +6,30 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Orbit-tape scrub while tracking (2026-10-26)
+
+- **Symptom.** Dragging the orbit tape in Follow or Inspect: the view swung
+  around the station and the station stuttered against Earth.
+- **Measured** (dev hooks: camera offset in the station's orbital frame,
+  per-frame station step; production frames every 100 ms):
+  - the camera offset's along-track component went +0.39 → −0.15 over a
+    ~10-minute scrub — tracking kept an inertial offset while the LVLH
+    frame turned; half an orbit would put the camera under the station;
+  - per-frame station steps of 0–340 km while the clock moved evenly —
+    10 Hz snapshots alternating blend and snap (400 km reseed bound), while
+    the Earth reads the clock every frame;
+  - the attitude eased after every >5° step.
+- **Fix.** `StationFrameCarry` rotates the eye and `camera.up` with the
+  station's attitude change while tracking (reset during flights); a paused
+  clock propagates at its own time each frame (`snapTo`) and snaps the
+  attitude (`AttitudeFollower.snap`); shadow redraws are capped at
+  `SEEK_MIN_INTERVAL_MS` (150 ms) while seeking.
+- **After.** The same half-revolution scrub keeps the limb in place with the
+  ground flowing underneath; Follow scrub 60 fps; shadow redraws during an
+  Inspect scrub 57 → 31 per 3.5 s. Tests: `StationFrameCarry.test.ts`
+  (framing preserved across uneven steps and a half-orbit seek),
+  `AttitudeFollower.snap`, `snapTo`, the seek redraw cap.
+
 ## B.3 visible passes (2026-10-26)
 
 - **Prediction.** `src/core/orbital/PassPredictor.ts`: SGP4 every 30 s over
