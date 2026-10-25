@@ -93,7 +93,7 @@ Wave 2 (planned at `aa206a1`, after wave 1 merged):
 | [014](014-ground-track-hud.md) | Ground-track sampler + HUD globe track (B.2 first cut) | P2 | S–M | — | DONE |
 | [015](015-ground-track-3d.md) | Optional 3D ground track + footprint with constant-ulp depth bias (B.2 + D.3) | P3 | M | 014 | DONE |
 
-| [016](016-docs-pass.md) | Docs pass: fold errata banners, fix drift, record waves 1–2 | P1 | M | 002–015 | TODO |
+| [016](016-docs-pass.md) | Docs pass: fold errata banners, fix drift, record waves 1–2 | P1 | M | 002–015 | DONE |
 
 The docs pass (016): fold both errata banners, fix the drift the
 audit found (60→70 km clearance, `lerpLookAt`, MiB units, flight formulas,
