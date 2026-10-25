@@ -382,7 +382,7 @@ Per frame (scratch objects, zero allocation):
   `node.quaternion = Δq · baseQuaternion` (three.js `.premultiply`).
   Post-multiplying (`base · Δq`) rotates about a node-LOCAL axis, which the
   TRRJs' ±90° authored bases turn into a perpendicular — radiators windmill
-  through the truss. This exact bug shipped once (§3.4 erratum in
+  through the truss. This exact bug shipped once (finding 6's ERRATUM in
   MODEL_AUDIT.md).
 
 If you change ANY of this: re-verify per §7.5 — the failure modes are
