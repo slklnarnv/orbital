@@ -6,6 +6,33 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Live IGOAL outage: KTX2 transcoder vs CSP (2026-10-25)
+
+- **Symptom (live only).** Locate waited the 8 s gate and flew to Model A;
+  the "High fidelity" spinner never finished. `iss_igoal_locate.glb` and
+  `/basis/*` all returned 200.
+- **Cause.** Live console: four `EvalError`s ("'unsafe-eval' is not an
+  allowed source"), one per KTX2Loader worker. three's Basis glue (embind,
+  DYNAMIC_EXECUTION=1) generates invokers with `new Function`; blob: workers
+  inherit the page CSP; the worker's init promise never resolves, so every
+  texture task — and the GLTF parse, and the Suspense — stayed pending.
+  `vite preview` sent no CSP, so it never reproduced locally.
+- **Fix.** `scripts/patch-basis-transcoder.mjs` (`npm run patch:basis`)
+  rewrites the two code-generation sites to closures (Emscripten's
+  DYNAMIC_EXECUTION=0 shape); the CSP is unchanged. KTX2 texture loads are
+  stall-guarded (30 s → load error). GLTFParser resolves a failed texture to
+  null and still finishes the model, so detail preparation now fails any
+  model with missing textures (`countMissingTextures`) → ladder → legacy,
+  never a grey IGOAL. `vite preview` now serves the `vercel.json` catch-all
+  headers.
+- **Tests.** `BasisTranscoderCsp.test.ts` runs the glue in a V8 context with
+  string code generation off: stock three fails, the shipped glue transcodes
+  a real texture from the LOD bit-identically to stock, and `public/basis/`
+  must equal the patched three copy. `LoadStallGuard.test.ts` covers the
+  bound. Headless Edge against the CSP-enforcing preview: IGOAL at Follow,
+  no spinner; with the stock glue swapped into `dist/`, the attempt fails at
+  30 s and demotes to legacy.
+
 ## Parked model items, re-opened (2026-10-25)
 
 - **Rigid batching (plan 001 Phase D) landed.** `batchRigidMeshes` merges

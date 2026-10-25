@@ -7,8 +7,22 @@
 
 ## Current state (2026-10-25)
 
+- **Live IGOAL outage fixed (2026-10-25)**: after PRs #20/#21 the live site
+  never showed the close-range model — Locate waited 8 s and flew to Model A,
+  and "High fidelity" spun forever. Cause, from the live console: three's
+  Basis transcoder glue calls `new Function`, the CSP has no `'unsafe-eval'`,
+  so all four KTX2 workers threw `EvalError` at init and never answered.
+  `public/basis/basis_transcoder.js` is now generated CSP-safe by
+  `npm run patch:basis`; KTX2 texture loads fail after 30 s instead of
+  hanging, and a model with any failed texture demotes to legacy instead of
+  rendering grey; `vite preview` serves the production headers. Verified in
+  headless Edge against the CSP-enforcing preview (IGOAL at Follow; the stock
+  transcoder demotes to legacy). Details:
+  `docs/ISS_MODEL_CONTEXT.md` §1. Still open on the live console: the
+  BigDataCloud client now calls `api-bdc.io`, which `connect-src` blocks
+  (reverse geocoding falls back).
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 425 unit tests in 46 files, production build. CI
+  lint (0 warnings), 437 unit tests in 48 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).

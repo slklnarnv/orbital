@@ -32,3 +32,14 @@ export function withPreparationTarget<T>(
 export function createPreparationTarget(): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
 }
+
+/**
+ * Number of a GLTF's textures that failed to load. three-stdlib's GLTFParser
+ * resolves a failed texture to null and finishes the model without it, so a
+ * broken KTX2 transcoder would otherwise "succeed" as an untextured grey
+ * station. Detail preparation treats any miss as a failed attempt, which
+ * demotes to the next model on the reliability ladder.
+ */
+export function countMissingTextures(textures: ReadonlyArray<unknown>): number {
+  return textures.filter((texture) => texture === null || texture === undefined).length
+}

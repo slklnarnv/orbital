@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
@@ -42,6 +43,30 @@ function devApiTle(): Plugin {
 const root = path.dirname(fileURLToPath(import.meta.url))
 
 /**
+ * Production-header parity for `vite preview`: serves the catch-all headers
+ * from vercel.json — above all the Content-Security-Policy. The preview once
+ * loaded the IGOAL model fine while the live CSP (no 'unsafe-eval') hung the
+ * KTX2 transcoder workers, because preview sent no CSP at all. Dev keeps no
+ * CSP (Vite's HMR client needs inline/eval).
+ */
+function previewProductionHeaders(): Plugin {
+  interface VercelHeaderRule { source: string; headers: Array<{ key: string; value: string }> }
+  const config = JSON.parse(readFileSync(path.join(root, 'vercel.json'), 'utf8')) as {
+    headers?: VercelHeaderRule[]
+  }
+  const headers = config.headers?.find((rule) => rule.source === '/(.*)')?.headers ?? []
+  return {
+    name: 'orbital-preview-production-headers',
+    configurePreviewServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        for (const { key, value } of headers) res.setHeader(key, value)
+        next()
+      })
+    },
+  }
+}
+
+/**
  * Build id stamped onto the non-content-hashed static assets (/models,
  * /textures). Those routes are served `immutable` for a year, so a deploy has
  * to change the URL to bust the cache: `?v=<id>`.
@@ -71,6 +96,7 @@ export default defineConfig({
   plugins: [
     react(),
     devApiTle(),
+    previewProductionHeaders(),
     tailwindcss(),
     glsl({
       include: ['**/*.vert', '**/*.frag', '**/*.glsl'],
