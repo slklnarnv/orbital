@@ -398,21 +398,14 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 ## Next steps
 
 `docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
-it next. As of 2026-10-23 the top of that list is:
+it next. As of 2026-10-25 the top of that list is:
 
-1. Re-check the live deployment after the #14/#15 and Locate-LOD merges:
-   `/models/*` and `/textures/*` should answer `immutable` with
-   `?v=<asset hash>`; `/robots.txt`, `/sitemap.xml`, `/og-image.png` 200; `H`
-   hides the HUD; safe-area insets on a notched phone; the orbit ring closes
-   at the station's antipode and the dashes hold across refreshes. On a
-   throttled connection, Locate must depart on the detailed LOD (not the
+1. Re-check the live deployment after the wave 1–2 merges: `/models/*` and
+   `/textures/*` answering `immutable` with `?v=<asset hash>`; `/robots.txt`,
+   `/sitemap.xml`, `/og-image.png` 200. Then a human visual pass on the
+   penumbra fade, the countdown, the ground track and the Bloom MSAA edges. On
+   a throttled connection, Locate must depart on the detailed LOD (not the
    schematic) at Follow, with the full model appearing only below 200 km.
-2. **D.1 — penumbra eclipse.** The largest fidelity gap left, and it also
-   supplies B.1's day/night countdown. The shadow test is binary in three
-   places (`ISSModel`, `ISSAnimations`, `ISSJointKinematics`' `sunlit`); the
-   real penumbra is ~63 km ≈ 8 s of flight, collapsed into one frame that
-   flips a 2.3× exposure boost, ambient, earthshine, the glint tint and the
-   TRRJ law.
-3. B.1–B.3. **B.2 must adopt D.3 first** — a 2 km ground-track offset
-   z-fights above ~500 km ground distance, so the track needs a
-   depth-independent draw.
+2. **B.3 — next visible pass** (reuse `isSunlit` and the forecaster pattern;
+   needs CSP and `Permissions-Policy` changes for city search and geolocation).
+3. C.5 (CHANGELOG + Dependabot), then D.6's remainder and C.4 accessibility.
