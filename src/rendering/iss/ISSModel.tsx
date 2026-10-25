@@ -67,6 +67,7 @@ import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
 import { countMissingTextures, createPreparationTarget, withPreparationTarget } from './detailPreparation'
 import { KTX2_TEXTURE_STALL_MS, guardLoadStall } from './loadStallGuard'
+import { BASIS_TRANSCODER_PATH, versionTranscoderUrl } from './basisTranscoderUrl'
 import { sharedJointStates } from './ISSRigAnimator'
 import {
   SUN_LIGHT_NAME,
@@ -119,13 +120,20 @@ class StallGuardedKTX2Loader extends KTX2Loader {
   }
 }
 
+// The transcoder files carry a content-hash query (basisTranscoderUrl.ts) via
+// the loader's own manager, so a changed transcoder reaches cached clients.
+const ktx2Manager = new THREE.LoadingManager()
+ktx2Manager.setURLModifier((url) => versionTranscoderUrl(url, __BASIS_ID__))
+
 let ktx2Loader: KTX2Loader | null = null
 let ktx2Renderer: THREE.WebGLRenderer | null = null
 
 function ktx2LoaderFor(gl: THREE.WebGLRenderer): KTX2Loader {
   if (!ktx2Loader || ktx2Renderer !== gl) {
     ktx2Loader?.dispose()
-    ktx2Loader = new StallGuardedKTX2Loader().setTranscoderPath('/basis/').detectSupport(gl)
+    ktx2Loader = new StallGuardedKTX2Loader(ktx2Manager)
+      .setTranscoderPath(BASIS_TRANSCODER_PATH)
+      .detectSupport(gl)
     ktx2Renderer = gl
   }
   return ktx2Loader

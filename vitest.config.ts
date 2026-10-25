@@ -6,6 +6,7 @@ export default defineConfig({
   // importing any module that builds a static URL needs it defined here too.
   define: {
     __BUILD_ID__: JSON.stringify('test'),
+    __BASIS_ID__: JSON.stringify('test'),
   },
   resolve: {
     alias: {

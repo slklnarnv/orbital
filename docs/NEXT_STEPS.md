@@ -17,12 +17,15 @@
   hanging, and a model with any failed texture demotes to legacy instead of
   rendering grey; `vite preview` serves the production headers. Verified in
   headless Edge against the CSP-enforcing preview (IGOAL at Follow; the stock
-  transcoder demotes to legacy). Details:
+  transcoder demotes to legacy). Follow-up: the transcoder URLs carry a
+  content hash (`?v=<__BASIS_ID__>`) and `/basis/` is served immutable —
+  browsers that had cached the stock glue (`max-age=3600` + SWR) kept running
+  it after the deploy. Details:
   `docs/ISS_MODEL_CONTEXT.md` §1. Still open on the live console: the
   BigDataCloud client now calls `api-bdc.io`, which `connect-src` blocks
   (reverse geocoding falls back).
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 437 unit tests in 48 files, production build. CI
+  lint (0 warnings), 439 unit tests in 49 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).
