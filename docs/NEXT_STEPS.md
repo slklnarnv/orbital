@@ -7,6 +7,12 @@
 
 ## Current state (2026-10-25)
 
+- **README rewritten (2026-10-25)**: about 40% shorter, with a primer on
+  what the view shows (TLE and SGP4, GMST and the westward drift, eclipse,
+  LVLH attitude, the 1,000× scale), a Mermaid pipeline diagram and four
+  screenshots in `docs/images/` captured on the live site with a real GPU.
+  The camera and model detail it dropped lives in `docs/HANDOFF.md` and
+  `docs/ISS_MODEL_CONTEXT.md`. `NOTICE.md` now lists the Basis transcoder.
 - **Follow flicker and Bloom frame rate fixed (2026-10-25)**: measured on
   the live site on the owner's integrated AMD GPU (headless Edge, D3D11,
   1280×713 at DPR 1.5). Flicker: ~9% of frames turned the solar arrays black
@@ -91,8 +97,9 @@
   Locate reaches `Follow · Locked`; the glint fades (opacity 0.077 at the
   Follow standoff); Bloom-mode edges are antialiased; the countdown reads and
   counts down; the mobile gauge gap is 10 px; the 3D track and footprint
-  render with limb occlusion; no console errors except an external BigDataCloud
-  400. No human visual pass yet.
+  render with limb occlusion; the only console error then was an external
+  BigDataCloud 400 (gone: place names are offline now). No human visual pass
+  yet.
 - **IGOAL rebuild from both sources (2026-10-25)**: the authored PBR
   materials are grafted from the source GLB (38 metallic-roughness maps, MLI
   and GEDI albedo, cutouts); every model texture is KTX2 / ETC1S (texture
@@ -117,11 +124,12 @@
 
 ## Next (ranked)
 
-1. Re-check the live deployment after the wave 1-2 merges: console free of CSP
-   errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404;
-   `/models/*` and `/textures/*` answering `immutable` with `?v=<asset hash>`;
-   `/robots.txt`, `/sitemap.xml`, `/og-image.png` and
-   `/basis/basis_transcoder.wasm` all 200. A human look at the rebuilt
+1. Live deployment re-check — done 2026-10-25: no CSP violations or console
+   errors over a minute; Locate shows IGOAL; 60 fps in every Bloom/Shadows
+   combination on the owner's integrated GPU; `/api/tle` 200 (`max-age=60`),
+   `/api/tle?x=1` 404; `/models/*`, `/textures/*` and `/basis/*` answer
+   `immutable` with `?v=<hash>`; `/robots.txt`, `/sitemap.xml` and
+   `/og-image.png` 200. Still open: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
    visual pass on the penumbra fade at a terminator crossing (300x), the

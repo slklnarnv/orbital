@@ -24,6 +24,7 @@ in [`public/textures/README.md`](public/textures/README.md).
 | ISS, legacy detailed | `public/models/international_space_station.glb` | NASA 3D Resources | As above |
 | ISS, schematic fallback | `public/models/International Space Station (ISS) (A).glb` | NASA 3D Resources | As above |
 | Draco decoder | `public/draco/*` | [google/draco](https://github.com/google/draco) | Apache-2.0 |
+| Basis Universal transcoder | `public/basis/*` | [BinomialLLC/basis_universal](https://github.com/BinomialLLC/basis_universal), via three.js; the `.js` glue is patched to avoid string evaluation by `scripts/patch-basis-transcoder.mjs` | Apache-2.0 |
 
 The ISS assets are rendered at roughly 1,000× their real size so the station
 stays legible at orbital scale. That is a deliberate visualization choice, not
