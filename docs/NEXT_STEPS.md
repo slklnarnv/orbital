@@ -57,9 +57,8 @@
 - **IGOAL rebuild from both sources (2026-10-25)**: the authored PBR
   materials are grafted from the source GLB (38 metallic-roughness maps, MLI
   and GEDI albedo, cutouts); every model texture is KTX2 / ETC1S (texture
-  memory ~700 → ≤228 MiB full, ~97 → ~20 MiB LOD); the PBR environment is an
-  Earth-below / space-above map aimed at nadir (`orbitalEnvironment.ts`); the
-  joint state carries across the LOD ⇄ full swap. Details:
+  memory ~700 → ≤228 MiB full, ~97 → ~20 MiB LOD); authored metalness halved
+  for brightness parity; the joint state carries across the LOD ⇄ full swap. Details:
   `plans/PROGRESS.md`, `docs/ISS_MODEL_CONTEXT.md` §1.
 - **Locate LOD + two-tier detail (2026-10-23)**: Locate/Follow load
   `iss_igoal_locate.glb` (now 6.53 MiB, 787k triangles, 285 nodes, full rig);
@@ -76,8 +75,8 @@
    `/models/*` and `/textures/*` answering `immutable` with `?v=<asset hash>`;
    `/robots.txt`, `/sitemap.xml`, `/og-image.png` and
    `/basis/basis_transcoder.wasm` all 200. A human look at the rebuilt
-   materials and the orbital environment at Follow and Inspect, day and
-   night (metal mirroring Earth below, MLI blankets, ELC grating). Then a human
+   materials at Follow and Inspect, day and night, on a real GPU (MLI
+   blankets, ELC grating, iROSA wings, night legibility). Then a human
    visual pass on the penumbra fade at a terminator crossing (300x), the
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD

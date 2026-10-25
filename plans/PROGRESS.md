@@ -25,19 +25,22 @@ was analysed against them and rebuilt (`docs/ISS_MODEL_CONTEXT.md` §1):
 - **LOD.** Derived from the high build's lossless master; normal and
   metallic-roughness maps at 256 px; 418 emptied leaf nodes removed (703 →
   285 nodes; every rig node kept).
-- **Environment.** `RoomEnvironment` replaced by `orbitalEnvironment.ts`:
-  Earth below (70°), space above, turned onto the station's nadir every frame
-  and dimmed with the daylight below (0.03–0.45), with a 0.28 × shade floor in
-  eclipse so the authored metal stays legible (an in-app eclipse render showed
-  bare metal going near-black without it).
+- **Brightness.** Authored metalness is halved at build time
+  (`SOURCE_METALLIC_SCALE`): at full value the array backs and truss went
+  near-black in eclipse. Measured parity with the previous asset (mean lit
+  luminance, app lighting: day 104 vs 106, eclipse 94 vs 101). Cutouts are
+  single-sided (double-sided iROSA blankets z-fought into tan speckle).
+- **Tried, not adopted:** an Earth-below / space-above PBR environment aimed
+  at nadir — physically motivated, but daylight luminance fell to 79 and the
+  array backs went black at night; `RoomEnvironment` stays.
 - **Animation.** Only the visible detail model animates; joint state is
   handed to the next tier, so a swap mid-slew no longer snaps
   (`freshHandoff`). The SARJs stay uncapped by design (docs corrected).
 - **Measured, not adopted:** meshopt + quantization (geometry memory 214 →
   113 MB, faster parse, but ≈ +9 MB transfer and a 50+ MB raw GLB in git).
-- Tests: graft, KTX2 encode plan, published-asset material contract,
-  `pruneEmptyLeaves`, environment rotation (against three's own sampling
-  matrix), `freshHandoff`.
+- Tests: graft (incl. metallic scale, single-sided cutouts), KTX2 encode
+  plan, published-asset material contract, `pruneEmptyLeaves`,
+  `freshHandoff`.
 
 ## Improve-skill audit + waves 1–2 (2026-10-24/25)
 

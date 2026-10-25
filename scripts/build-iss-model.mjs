@@ -226,12 +226,28 @@ export async function repairMaterialsAndTextures(document) {
 /**
  * Materials whose base-colour alpha is a genuine cutout (inspected: the ELC
  * deck grating and perforated plates, the iROSA hex-hole panels). They render
- * MASK and double-sided so the far side shows through the holes. `Truss` is
- * BLEND in the source as well, but its alpha also hides the radiator edge
- * rails and support members, so it stays OPAQUE.
+ * MASK. They stay single-sided although the source marks every material
+ * double-sided: the meshes are closed, so the far side shows through a hole
+ * anyway, and double-sided thin blankets z-fight front face against back face
+ * (it speckled every iROSA wing tan at orbit range). `Truss` is BLEND in the
+ * source as well, but its alpha also hides the radiator edge rails and
+ * support members, so it stays OPAQUE.
  */
 export const CUTOUT_MATERIALS = new Set(['ELC_Base', 'IROSA'])
 export const CUTOUT_ALPHA = 0.5
+
+/**
+ * The authored metalness is tuned for Blender's all-around HDRI, where metal
+ * always has something bright to mirror. ORBITAL's rig is a sun, a dim studio
+ * environment, fills and black space, so metal that faces away from the fills
+ * takes almost no light (the array backs and truss went near-black at night).
+ * Halving it — the maps keep their relative variation — measured at parity
+ * with the calibrated look of the previous asset (mean lit-pixel luminance,
+ * app lighting, array close-up: day 113 vs 106, eclipse 102 vs 101). Real
+ * ISS surfaces are mostly dielectric (white paint, MLI, glass-covered cells),
+ * so the scale also moves the materials toward the physical values.
+ */
+export const SOURCE_METALLIC_SCALE = 0.5
 
 /**
  * Read the source GLB's materials without decoding its geometry: factors,
@@ -279,10 +295,11 @@ export function readSourceMaterials(glb) {
  * Graft the source materials onto the FBX-converted document, by material
  * name. Run before dedup: FBX2glTF emits untextured look-alikes (e.g. GEDI)
  * that dedup would otherwise merge before they receive their own maps.
- *   - factors and metallic-roughness maps come from the source;
+ *   - factors and metallic-roughness maps come from the source (metallic
+ *     scaled by SOURCE_METALLIC_SCALE);
  *   - base-colour and normal maps keep the FBX's lossless images and only fall
  *     back to the source's (JPEG) ones where the FBX has none;
- *   - CUTOUT_MATERIALS render MASK, double-sided.
+ *   - CUTOUT_MATERIALS render MASK (single-sided).
  */
 export function applySourceMaterials(document, sourceMaterials) {
   const report = { matched: 0, unmatched: [], metallicRoughness: 0, baseColor: 0, normal: 0, cutouts: [] }
@@ -306,7 +323,7 @@ export function applySourceMaterials(document, sourceMaterials) {
     report.matched += 1
     material
       .setBaseColorFactor(source.baseColorFactor)
-      .setMetallicFactor(source.metallicFactor)
+      .setMetallicFactor(source.metallicFactor * SOURCE_METALLIC_SCALE)
       .setRoughnessFactor(source.roughnessFactor)
     if (source.metallicRoughness) {
       material.setMetallicRoughnessTexture(textureFor(source.metallicRoughness))
@@ -324,7 +341,7 @@ export function applySourceMaterials(document, sourceMaterials) {
       material.setNormalScale(source.normalScale)
     }
     if (CUTOUT_MATERIALS.has(name)) {
-      material.setAlphaMode('MASK').setAlphaCutoff(CUTOUT_ALPHA).setDoubleSided(true)
+      material.setAlphaMode('MASK').setAlphaCutoff(CUTOUT_ALPHA)
       report.cutouts.push(name)
     }
   }

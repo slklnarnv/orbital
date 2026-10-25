@@ -210,7 +210,7 @@ async function main() {
   console.log(`nodes:            ${report.nodes} (mesh instances: ${report.meshInstances}, stored meshes: ${report.storedMeshes})`)
   console.log(`triangles:        ${(report.triangles / 1000).toFixed(0)}k (strip: ${report.strippedNodes} nodes, simplify: ${report.simplified} prims)`)
   console.log(`vertices:         ${(report.vertices / 1000).toFixed(0)}k`)
-  console.log(`textures:         ${report.textures}`)
+  console.log(`textures:         ${report.textures} KTX2`)
   console.log(`extensions:       ${report.extensionsUsed.join(', ')}`)
   console.log(`bounds (m):       ${report.bounds.size.join(' × ')}`)
   console.log(`source sha256:    ${report.sourceSha256}`)

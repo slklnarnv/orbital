@@ -32,6 +32,7 @@ import {
   classifyTextureUsage,
   ktxCreateArgs,
   readSourceMaterials,
+  SOURCE_METALLIC_SCALE,
   splitRadiatorPanels,
   stripVertexColors,
   validateCandidate,
@@ -520,8 +521,9 @@ describe('readSourceMaterials + applySourceMaterials', () => {
     const elc = byName.get('ELC_Base')
     expect(elc?.getBaseColorTexture()).toBe(fbxBase) // the FBX's lossless image wins
     expect(elc?.getMetallicRoughnessTexture()?.getName()).toBe('ELC_MR')
-    expect([elc?.getAlphaMode(), elc?.getAlphaCutoff(), elc?.getDoubleSided()]).toEqual(['MASK', 0.5, true])
-    expect([elc?.getMetallicFactor(), elc?.getRoughnessFactor()]).toEqual([1, 1])
+    // Single-sided: double-sided thin blankets z-fight front against back.
+    expect([elc?.getAlphaMode(), elc?.getAlphaCutoff(), elc?.getDoubleSided()]).toEqual(['MASK', 0.5, false])
+    expect([elc?.getMetallicFactor(), elc?.getRoughnessFactor()]).toEqual([SOURCE_METALLIC_SCALE, 1])
     // BLEND in the source, but not a listed cutout: stays as the repairs left it.
     expect(byName.get('Truss')?.getAlphaMode()).toBe('OPAQUE')
     const mli = byName.get('MLI.Generic')
@@ -578,8 +580,11 @@ describe('published high asset', () => {
     expect(materials.filter((m) => m.pbrMetallicRoughness?.metallicRoughnessTexture).length).toBeGreaterThanOrEqual(35)
     expect(byName.get('MLI.Generic')?.pbrMetallicRoughness?.baseColorTexture).toBeDefined()
     for (const cutout of ['ELC_Base', 'IROSA']) {
-      expect(byName.get(cutout)).toMatchObject({ alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true })
+      expect(byName.get(cutout)).toMatchObject({ alphaMode: 'MASK', alphaCutoff: 0.5 })
+      expect(byName.get(cutout)?.doubleSided ?? false).toBe(false)
     }
     expect(byName.get('Truss')?.alphaMode ?? 'OPAQUE').toBe('OPAQUE')
+    // Authored metalness is halved (SOURCE_METALLIC_SCALE): no factor above it.
+    expect(Math.max(...materials.map((m) => m.pbrMetallicRoughness?.metallicFactor ?? 1))).toBeLessThanOrEqual(SOURCE_METALLIC_SCALE)
   })
 })

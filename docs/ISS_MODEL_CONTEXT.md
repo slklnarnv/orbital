@@ -3,8 +3,7 @@
 > Status 2026-10-25: this briefing describes the code as implemented by plan
 > 001 (rig data, the TRRJ axis, the build-time radiator coating, BGA tracking),
 > the Locate LOD, and the source-material / KTX2 rebuild (authored PBR grafted
-> from the source GLB, GPU-compressed textures, the orbital environment, joint
-> hand-off between tiers). §3 is audit history and stays in the past tense.
+> from the source GLB, GPU-compressed textures, joint hand-off between tiers). §3 is audit history and stays in the past tense.
 
 Read this completely before touching anything. Every number in here was
 verified by decoded-vertex measurement AND cross-checked in the browser with
@@ -72,9 +71,17 @@ What it does (all steps are in `scripts/build-iss-model.mjs`, ~3.5 min):
    blankets, GEDI; FBX images win where both exist), sets the authored normal
    strengths (MLI 3, ELC_Payloads_04 2), and renders the genuine alpha
    cutouts `CUTOUT_MATERIALS` = ELC_Base (deck grating, perforated plates) and
-   IROSA (hex-hole panels) as MASK 0.5, double-sided. `Truss` is BLEND in the
-   source too, but its alpha also hides the radiator edge rails, so it stays
-   OPAQUE. Then strips the baked `COLOR_0` vertex-colour layer (Nauka's stale
+   IROSA (hex-hole panels) as MASK 0.5. They stay single-sided although the
+   source marks every material double-sided: double-sided thin blankets
+   z-fight front against back face (it speckled every iROSA wing tan at orbit
+   range). `Truss` is BLEND in the source too, but its alpha also hides the
+   radiator edge rails, so it stays OPAQUE. The authored metalness is halved
+   (`SOURCE_METALLIC_SCALE = 0.5`): it was tuned for Blender's all-around
+   HDRI, and under this app's sun + studio environment + black space the
+   full values turned the array backs and truss near-black at night. Halved,
+   the asset measures at brightness parity with the previous one (mean
+   lit-pixel luminance, app lighting, array close-up: day 104 vs 106,
+   eclipse 94 vs 101) while keeping the maps' variation. Then strips the baked `COLOR_0` vertex-colour layer (Nauka's stale
    hull shading), dedupe / prune (`keepLeaves`, which keeps the six empty
    attachment frames) / weld, and resizes textures to lossless PNG ≤2048 px
    (metallic-roughness ≤1024).
@@ -171,7 +178,6 @@ the LOD. At runtime the mounted asset is logged:
 | `src/rendering/iss/ISSModel.tsx` | LOD selection, normalization constants, GPU prep, eclipse lighting, `[ISS AUDIT]` log |
 | `src/rendering/iss/ISSAnimations.tsx` | Frame-loop orchestration for SARJ/TRRJ/BGA joints + camera oscillators (all part motion) |
 | `src/rendering/iss/ISSJointKinematics.ts` | Pure, unit-tested joint math: rig types, `resolveJoint`, target laws, slew, tier hand-off, `parseRigMetadata` |
-| `src/rendering/scene/orbitalEnvironment.ts` | The PBR environment: Earth below / space above, turned onto the station's nadir, scaled by daylight below (§4) |
 | `scripts/iss-rig-manifest.mjs` | Rig contract source of truth: joints, axes, oscillators, TRRJ limits, protected frames, required nodes |
 | `src/rendering/iss/ISSGroup.tsx` | LVLH/TEA flight attitude + inertial position (do not touch for model work) |
 | `scripts/build-iss-model.mjs` | IGOAL FBX + GLB → optimized runtime GLB + master (needs both source arguments and `ktx`) |
@@ -351,20 +357,13 @@ before believing any new "discrepancy", including your own.
   at ISS altitude) through `eclipseLighting()` (`eclipseLighting.ts`) to the
   key-light exposure, ambient and earthshine intensities; the shade-0 and
   shade-1 endpoints equal the old binary sunlit and eclipse values.
-- Environment (image-based lighting for every glTF PBR material):
-  `orbitalEnvironment.ts` replaces the old studio `RoomEnvironment`. The map is
-  an Earth disc of 70° angular radius below (−Y, a thin bright limb) and black
-  space above, PMREM-processed once in `SceneRoot`'s `RuntimeEnvironment`. Each
-  ISS frame `orientOrbitalEnvironment` sets `scene.environmentRotation` so −Y
-  follows the station's nadir (exactly: three negates the Euler angles when it
-  builds the sampling matrix, so the rotation is decomposed and negated — unit
-  tested against that construction) and `scene.environmentIntensity` from 0.03
-  (night below) to 0.45 (subsolar), by the sun's zenith angle at the
-  sub-station point — but never below `0.28 × shade` while the station is
-  shaded (`ORBITAL_ENV_ECLIPSE_FILL`, the old studio level): like the
-  earthshine key light, it keeps the authored, mostly-metallic hardware
-  legible in eclipse, where metal takes almost no diffuse light. In daylight,
-  metallic hardware therefore mirrors a blue Earth below and dark space above.
+- Environment: `SceneRoot`'s `RuntimeEnvironment` (a PMREM'd
+  `RoomEnvironment` at intensity 0.28) is the image-based light for every
+  glTF PBR material. An Earth-below / space-above environment aimed at nadir
+  was built and measured (2026-10-25) and NOT adopted: physically motivated,
+  but with black space above, every surface not facing Earth lost its fill —
+  daylight mean luminance 79 vs 106, and the array backs went black in
+  eclipse — against the app's calibrated, legible look.
 
 ---
 

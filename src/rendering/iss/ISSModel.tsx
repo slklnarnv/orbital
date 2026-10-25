@@ -66,7 +66,6 @@ import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
 import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
-import { orientOrbitalEnvironment } from '../scene/orbitalEnvironment'
 import {
   FALLBACK_MODEL_URL,
   HIGH_MODEL_URL,
@@ -767,9 +766,6 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
     const shade = 1 - sunVisibility(worldPos.current, _sunDirVec)
     const lighting = eclipseLighting(shade)
-    // The PBR environment is the Earth below the station: aim it at nadir and
-    // dim it with the daylight down there (an eclipse fill keeps metal legible).
-    orientOrbitalEnvironment(scene, worldPos.current, _sunDirVec, shade)
 
     // 3c. Dynamic camera-distance-based local point lights exposure scaling
     // Lights are 0.0 at far planetary ranges (3000 km) and scale smoothly to 1.0 during close zoom (100 km)
