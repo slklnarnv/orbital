@@ -57,11 +57,13 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { sunVisibility } from '@/core/orbital/SunVisibility'
 import { useLoadingStore, type DetailQuality } from '@/stores/loadingStore'
 import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
+import { eclipseLighting } from './eclipseLighting'
 import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
 import {
   FALLBACK_MODEL_URL,
@@ -726,13 +728,14 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     // when the reticle carried the far range.)
     const glintOpacity = 0.32 * Math.min(1, Math.max(0, (distanceKm - 150.0) / 850.0))
 
-    // 3b. Shadow detection for dynamic color-shifting halo
+    // 3b. Sun visibility across the ~63 km penumbra (core/orbital/SunVisibility):
+    // lighting follows the continuous value, so a terminator crossing is a fade,
+    // not a one-frame switch.
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
     _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
-    const p = worldPos.current.dot(_sunDirVec)
-    const perpSq = worldPos.current.lengthSq() - p * p
-    const isShadowed = p < 0 && perpSq < 6371.0 * 6371.0
+    const shade = 1 - sunVisibility(worldPos.current, _sunDirVec)
+    const lighting = eclipseLighting(shade)
 
     // 3c. Dynamic camera-distance-based local point lights exposure scaling
     // Lights are 0.0 at far planetary ranges (3000 km) and scale smoothly to 1.0 during close zoom (100 km)
@@ -742,20 +745,19 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     const smoothMultiplier = Math.pow(lightFactor, 2.0) // Soft quadratic ease-in for simulated exposure adaptation
 
     // Physical Camera Exposure Adaptation
-    // When the ISS is in shadow, we boost light exposure by 2.3x so modules remain engineered and visible.
-    const shadowExposureBoost = isShadowed ? 2.3 : 1.0
-
+    // The exposure boost ramps with shade from 1.0x (full sun) to 2.3x (umbra),
+    // so modules stay legible and the change across the penumbra is a fade.
     if (lightPrimaryRef.current) {
-      lightPrimaryRef.current.intensity = 1.6 * smoothMultiplier * shadowExposureBoost
+      lightPrimaryRef.current.intensity = 1.6 * smoothMultiplier * lighting.exposureBoost
     }
     if (lightSecondaryRef.current) {
-      lightSecondaryRef.current.intensity = 0.8 * smoothMultiplier * shadowExposureBoost
+      lightSecondaryRef.current.intensity = 0.8 * smoothMultiplier * lighting.exposureBoost
     }
     if (lightAmbientRef.current) {
-      // Dynamic ambient fill: lifts shadowed module details dynamically when zoomed in close.
-      // Soft fill when sunlit (0.24) to keep contrast, and a richer lift when shadowed (0.42) to simulate camera exposure adaptation.
-      const baseAmbientIntensity = isShadowed ? 0.42 : 0.24
-      lightAmbientRef.current.intensity = baseAmbientIntensity * smoothMultiplier
+      // Dynamic ambient fill: lifts shadowed module details when zoomed in close.
+      // Soft fill in full sun (0.24) to keep contrast, ramping to a richer lift
+      // in umbra (0.42) to simulate camera exposure adaptation.
+      lightAmbientRef.current.intensity = lighting.ambient * smoothMultiplier
     }
 
     // 3d. Earthshine key light — physically motivated dark-side illumination.
@@ -765,7 +767,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     // irrelevant at planetary range where the detail model is hidden.
     const earthshine = earthshineRef.current
     if (earthshine) {
-      if (isShadowed) {
+      if (shade > 0) {
         // Direction from Earth's center through the station, extended outward:
         // the light hangs below the station on the planet-facing side.
         _nadirDir.current.copy(worldPos.current).multiplyScalar(-1).normalize()
@@ -781,7 +783,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         earthshine.position.copy(_lightLocal.current)
         // Target lives at scene level (added via effect) — world space.
         earthshineTarget.position.copy(worldPos.current)
-        earthshine.intensity = 0.65 * smoothMultiplier
+        earthshine.intensity = lighting.earthshine * smoothMultiplier
       } else {
         earthshine.intensity = 0.0
       }
@@ -805,8 +807,8 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
       glintUniforms.uOpacity.value = glintOpacity
-      // Daylight (light blue glint) vs. shadow (deeper blue) color shift
-      glintUniforms.uColor.value.copy(isShadowed ? GLINT_COLOR_SHADOW : GLINT_COLOR_SUNLIT)
+      // Daylight (light blue glint) → shadow (deeper blue) color shift, blended by shade
+      glintUniforms.uColor.value.copy(GLINT_COLOR_SUNLIT).lerp(GLINT_COLOR_SHADOW, shade)
     }
   })
 
