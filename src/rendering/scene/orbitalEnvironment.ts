@@ -9,7 +9,7 @@ import * as THREE from 'three'
  * environmentRotation turns it so −Y follows the station's nadir — metallic
  * hardware then mirrors a blue Earth below and dark space above, instead of
  * the studio walls of RoomEnvironment. Its intensity follows how much of the
- * visible Earth is in daylight.
+ * visible Earth is in daylight, with an eclipse fill for legibility.
  */
 
 /** Angular radius of the Earth seen from ISS altitude (deg). */
@@ -20,6 +20,15 @@ export const ORBITAL_ENV_INTENSITY = 0.45
 
 /** Floor for a night-side Earth (airglow, city lights, starlight). */
 export const ORBITAL_ENV_NIGHT_FLOOR = 0.03
+
+/**
+ * Environment level with the station in full shade. The app keeps the station
+ * legible in eclipse (eclipseLighting's earthshine key light and exposure
+ * boost); metallic hardware takes almost no diffuse light, so the environment
+ * follows the same rule or bare metal turns black at night. Matches the
+ * studio environment's old constant 0.28.
+ */
+export const ORBITAL_ENV_ECLIPSE_FILL = 0.28
 
 const vertexShader = /* glsl */ `
   varying vec3 vDirection;
@@ -106,19 +115,30 @@ const _up = new THREE.Vector3()
 const _down = new THREE.Vector3()
 
 /**
- * Point the orbital environment at the station's nadir and scale it by the
- * daylight on the Earth below. Called from the ISS frame loop with the
- * station's world position (Earth at the origin) and the unit sun direction.
+ * environmentIntensity from the daylight below and the station's shade
+ * (1 − sun visibility): the physical Earth-below level, never darker than
+ * the eclipse legibility fill while the station is shaded.
+ */
+export function orbitalEnvironmentIntensity(cosSunZenith: number, shade: number): number {
+  const daylight =
+    ORBITAL_ENV_NIGHT_FLOOR + (ORBITAL_ENV_INTENSITY - ORBITAL_ENV_NIGHT_FLOOR) * earthBelowBrightness(cosSunZenith)
+  const s = Math.max(0, Math.min(1, shade))
+  return Math.max(daylight, ORBITAL_ENV_ECLIPSE_FILL * s)
+}
+
+/**
+ * Point the orbital environment at the station's nadir and set its level.
+ * Called from the ISS frame loop with the station's world position (Earth at
+ * the origin), the unit sun direction and the station's shade.
  */
 export function orientOrbitalEnvironment(
   scene: THREE.Scene,
   stationWorld: THREE.Vector3,
   sunDirection: THREE.Vector3,
+  shade: number,
 ): void {
   if (stationWorld.lengthSq() === 0) return
   _up.copy(stationWorld).normalize()
   environmentRotationForNadir(_down.copy(_up).negate(), scene.environmentRotation)
-  const brightness = earthBelowBrightness(_up.dot(sunDirection))
-  scene.environmentIntensity =
-    ORBITAL_ENV_NIGHT_FLOOR + (ORBITAL_ENV_INTENSITY - ORBITAL_ENV_NIGHT_FLOOR) * brightness
+  scene.environmentIntensity = orbitalEnvironmentIntensity(_up.dot(sunDirection), shade)
 }

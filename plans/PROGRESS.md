@@ -27,7 +27,9 @@ was analysed against them and rebuilt (`docs/ISS_MODEL_CONTEXT.md` §1):
   285 nodes; every rig node kept).
 - **Environment.** `RoomEnvironment` replaced by `orbitalEnvironment.ts`:
   Earth below (70°), space above, turned onto the station's nadir every frame
-  and dimmed with the daylight below (0.03–0.45).
+  and dimmed with the daylight below (0.03–0.45), with a 0.28 × shade floor in
+  eclipse so the authored metal stays legible (an in-app eclipse render showed
+  bare metal going near-black without it).
 - **Animation.** Only the visible detail model animates; joint state is
   handed to the next tier, so a swap mid-slew no longer snaps
   (`freshHandoff`). The SARJs stay uncapped by design (docs corrected).

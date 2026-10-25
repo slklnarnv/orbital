@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import {
+  ORBITAL_ENV_ECLIPSE_FILL,
   ORBITAL_ENV_INTENSITY,
   ORBITAL_ENV_NIGHT_FLOOR,
   earthBelowBrightness,
   environmentRotationForNadir,
+  orbitalEnvironmentIntensity,
   orientOrbitalEnvironment,
 } from '@/rendering/scene/orbitalEnvironment'
 
@@ -65,14 +67,27 @@ describe('earthBelowBrightness', () => {
   })
 })
 
+describe('orbitalEnvironmentIntensity', () => {
+  it('follows the daylight below while the station is sunlit', () => {
+    expect(orbitalEnvironmentIntensity(1, 0)).toBeCloseTo(ORBITAL_ENV_INTENSITY, 9)
+    expect(orbitalEnvironmentIntensity(-1, 0)).toBeCloseTo(ORBITAL_ENV_NIGHT_FLOOR, 9)
+  })
+
+  it('keeps the eclipse legibility fill in shade, never dimming a brighter daylight level', () => {
+    expect(orbitalEnvironmentIntensity(-1, 1)).toBeCloseTo(ORBITAL_ENV_ECLIPSE_FILL, 9)
+    expect(orbitalEnvironmentIntensity(-1, 0.5)).toBeCloseTo(ORBITAL_ENV_ECLIPSE_FILL * 0.5, 9)
+    expect(orbitalEnvironmentIntensity(1, 1)).toBeCloseTo(ORBITAL_ENV_INTENSITY, 9)
+  })
+})
+
 describe('orientOrbitalEnvironment', () => {
   it('scales the environment between the night floor and full daylight', () => {
     const scene = new THREE.Scene()
     const sun = new THREE.Vector3(1, 0, 0)
-    orientOrbitalEnvironment(scene, new THREE.Vector3(6800, 0, 0), sun)
+    orientOrbitalEnvironment(scene, new THREE.Vector3(6800, 0, 0), sun, 0)
     expect(scene.environmentIntensity).toBeCloseTo(ORBITAL_ENV_INTENSITY, 9)
-    orientOrbitalEnvironment(scene, new THREE.Vector3(-6800, 0, 0), sun)
-    expect(scene.environmentIntensity).toBeCloseTo(ORBITAL_ENV_NIGHT_FLOOR, 9)
+    orientOrbitalEnvironment(scene, new THREE.Vector3(-6800, 0, 0), sun, 1)
+    expect(scene.environmentIntensity).toBeCloseTo(ORBITAL_ENV_ECLIPSE_FILL, 9)
     // The map's Earth now lies toward the planet's centre from the station.
     const sampled = new THREE.Vector3(1, 0, 0).applyMatrix4(samplingMatrix(scene.environmentRotation))
     expect(sampled.y).toBeCloseTo(-1, 6)
@@ -81,7 +96,7 @@ describe('orientOrbitalEnvironment', () => {
   it('leaves the scene untouched for a degenerate position', () => {
     const scene = new THREE.Scene()
     scene.environmentIntensity = 0.7
-    orientOrbitalEnvironment(scene, new THREE.Vector3(), new THREE.Vector3(1, 0, 0))
+    orientOrbitalEnvironment(scene, new THREE.Vector3(), new THREE.Vector3(1, 0, 0), 0)
     expect(scene.environmentIntensity).toBe(0.7)
   })
 })

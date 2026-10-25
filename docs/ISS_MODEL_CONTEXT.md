@@ -360,8 +360,11 @@ before believing any new "discrepancy", including your own.
   builds the sampling matrix, so the rotation is decomposed and negated — unit
   tested against that construction) and `scene.environmentIntensity` from 0.03
   (night below) to 0.45 (subsolar), by the sun's zenith angle at the
-  sub-station point. Metallic hardware therefore mirrors a blue Earth below and
-  dark space above.
+  sub-station point — but never below `0.28 × shade` while the station is
+  shaded (`ORBITAL_ENV_ECLIPSE_FILL`, the old studio level): like the
+  earthshine key light, it keeps the authored, mostly-metallic hardware
+  legible in eclipse, where metal takes almost no diffuse light. In daylight,
+  metallic hardware therefore mirrors a blue Earth below and dark space above.
 
 ---
 
