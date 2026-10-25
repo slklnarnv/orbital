@@ -32,6 +32,15 @@
   bound. Headless Edge against the CSP-enforcing preview: IGOAL at Follow,
   no spinner; with the stock glue swapped into `dist/`, the attempt fails at
   30 s and demotes to legacy.
+- **Follow-up: version the transcoder.** After the deploy, a browser that had
+  loaded the site in the previous hour still got the stock glue from its HTTP
+  cache (`/basis/` was `max-age=3600, stale-while-revalidate=86400`, fixed
+  file names). The KTX2Loader now has its own `LoadingManager` whose URL
+  modifier appends `?v=<__BASIS_ID__>` (content hash of `public/basis/`,
+  `vite.config.ts`) to the transcoder files only — never to the blob: texture
+  URLs (`basisTranscoderUrl.ts`, tested). `/basis/` is now `immutable` like
+  `/models`; `.gitattributes` pins the glue to LF so the id is identical on
+  Windows and Vercel.
 
 ## Parked model items, re-opened (2026-10-25)
 

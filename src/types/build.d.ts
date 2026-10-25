@@ -5,3 +5,9 @@
  * for a year while a real asset change still busts the cache.
  */
 declare const __BUILD_ID__: string
+
+/**
+ * Content hash of the self-hosted Basis transcoder (public/basis/*.js|wasm),
+ * stamped by `vite.config.ts`; versions the transcoder URLs.
+ */
+declare const __BASIS_ID__: string

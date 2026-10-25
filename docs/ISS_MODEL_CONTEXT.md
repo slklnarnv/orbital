@@ -185,7 +185,10 @@ error. GLTFParser resolves failed textures to null and still finishes the
 model, so detail preparation fails any model with missing textures
 (`countMissingTextures`) and the ladder demotes instead of showing a grey
 station or stranding the spinner. `vite preview`
-serves the `vercel.json` headers, so CSP failures reproduce locally.
+serves the `vercel.json` headers, so CSP failures reproduce locally. The
+transcoder URLs carry `?v=<__BASIS_ID__>` (a content hash of `public/basis/`)
+and the route is `immutable`, so a changed transcoder reaches cached clients
+at once.
 
 **Selection**: `src/stores/settingsStore.ts` (`issModelQuality: 'high' |
 'legacy'`, default `'high'`, persisted). `'high'` → `iss_igoal_locate.glb`

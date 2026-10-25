@@ -89,9 +89,25 @@ const BUILD_ID = (() => {
   }
 })()
 
+/**
+ * Content hash of the Basis transcoder files: KTX2Loader fetches them by
+ * fixed names, so the URLs carry `?v=<id>` (src/rendering/iss/
+ * basisTranscoderUrl.ts) and `/basis/` can be served immutable. The .js is
+ * checked out LF everywhere (.gitattributes), so the id is the same on every
+ * machine.
+ */
+const BASIS_ID = (() => {
+  try {
+    return computeAssetBuildId(root, { dirs: ['public/basis'], extensions: /\.(js|wasm)$/i })
+  } catch {
+    return BUILD_ID
+  }
+})()
+
 export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __BASIS_ID__: JSON.stringify(BASIS_ID),
   },
   plugins: [
     react(),
