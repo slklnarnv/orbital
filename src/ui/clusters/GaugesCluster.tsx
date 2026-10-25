@@ -30,8 +30,9 @@ export function GaugesCluster(): JSX.Element {
 
   return (
     <div className="hud-bottom-left hud-text">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20 }}>
+      {/* columnGap: 'inherit' keeps .hud-bottom-left's gap (20px, 10px on mobile); inline px would beat the media query. */}
+      <div style={{ display: 'flex', flexDirection: 'column', rowGap: 6, columnGap: 'inherit' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', columnGap: 'inherit' }}>
           <HudGauge label="Speed" value={speed.toFixed(2)} unit="km/s" width={96} />
           <HudGauge label="Altitude" value={altitude.toFixed(1)} unit="km" width={96} />
         </div>
