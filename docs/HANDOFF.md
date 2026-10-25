@@ -213,6 +213,9 @@ landed through its own PR.
   Nominatim; Nominatim's public reverse endpoint returns "Unable to geocode"
   over open ocean at every zoom (verified). BigDataCloud gives
   country+continent over land and the marine region in `locality` over water.
+  The code calls the documented `api.bigdatacloud.net`, which redirects
+  (307) to `api-bdc.io`; `connect-src` must allow both
+  (`ConnectSrcCsp.test.ts`).
 - **Open-Meteo** forecast for temperature, WMO weather code, IANA timezone and
   UTC offset (local clock derives from the offset, not the tz name).
 - Both keyless/CORS. Rate limited via `ApiRateLimiter` (~10 s cadence,

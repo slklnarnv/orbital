@@ -6,6 +6,27 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Reverse geocoding blocked by connect-src (2026-10-25)
+
+- **Symptom (live only).** Every BigDataCloud request logged a `connect-src`
+  violation for `https://api-bdc.io/data/reverse-geocode-client?...`; the
+  "Passing over" place lookup always fell back.
+- **Cause.** `GeoLookupService` calls `api.bigdatacloud.net` — still the host
+  BigDataCloud's docs and its own JS client use — but it now answers 307 →
+  `api-bdc.io` (verified with curl). CSP checks each redirect hop, and
+  `connect-src` allowed only the first host.
+- **Fix.** `connect-src` gains `https://api-bdc.io`; the code keeps the
+  documented host so a future move back is harmless. Nothing else in the
+  CSP changed.
+- **Tests.** `tests/unit/build/ConnectSrcCsp.test.ts` reads the CSP from
+  `vercel.json` and requires every absolute URL host in `src/`, plus the
+  known redirect targets it lists, to be allowed — and no other external
+  host to be. It fails on the previous CSP.
+- **Open.** BigDataCloud's fair-use policy for the free client endpoint
+  allows only the calling device's own, current location; the ISS ground
+  point is not that, and violations are IP-banned (402). Choosing a
+  compliant geocoder or proxy is a roadmap item (`docs/NEXT_STEPS.md`).
+
 ## Live IGOAL outage: KTX2 transcoder vs CSP (2026-10-25)
 
 - **Symptom (live only).** Locate waited the 8 s gate and flew to Model A;

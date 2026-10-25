@@ -30,6 +30,8 @@ import { useGeoStore } from '@/stores/geoStore'
  * pattern and flip this service to proxy-first — see docs/HANDOFF.md.
  */
 
+// The documented host; since 2026-10 it answers 307 → api-bdc.io, so the CSP's
+// connect-src must allow both (CSP checks every redirect hop).
 const GEOCODE_ENDPOINT = 'https://api.bigdatacloud.net/data/reverse-geocode-client'
 const OPEN_METEO_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 
