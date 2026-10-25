@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatCountdown,
   formatLatitude,
   formatLongitude,
   formatPeriod,
@@ -72,5 +73,17 @@ describe('telemetryModeVisual', () => {
     expect(v.label).toBe(label)
     expect(v.dotClass.length).toBeGreaterThan(0)
     expect(v.color).toMatch(/^var\(--signal-[a-z]+\)$/)
+  })
+})
+
+describe('formatCountdown', () => {
+  it.each([
+    [0, '00:00'],
+    [761_000, '12:41'],
+    [3_725_000, '1:02:05'],
+    [-1, '—'],
+    [NaN, '—'],
+  ])('formats %s ms as %s', (ms, text) => {
+    expect(formatCountdown(ms)).toBe(text)
   })
 })
