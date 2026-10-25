@@ -153,4 +153,6 @@ and runs the Playwright smoke specs in `tests/e2e/` on software WebGL, with the
 network stubbed. It covers a clean boot, Locate reaching "Follow · Locked",
 Space pausing, `H` hiding the HUD, settings surviving a reload, and a TLE failure
 degrading to Cached, Recovery or Fallback. CI runs it as the `e2e` job after
-`verify`. It does not replace the visual checks above.
+`verify`; the job is advisory (not a required status check — `verify` is the
+merge gate), so a red `e2e` is a prompt to look, not a blocked merge. It does
+not replace the visual checks above.

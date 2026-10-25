@@ -21,6 +21,10 @@ jobs:
       - run: npm run verify
       - run: npm audit --omit=dev --audit-level=high
       - run: npm audit --audit-level=high
+  # Advisory, not a merge gate: keep `e2e` OUT of the branch's required status
+  # checks. It reports on every PR (including bot PRs such as the fallback-TLE
+  # refresh) but software-WebGL timing on hosted runners can be slow; `verify`
+  # is the gate.
   e2e:
     needs: verify
     runs-on: ubuntu-latest

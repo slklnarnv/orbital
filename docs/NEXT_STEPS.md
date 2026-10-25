@@ -10,8 +10,8 @@
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
   lint (0 warnings), 397 unit tests in 43 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
-  an `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
-  `vite preview`). Node 22 (`.nvmrc`).
+  an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
+  `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).
 - **Improve-skill audit, waves 1-2 landed 2026-10-24/25** (plans 002-015; the
   index is `plans/README.md`, the per-plan results are in `plans/PROGRESS.md`):
   - *Data and toolchain.* The packaged fallback TLE has epoch 2026-10-24, and
