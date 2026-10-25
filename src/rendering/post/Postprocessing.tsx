@@ -2,12 +2,13 @@ import React, { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { FRAME_PRIORITY } from '../framePriority'
+import { MultisampleRenderPass } from './MultisampleRenderPass'
 import { SunFlare } from './SunFlare'
 
 // ─── Bloom calibration ────────────────────────────────────────────────────────
@@ -20,21 +21,24 @@ const BLOOM_RADIUS = 0.4
 const BLOOM_THRESHOLD = 2.4
 
 // The composer bypasses the Canvas's antialiased backbuffer, so the scene
-// target carries its own MSAA (WebGL2). Bloom off never uses this path.
+// pass carries its own MSAA (WebGL2) — that pass only; the composer's
+// targets are single-sample (MultisampleRenderPass). Bloom off never uses
+// this path.
 const COMPOSER_MSAA_SAMPLES = 4
 
 /**
  * Postprocessing — HDR bloom + OutputPass compositing.
  *
  * Render contract: the priority-1 useFrame takes over final rendering from
- * R3F. drei's CameraControls runs at priority −1 and all scene useFrames run
- * at priority 0, so by the time the composer renders, every transform this
+ * R3F. ISSGroup advances the station at priority −2, drei's CameraControls
+ * runs at −1 and the other scene useFrames at 0 (framePriority.ts), so by the
+ * time the composer renders, every transform this
  * frame is current — the same ordering the direct pipeline relied on.
  * OutputPass applies ACES tone mapping + sRGB (since r152, materials render
  * linear into the composer's target), so the custom shaders' tonemapping
- * includes keep behaving exactly as before. The composer's scene target is
- * multisampled (COMPOSER_MSAA_SAMPLES), since it bypasses the Canvas's
- * antialiased backbuffer.
+ * includes keep behaving exactly as before. The scene pass is multisampled
+ * (COMPOSER_MSAA_SAMPLES), since it bypasses the Canvas's antialiased
+ * backbuffer; the passes after it are full-screen quads and run single-sample.
  */
 export const Postprocessing = React.memo(function Postprocessing(): null {
   const gl = useThree((state) => state.gl)
@@ -50,13 +54,11 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
   const lensFlare = useSettingsStore((state) => state.lensFlare)
 
   useEffect(() => {
-    const target = new THREE.WebGLRenderTarget(1, 1, {
-      type: THREE.HalfFloatType,
-      samples: COMPOSER_MSAA_SAMPLES,
-    })
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
     target.texture.name = 'EffectComposer.rt1'
     const composer = new EffectComposer(gl, target)
-    composer.addPass(new RenderPass(scene, camera))
+    const scenePass = new MultisampleRenderPass(scene, camera, COMPOSER_MSAA_SAMPLES)
+    composer.addPass(scenePass)
 
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
@@ -87,6 +89,7 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
       // EffectComposer.dispose frees only its own ping-pong targets and copy
       // pass; each pass owns GPU targets/materials (bloom: 11 HalfFloat mips)
       // that would otherwise leak on every Bloom toggle.
+      scenePass.dispose()
       bloom.dispose()
       flare.pass.dispose()
       outputPass.dispose()
@@ -125,7 +128,7 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
       flare.update(camera as THREE.PerspectiveCamera, sunDirectionWorld(simulationClock.now().julianDate))
     }
     composer.render()
-  }, 1)
+  }, FRAME_PRIORITY.composer)
 
   return null
 })
