@@ -95,6 +95,12 @@ Wave 2 (planned at `aa206a1`, after wave 1 merged):
 
 | [016](016-docs-pass.md) | Docs pass: fold errata banners, fix drift, record waves 1–2 | P1 | M | 002–015 | DONE |
 
+Roadmap (2026-10-26, after B.3 and the scrub fix):
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| [017](017-display-visuals-polish-roadmap.md) | Display, visuals and polish roadmap: responsive HUD, clouds, 8K Earth, sun, dashed orbit, identity, shortcuts + help, info panel, module explorer | P1–P3 | L (umbrella) | — | PLANNED |
+
 The docs pass (016): fold both errata banners, fix the drift the
 audit found (60→70 km clearance, `lerpLookAt`, MiB units, flight formulas,
 test counts, layout, LIVE/HYBRID wording), and record everything that landed.

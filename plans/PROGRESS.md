@@ -6,6 +6,19 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Roadmap 017: display, visuals and polish (2026-10-26)
+
+- Viewport audit (nine sizes, 360×640 to 3440×1440, overview and Follow):
+  no overlaps, nothing off-screen, no horizontal scroll; but landscape phones
+  get the full desktop HUD, portrait framing puts the station under the
+  clock, text down to 7 px, touch targets down to 23×15 px, and the HUD does
+  not scale up on QHD/ultrawide.
+- Captures: clouds blocky at 800 km and stair-stepped at 300 km; the sun reads
+  as a small bright star by the limb; the dashed orbit looks right (its code
+  is the issue).
+- Plan: `plans/017-display-visuals-polish-roadmap.md`; NEXT_STEPS' ranked list
+  now follows it.
+
 ## Orbit-tape scrub while tracking (2026-10-26)
 
 - **Symptom.** Dragging the orbit tape in Follow or Inspect: the view swung
