@@ -202,6 +202,7 @@ landed through its own PR.
 | `src/ui/clusters/OrbitTape.tsx` | Revolution tape (argument-of-latitude math lives here) |
 | `src/ui/clusters/CameraCluster.tsx` | Locate-ISS reticle control (top-right) |
 | `src/ui/clusters/GroundTrackGlobe.tsx` | Orthographic globe + passing-over lines |
+| `src/ui/common/PassesPanel.tsx` | Visible-pass popover (observer search, pass list, Watch); prediction in `src/core/orbital/PassPredictor.ts` |
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |

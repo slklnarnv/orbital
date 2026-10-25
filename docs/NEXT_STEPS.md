@@ -5,8 +5,23 @@
 > (see CLAUDE.md). Keep the Current state section fresh in the same commit as
 > behavior changes - never ship an errata banner, fix the stale text instead.
 
-## Current state (2026-10-25)
+## Current state (2026-10-26)
 
+- **B.3 visible passes landed (2026-10-26)**: a "Passes" control beside the
+  settings gear. The observer comes from an offline city search (Natural
+  Earth 10m populated places, `src/data/city-index.json`, 7,342 places,
+  ~150 KiB gzip, loaded on the first search; accent-folded via
+  `normalizeQuery`), typed coordinates, or browser geolocation
+  (`Permissions-Policy` now `geolocation=(self)`), and is kept in
+  localStorage only. `PassPredictor.ts` scans 48 h of simulation time at
+  30 s for ISS > 10°, sunlit, and Sun < −6° at the observer, bisects the
+  edges to 1 s and runs in a module worker (`passes.worker.ts`; main-thread
+  fallback). It matches Skyfield on 8 passes over 4 cities to 4 s and 1°
+  (known-answer tests). "Watch" seeks 30 s before a pass and plays at 1×.
+  Also fixed on phones: popovers no longer lose their fine text (a ≤900 px
+  rule hid every `.hud-fine` in the top-right corner, including the model
+  hints), and the Passes + settings row sits under the camera reticle
+  instead of overlapping its mode label.
 - **README rewritten (2026-10-25)**: about 40% shorter, with a primer on
   what the view shows (TLE and SGP4, GMST and the westward drift, eclipse,
   LVLH attitude, the 1,000× scale), a Mermaid pipeline diagram and four
@@ -53,7 +68,7 @@
   requires every point of the ISS band to resolve. The geo cache also no
   longer fails a good lookup when IndexedDB is missing entirely.
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 460 unit tests in 52 files, production build. CI
+  lint (0 warnings), 482 unit tests in 55 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).
@@ -136,9 +151,9 @@
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km.
-2. **B.3 next visible pass.** Reuse `isSunlit` and the forecaster pattern. It
-   needs CSP and `Permissions-Policy` changes for city search and browser
-   geolocation.
+2. **B.3 next visible pass** — landed 2026-10-26 (see Current state). Follow-ups
+   if wanted: an observer marker on the globe, pass brightness (magnitude),
+   and a "pass starting" notice while the panel is closed.
 3. **C.5**: a short `CHANGELOG.md` and Dependabot (the scheduled fallback-TLE
    refresh is done).
 4. **D.6 remainder** (coarse-pointer hit areas, render-scale override) and
@@ -203,7 +218,8 @@ can be extended. "Touches" lists the files expected to change.
    a pass is visible when elevation > 10°, the ISS is sunlit (B.1) and the sun
    is below −6° at the observer. Run in a Web Worker. Observer location kept in
    localStorage only, never sent anywhere. Panel: rise/max/set times, max
-   elevation, "Jump to pass" (uses the existing seek).
+   elevation, "Jump to pass" (uses the existing seek). **Landed 2026-10-26**
+   (`PassPredictor.ts`, `PassesPanel.tsx`); city search is offline.
 4. **Share links.** `#t=<epochMs>&m=<mode>&q=<quality>`; parse with a
    whitelist for enums and clamp for numbers (same rule as the settings
    sanitizer). Write the hash at most once a second; apply once on load.
@@ -267,7 +283,7 @@ can be extended. "Touches" lists the files expected to change.
       adopted (`docs/ISS_MODEL_CONTEXT.md` §9.4: half the geometry memory,
       but ≈ +9 MB transfer and a 50+ MB raw GLB in git).
 
-Suggested order now: B.3 → A.2 → C.2 (A.3, B.1 and B.2 landed 2026-10-25;
+Suggested order now: A.2 → C.2 (B.3 landed 2026-10-26; A.3, B.1 and B.2 landed 2026-10-25;
 C.6a/C.6b and the Locate LOD landed 2026-10-23; C.2 remains for the
 full-asset decode/VRAM path).
 
@@ -551,8 +567,8 @@ Cost: one session. Low value for a tracker; listed for completeness.
 ### Small items that fold into existing work
 
 - `F1` help overlay + one shortcut registry (their `?` modal) -> C.4.
-- Accent-folded place search (`normalizeQuery`: dotless i, NFD) -> B.3, only
-  if city search lands.
+- Accent-folded place search (`normalizeQuery`: dotless i, NFD) -> B.3 —
+  landed with the offline city search (`src/core/geo/CitySearch.ts`).
 - Render scale -> D.6.
 
 ### Rejected, with reasons

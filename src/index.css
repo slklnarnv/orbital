@@ -241,6 +241,111 @@ body,
   border: 1px solid var(--hud-line);
 }
 
+/* ─── Visible passes (PassesPanel) ─────────────────────────────────────── */
+/* Shares the settings popover's frame; wider for the pass rows and capped
+   to the viewport so it scrolls instead of running off small screens. */
+
+.hud-passes-popover {
+  width: min(320px, calc(100vw - 28px));
+  max-height: calc(100vh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+/* Bare typographic control (Passes, Change): no box, brightens on hover. */
+.hud-btn-text {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  margin: -4px -2px;
+  cursor: pointer;
+  color: var(--hud-mid);
+  transition: color var(--transition-ui);
+}
+
+.hud-btn-text:hover {
+  color: var(--hud-hi);
+}
+
+.hud-btn-text:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 3px;
+}
+
+.hud-input {
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  padding: 7px 10px;
+  color: var(--hud-hi);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.hud-input::placeholder {
+  color: var(--hud-lo);
+}
+
+.hud-input:focus-visible {
+  outline: 1.5px solid var(--hud-hi);
+  outline-offset: 2px;
+}
+
+.hud-suggestions,
+.hud-pass-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hud-suggestion {
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  color: var(--hud-mid);
+  cursor: pointer;
+}
+
+.hud-suggestion--active {
+  border-color: var(--hud-line);
+  color: var(--hud-hi);
+}
+
+.hud-pass-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.hud-pass {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.hud-pass:last-child {
+  border-bottom: 0;
+}
+
+.hud-option--compact {
+  flex: none;
+  padding: 5px 9px;
+}
+
+.hud-passes-note {
+  margin-top: 12px;
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--hud-lo);
+}
+
 .hud-scrim {
   position: absolute;
   left: 0;
@@ -801,7 +906,10 @@ body,
 }
 
 @media (max-width: 900px) {
-  .hud-corner--tr .hud-fine {
+  /* Only the ephemeris line and its divider: a bare `.hud-fine` here also
+     hid every fine line inside the popovers opened from this corner. */
+  .hud-corner--tr > .hud-corner__meta,
+  .hud-corner--tr > .hud-corner__divider {
     display: none;
   }
 }
@@ -812,8 +920,15 @@ body,
     left: max(14px, env(safe-area-inset-left));
   }
 
+  /* The camera control owns the top-right on phones; the Passes + settings
+     row sits under its reticle instead of on top of its mode label. */
   .hud-corner--tr {
-    top: max(14px, env(safe-area-inset-top));
+    top: calc(68px + env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+  }
+
+  .hud-settings-popover {
+    top: calc(96px + env(safe-area-inset-top));
     right: max(14px, env(safe-area-inset-right));
   }
 
