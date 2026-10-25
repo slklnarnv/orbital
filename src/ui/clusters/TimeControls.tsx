@@ -202,7 +202,7 @@ export function TimeControls(): JSX.Element {
       {seekOpen && (
         <div role="dialog" aria-label="Set simulation time" className="hud-transport-popover hud-text">
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
-            SET TIME · UTC
+            Set time · UTC
           </span>
           <input
             className="hud-transport-input"

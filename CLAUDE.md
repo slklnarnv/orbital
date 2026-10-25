@@ -10,8 +10,8 @@ npm run verify   # asset budget -> shader ramps -> typecheck -> lint -> unit tes
 ```
 
 It is the release gate; never commit red. A first run also catches environment
-surprises (Node 20 has no global `navigator` - guard module-scope browser
-reads; this broke CI once). Requires Node 20+.
+surprises (guard module-scope browser reads such as `navigator`; Node 20
+lacked a global `navigator` and this broke CI once). Requires Node 22+.
 
 ## What this is
 
@@ -25,6 +25,7 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 
 - `npm run dev` - Vite; serves `/api/tle` through the real handler
 - `npm test` - Vitest watch
+- `npm run test:e2e` - Playwright smoke suite (production preview)
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (before releases)
 - `npm run preview` - production bundle locally
 - `npm run verify` - the gate (see Rule 1)
@@ -34,13 +35,14 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `api/tle.ts` - Vercel function; guarded (GET/HEAD only, query-refusal,
   warm memo + dedupe, stale-on-error)
 - `src/core/` - simulation truth: clock, runtime, SGP4, telemetry manager,
-  geo lookup. No React, no three.
+  geo lookup, sun visibility / eclipse forecast / ground track. No React, no three.
 - `src/interaction/` - camera state machine, flights, constraint, sensitivity
 - `src/rendering/` - scene graph: `earth/`, `iss/` (model + joints),
   `post/` (bloom + flare), `shaders/` (GLSL), `scene/`
 - `src/stores/` - zustand UI projection (throttled, never per-frame)
 - `src/ui/` - HUD clusters; `src/index.css` is the HUD design system
-- `scripts/` - GLB build pipeline (`build-iss-model.mjs`) + asset/shader gates
+- `scripts/` - GLB build pipeline (`build-iss-model.mjs`, `build-iss-locate-lod.mjs`),
+  `refresh-fallback-tle.mjs`, asset/shader gates
 - `docs/` - deep docs; `plans/` - ledger + plan 001 + history
 
 ## Hard invariants (breaking any of these is a bug)

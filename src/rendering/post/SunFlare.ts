@@ -40,6 +40,18 @@ const _toCentre = new THREE.Vector3()
 const _camSpace = new THREE.Vector3()
 const _invQuat = new THREE.Quaternion()
 
+/**
+ * Radius of the shader-side Earth disc mask, in the shader's NDC-height units.
+ * When Earth's centre is at or behind the camera plane (`earthCamZ >= 0`) the
+ * projection would mirror the disc onto the screen and could blank the whole
+ * flare, so a negative radius is returned: `earthMask` is then 1 everywhere
+ * and the CPU occlusion test still gates `uStrength`.
+ */
+export function earthMaskRadius(earthCamZ: number, angEarth: number, tanHalf: number): number {
+  if (earthCamZ >= 0) return -1
+  return tanHalf > 0 ? Math.tan(angEarth) / tanHalf : 0
+}
+
 const SunFlareShader = {
   name: 'SunFlareShader',
   uniforms: {
@@ -175,15 +187,19 @@ export class SunFlare {
 
     // Earth centre, for the shader-side disc mask.
     _camSpace.copy(camera.position).multiplyScalar(-1).applyQuaternion(_invQuat)
-    const earthX = (_camSpace.x / -_camSpace.z) / halfAspect
-    const earthY = (_camSpace.y / -_camSpace.z) / tanHalf
+    // Behind the camera plane the projection would mirror the disc (and divide
+    // by ~0 at the plane), so park the centre at a finite point; the mask is
+    // disabled below via a negative radius.
+    const earthInFront = _camSpace.z < 0
+    const earthX = earthInFront ? (_camSpace.x / -_camSpace.z) / halfAspect : 0
+    const earthY = earthInFront ? (_camSpace.y / -_camSpace.z) / tanHalf : 0
 
     const edge = Math.min(1 - Math.abs(sunX), 1 - Math.abs(sunY))
     const frameFade = THREE.MathUtils.smoothstep(edge, FRAME_FADE_LO, FRAME_FADE_HI)
 
     ;(u.uSunNdc.value as THREE.Vector2).set(sunX, sunY)
     ;(u.uEarthNdc.value as THREE.Vector2).set(earthX, earthY)
-    u.uEarthRadius.value = tanHalf > 0 ? Math.tan(angEarth) / tanHalf : 0
+    u.uEarthRadius.value = earthMaskRadius(_camSpace.z, angEarth, tanHalf)
     u.uAspect.value = camera.aspect
     u.uStrength.value = occl * frameFade
   }

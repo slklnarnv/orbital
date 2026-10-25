@@ -6,7 +6,45 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Current state (2026-10-23)
+## Improve-skill audit + waves 1–2 (2026-10-24/25)
+
+A deep audit (six auditors, every finding re-read) produced plans 002–016;
+the index with per-plan status and the rejected/deferred findings is
+`plans/README.md`. Waves 1–2 (002–015) are landed.
+
+| Plan | Title | Result |
+|---|---|---|
+| 002 | Fresh fallback TLE | Packaged `src/data/fallback-tle.json` has epoch 2026-10-24. |
+| 003 | Toolchain, CI, Node 22 | Dev toolchain patched within its majors (vite `^6.4.5`, vitest `^4.1.12`, sharp `^0.35.5`); Node 22 via `.nvmrc`; actions pinned to SHAs, `persist-credentials: false`, full-tree `npm audit` step; `refresh-tle.yml` opens a fallback-TLE PR Mon/Thu (needs the repo setting "Allow GitHub Actions to create and approve pull requests"). |
+| 004 | Telemetry correctness | Offline-start recovery; confidence scored on \|age\|; clock clamp 100 → 1000 ms; `X-TLE-Stale` honoured (`fetchTLEWithStatus`); a cache bootstrap never replaces a network TLE; same-instant TLE blend; 16 KiB upstream body cap in `/api/tle`. |
+| 005 | Geo correctness | Separate place/weather freshness, weather hidden after 1 h, local time null without a UTC offset, persisted rows validated (`isGeoSnapshot`). |
+| 006 | Rendering correctness | Stable glint uniforms (fade and tint work again); detail preparation compiles the composer's shader variant (`detailPreparation.ts`); flare Earth mask off when Earth's centre is behind the camera; PMREM target disposed; `unavailable` stays terminal; no spurious legacy attempt on reselect. |
+| 007 | Bloom MSAA | 4× MSAA on the bloom composer target (`COMPOSER_MSAA_SAMPLES`). |
+| 008 | Signed Locate sweep | Close departures land on the planned standoff. |
+| 009 | Known-answer tests | `OrbitalEngine` vs `satellite.js`, GMST vs `gstime`, formatters, `periodMsOf`, mode vocabulary, `ApiRateLimiter`; orbit-tape math extracted to `src/ui/clusters/orbitTapeMath.ts`. |
+| 010 | HUD hygiene | Production crash screen without a stack; sentence-case HUD strings; dead constants removed. |
+| 011 | Penumbra (roadmap D.1) | `SunVisibility.ts` (`sunVisibility`, `isSunlit`); continuous lighting via `eclipseLighting.ts`; the TRRJ law switches at the 0.5 edge. |
+| 012 | Countdown (roadmap B.1) | `EclipseForecast.ts` (`forecastShadowTransition`, `ShadowForecaster`); store fields `sunlit` / `shadowTransitionInMs`; the line under the gauges reads "Daylight · sunset in mm:ss" / "Eclipse · sunrise in mm:ss". |
+| 013 | Playwright smoke suite (roadmap A.3) | `tests/e2e/` (6 specs), `playwright.config.ts`, `npm run test:e2e`, CI `e2e` job. |
+| 014 | Ground track on the HUD globe | `GroundTrack.ts` (`sampleGroundTrack`); dotted past, solid future. |
+| 015 | Optional 3D ground track (B.2 + D.3) | `rendering/earth/GroundTrack.tsx` (setting "Ground track", default off) with a constant clip-space depth bias (`groundTrackDepth.ts`); supersedes D.3's options. |
+| 016 | Docs pass | This pass: both errata banners folded into the text, drift fixed, waves 1–2 recorded. |
+
+Verification snapshot (2026-10-25): `npm run verify` green with 397 unit
+tests in 43 files; the `e2e` CI job runs the 6 smoke specs. Reviewer browser
+checks (dev build, headless Chromium on SwiftShader): Locate reaches
+`Follow · Locked`; the glint fades (opacity 0.077 at the Follow standoff);
+Bloom-mode edges are antialiased; the countdown reads and counts down; the
+mobile gauge gap is 10 px; the 3D track and footprint render with limb
+occlusion; no console errors except an external BigDataCloud 400. No human
+visual pass yet.
+
+Known stale comment (`src/` was out of scope for the docs pass, so noted
+rather than fixed): the `ISSModel.tsx` header comment's reliability ladder
+omits the `locate` tier (the code: `high` loads `locate` first; a Locate-tier
+failure demotes to `legacy`, then Model A).
+
+## Earlier state (2026-10-23)
 
 Both PRs are **merged**, in the required order (#14 then #15), with `verify`
 and `npm audit` green on both merge commits:
@@ -187,7 +225,8 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 ## Verification snapshot
 
 - `npm run verify` green end-to-end: asset budget → shader ramps → typecheck
-  (tests + scripts + configs) → lint (0 warnings) → 246 unit tests → build.
+  (tests + scripts + configs) → lint (0 warnings) → unit tests (397 at
+  2026-10-25) → build.
 - CI green on PR #12 (ubuntu, Node 20) after guarding module-scope
   `navigator` reads (Node 20 has no global `navigator` — platform trap).
 - Browser (dev server, built-in Chromium): 300× joint motion ≤0.36°/frame;
@@ -204,8 +243,12 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 - **Phase D** (animation-safe rigid batching): POSTPONED by user decision.
   Constraints and rollback asset if ever revisited: history
   §"Remaining work (not started)".
-- **Playwright smoke suite**: postponed (not installed). Built-in headless
-  browser covered the browser checks so far.
+- **Investigate-first list and deferred majors**: see `plans/README.md`
+  ("Deferred", "Investigate visually first") — attitude low-pass lag at 300×,
+  orbit dash float32 precision in long accelerated sessions, 10 Hz Earth/sun
+  stepping at 300×, hidden detail model matrix updates, prefetch vs
+  first-paint on slow links; React 19 + R3F 9 + drei 10, three r18x,
+  Vite 7/8, satellite.js 7.
 - **Model A terminal-'unavailable' path**: implemented + unit-tested, but the
   live firing of `DefaultLoadingManager.onError` was never confirmed in a
   real browser. Verify only if that state ever matters.
@@ -214,14 +257,14 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
   Follow-ups: browser-verify the LOD→high swap and the high-tier hitch at
   Inspect; KTX2/meshopt for the full asset via C.2 (decode/VRAM, not the LOD's
   cold-network path).
-- **Features/engineering roadmap**: `docs/NEXT_STEPS.md` "Roadmap" section is
-  the ranked list (day/night countdown, ground track, visible passes, …).
+- **Features/engineering roadmap**: `docs/NEXT_STEPS.md` "Next (ranked)" and
+  "Roadmap" sections are the ranked list. B.1 (countdown), B.2 (ground track)
+  and A.3 (smoke suite) landed 2026-10-25; B.3 (next visible pass) is next.
 - **youreyesinspace comparison** (2026-10-19): borrow list D.1-D.9 in
   `docs/NEXT_STEPS.md`. Landed in PR #14: D.2, D.4, D.5, and the CSS half of
-  D.6. Still open: D.1, D.3, D.7, D.8, D.9. Two findings change planned work:
-  D.1 (the eclipse test is binary in three places; a 63 km penumbra is the
-  honest model) and D.3 (B.2's 2 km ground-track offset z-fights above
-  ~500 km ground distance, so the track needs a depth-independent draw).
+  D.6. D.1 (penumbra) and D.3 (ground-track depth, solved with a constant
+  clip-space bias) landed 2026-10-25 with plans 011 and 015. Still open: D.7,
+  D.8, D.9.
 - **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
   closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
   and the pinned render-scale override from D.6 are still open).

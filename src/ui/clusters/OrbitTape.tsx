@@ -4,6 +4,7 @@ import { useSimulationStore } from '@/stores/simulationStore'
 import { useOrbitalState } from '@/hooks/useOrbitalState'
 import { formatPeriod, formatUtcClockParts } from '@/utils/formatters'
 import { periodMsOf } from '@/utils/orbitalTime'
+import { argumentOfLatitudeDeg, wrapPhaseTowards } from './orbitTapeMath'
 
 /**
  * OrbitTape — the console's signature instrument: one full ISS revolution
@@ -96,37 +97,12 @@ export function OrbitTape(): JSX.Element {
   } | null>(null)
   const scrubAccumRef = useRef(0)
 
-  const sinInc = Math.sin((inclination * Math.PI) / 180)
-  if (Math.abs(sinInc) > 1e-6) {
-    const sinLat = Math.sin((latitude * Math.PI) / 180)
-    const clamped = Math.max(-1, Math.min(1, sinLat / sinInc))
-    const ascending = (Math.asin(clamped) * 180) / Math.PI // [-90, 90]
-
-    const prevLatitude = prevLatitudeRef.current
-    let u: number
-    if (prevLatitude === null) {
-      // No trend yet: first sample. Northern half as the interim estimate —
-      // the glide corrects it once the trend resolves.
-      u = latitude >= 0 ? ascending : 180 - ascending
-    } else if (latitude >= prevLatitude) {
-      // Northbound: u in [0,90) climbing, or [270,360) after the south apex
-      u = ascending >= 0 ? ascending : 360 + ascending
-    } else {
-      // Southbound: u in (90,270]
-      u = 180 - ascending
-    }
+  const u = argumentOfLatitudeDeg(latitude, prevLatitudeRef.current, inclination)
+  if (u !== null) {
     prevLatitudeRef.current = latitude
-
     const target = u / 360
-    if (targetRef.current === null) {
-      targetRef.current = target
-    } else {
-      // Shortest-path target update so the glide never cuts across the
-      // 0/360 wrap and trend noise at the apex latitudes cannot yank it.
-      let delta = target - targetRef.current
-      delta = ((delta + 1.5) % 1) - 0.5
-      targetRef.current = (targetRef.current + delta + 1) % 1
-    }
+    targetRef.current =
+      targetRef.current === null ? target : wrapPhaseTowards(targetRef.current, target)
   }
 
   // Frame loop: continuous sweep at the simulation's rate, easing toward the

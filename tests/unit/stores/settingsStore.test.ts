@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizePersistedSettings } from '@/stores/settingsStore'
+import { sanitizePersistedSettings, useSettingsStore } from '@/stores/settingsStore'
 
 describe('sanitizePersistedSettings', () => {
   it('keeps known keys with valid values', () => {
@@ -8,11 +8,13 @@ describe('sanitizePersistedSettings', () => {
       postprocessing: false,
       orbitLineStyle: 'dashed',
       lensFlare: true,
+      groundTrack: true,
     })).toEqual({
       issModelQuality: 'legacy',
       postprocessing: false,
       orbitLineStyle: 'dashed',
       lensFlare: true,
+      groundTrack: true,
     })
   })
 
@@ -22,7 +24,17 @@ describe('sanitizePersistedSettings', () => {
       postprocessing: 'yes',
       orbitLineStyle: 42,
       lensFlare: null,
+      groundTrack: 'yes',
     })).toEqual({})
+  })
+
+  it('keeps a boolean groundTrack and drops a non-boolean one', () => {
+    expect(sanitizePersistedSettings({ groundTrack: false })).toEqual({ groundTrack: false })
+    expect(sanitizePersistedSettings({ groundTrack: 'yes' })).toEqual({})
+  })
+
+  it('defaults groundTrack to off', () => {
+    expect(useSettingsStore.getState().groundTrack).toBe(false)
   })
 
   it('ignores unknown keys, including prototype-shaped ones', () => {

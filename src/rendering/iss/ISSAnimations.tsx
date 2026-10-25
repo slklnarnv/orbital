@@ -37,6 +37,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { isSunlit } from '@/core/orbital/SunVisibility'
 import type { DetailQuality } from '@/stores/loadingStore'
 import {
   BGA_SLEW_DEG_PER_SIM_SECOND,
@@ -121,10 +122,8 @@ const DEG2RAD = Math.PI / 180
 // seek or an eclipse transition. This caps the on-screen rate too, so every
 // catch-up reads as a glide.
 const MAX_WALL_DEG_PER_SECOND = 12
-// Sphere-Earth shadow test, identical to the lighting/exposure consumers
-// (ISSModel) and the analytic terminator inputs — one solar ephemeris only.
-const EARTH_RADIUS_KM = 6371
-const EARTH_RADIUS_KM_SQ = EARTH_RADIUS_KM * EARTH_RADIUS_KM
+// The TRRJ law switches at the penumbra midpoint (sunVisibility = 0.5), the
+// same edge the old cylinder test used.
 
 export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAnimationsProps): null {
   const config = useMemo(() => configForQuality(quality, rigMetadata), [quality, rigMetadata])
@@ -192,9 +191,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
     root.getWorldQuaternion(_rootQuat.current)
     root.getWorldPosition(_worldPos.current)
     _sunWorld.current.set(sunWorld.x, sunWorld.y, sunWorld.z).normalize()
-    const alongSun = _worldPos.current.dot(_sunWorld.current)
-    const perpSq = _worldPos.current.lengthSq() - alongSun * alongSun
-    const sunlit = !(alongSun < 0 && perpSq < EARTH_RADIUS_KM_SQ)
+    const sunlit = isSunlit(_worldPos.current, _sunWorld.current)
 
     // Sun/nadir in model space: the pivot root carries the normalization
     // pre-rotation and the live LVLH attitude, both cancelled by its inverse.

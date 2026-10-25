@@ -16,15 +16,41 @@ remote is the source of truth for history.
 ```bash
 npm ci
 npm run dev
-npm run verify     # asset budget + shader ramps + tsc + unit tests + build
+npm run verify     # asset budget + shader ramps + tsc + lint (0 warnings) + unit tests + build
 ```
 
-All green at handoff. Known pre-existing warning: `three-core` chunk > 500 kB.
+All green at handoff.
 
+## Session log — 2026-10-24/25 (improve-skill audit, waves 1-2)
+
+Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
+
+- **Locate sweep angle is signed** (`CameraFlightPath`), so close departures
+  land on the planned standoff; duration formula in the camera facts below.
+- **Eclipse countdown** = the line under the gauges (`GaugesCluster.tsx`), fed
+  by `telemetryStore.sunlit` / `shadowTransitionInMs` (`ShadowForecaster`,
+  `core/orbital/EclipseForecast.ts`). It bisects the 0.5 penumbra crossing
+  (`isSunlit`), the edge the TRRJ law uses; ISS lighting fades with
+  `sunVisibility`.
+- **Ground track**: the HUD globe (`GroundTrackGlobe.tsx`) draws +/- half an
+  orbit, dotted behind and solid ahead. The 3D track + footprint
+  (`rendering/earth/GroundTrack.tsx`) is the "Ground track" setting, default
+  off; depth is a constant clip-space bias (`groundTrackDepth.ts`), not
+  `depthTest: false`; keep its colours <= 1.0 (bloom threshold).
+- **Geo freshness** (`GeoLookupService.ts`): place 30 days; weather refreshes
+  after 15 min and is hidden past 1 h; local time is null without a UTC offset,
+  never another cell's clock; persisted rows must pass `isGeoSnapshot`.
+- **Playwright hooks** (`npm run test:e2e`, production preview, network stubbed
+  with `page.route`): `#btn-locate-iss`; `[role="status"]` ("Follow · Locked");
+  `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
+  "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
+  `orbital-settings` localStorage key. The loading overlay swallows pointer
+  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
-Read this block before the older chronological list below; it is the current
-state. The 2026-10-19 PR block follows it.
+Read this block before the older chronological list below. The 2026-10-19 PR
+block follows it.
 
 **The report:** a cold Locate on slow wifi loaded the first tier, departed,
 and then showed the schematic Model A before swapping to IGOAL mid-flight with
@@ -112,8 +138,8 @@ landed through its own PR.
    `ISSAnimations` now drives the authored SARJ/TRRJ joint nodes
    (`PORT_ALPHA_ROT`, `STBD_TRRJ_GAMMA_ROT`, …) instead of re-parenting
    arrays onto synthetic pivots (the "bent inner arrays" cause), and the
-   P1/S1 radiator subtrees get a dedicated light-silver coating split at build time (splitRadiatorPanels; the runtime mount override is gone)
-   (source MLI assignment read near-black). `[ISS AUDIT]` logs the mounted
+   P1/S1 radiator subtrees get a dedicated white (Z-93) coating split at build time (`splitRadiatorPanels`;
+   the runtime mount override is gone) (source MLI assignment read near-black). `[ISS AUDIT]` logs the mounted
    asset; `scripts/iss-model-inspector.html` is the browser harness for
    model forensics (serve with the dev server and open directly).
 1. **HUD redesign, pass 1** — replaced the original glass-panel dashboard with
@@ -131,7 +157,8 @@ landed through its own PR.
   (`--hud-mid/lo/line`); color is reserved for data-link status only
   (`--signal-*`). Space background `--space: #020409`.
 - **Type**: Space Grotesk (display/labels/numerals, `tnum` where they tick) +
-  Chivo Mono (fine ephemeris). Loaded in `index.html`.
+  Chivo Mono (fine ephemeris). Self-hosted in `public/fonts`, declared in
+  `src/index.css` (`index.html` preloads them).
 - **Voice**: sentence case everywhere (no ALL CAPS); hierarchy via weight and
   tone. Acronyms stay uppercase (TLE, JD, GMST, UTC, ISS).
 - **Geometry rule**: circles are only for physically-round things (the globe).
@@ -187,11 +214,11 @@ landed through its own PR.
   that needs the rendered camera to match *this frame's* ISS must call
   `controls.update(0)` after moving the target (see the tracking branch of
   `CameraController` — this was the close-range jitter fix, verified 0 px over
-  240 frames at 60 km).
+  240 frames at 60 km; 2026-09 measurement).
 - `controls.moveTo(x, y, z, false)` snaps the target immediately. It is appropriate
-  for tracking, but must not run during a cinematic flight. Overview/local Locate
-  retains the two-second `lerpLookAt` path; Reset View and close-Earth departures use
-  `CameraFlightPath`, sampled by the same frame-owned transition lifecycle.
+  for tracking, but must not run during a cinematic flight. Every Locate and Reset
+  View uses `CameraFlightPath`, sampled by the frame-owned transition lifecycle; a
+  short Locate takes about 2 s (the `planLocate` base).
 - Locate requests the fast detail tier before departure. `loadingStore.issDetail`
   covers the Locate LOD (downloading, GPU preparation, ready, failure) and the
   full high attempt separately; `ISSModel` uploads textures over separate frames,
@@ -210,13 +237,14 @@ landed through its own PR.
   sits on the sweep's own approach side), no per-frame shortest-arc decisions.
   Everything else (stateful aims, fixed arrival bearings, chord tests, bulges,
   rate-capped tracking) was tried and removed — the simple sweep replaced it
-  after each variant produced its own jank. Keep it simple. Flight time scales
-  with the sweep angle (350 ms/rad) plus a distance term
-  (min(2000, max(0, startRadius − 20,000) × 0.025) ms).
+  after each variant produced its own jank. Keep it simple. Flight time
+  (`planLocate`) is 2000 ms + min(2000, max(0, startRadius − 20,000) × 0.025) ms +
+  |sweep angle| × 350 ms (about 2 s up to roughly 5 s), multiplied by 0.35 under
+  `prefers-reduced-motion` (`CameraController.tsx`).
 - **The sweep is station-RELATIVE.** `planLocate` builds the route once and
   records the station position; `sampleLocate` translates that whole route by
   the station's drift since planning. Do NOT go back to flying to the planned
-  arrival point — the flight lasts 2–4 s, and at 300× the station covers
+  arrival point — the flight lasts 2 to about 5 s, and at 300× the station covers
   ~6,500 km in that window, so the camera landed at the station's old address
   (6,460 km out instead of the ~353 km standoff), the 6,500 km clearance clamp
   then pinned the eye, and Locate visibly chased the station and never caught
@@ -281,11 +309,13 @@ landed through its own PR.
   stays on the current radial bearing; close-Earth Locate follows a safe spherical
   route. Do not apply a second camera correction after a flight's sampled pose.
 - Modes classify rendered distances, not queued endpoints. Planetary has a
-  35,000/33,000 km entry/exit band; all manual ISS modes share 60 km model clearance.
+  35,000/33,000 km entry/exit band; all manual ISS modes share 70 km model clearance
+  (`ISS_MODEL_CLEARANCE_KM` in `CameraStateMachine.ts`).
 - Rotation and dolly response follow pivot geometry continuously, so entering Free
   does not reset sensitivity. Right-drag/touch pan releases tracking on actual motion;
   orbit and centered pinch retain lock. The zoom meter uses the actual pivot distance.
-- Reset View requests a 2.2-second Earth transition through the camera store. It
+- Reset View requests a 2.2 s Earth transition (plus up to ~0.8 s to settle roll:
+  `initialRollErrorRad` × 250 ms) through the camera store. It
   eases to the 25,000 km overview (farther for portrait framing), without model/TLE
   readiness gates. Automatic zoom-out handoffs still preserve pending user motion.
 - Curved Locate is one continuous gesture: the eye sweeps a great-circle route
@@ -368,21 +398,14 @@ note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 ## Next steps
 
 `docs/NEXT_STEPS.md` holds the current ranked menu of candidate work — read
-it next. As of 2026-10-23 the top of that list is:
+it next. As of 2026-10-25 the top of that list is:
 
-1. Re-check the live deployment after the #14/#15 and Locate-LOD merges:
-   `/models/*` and `/textures/*` should answer `immutable` with
-   `?v=<asset hash>`; `/robots.txt`, `/sitemap.xml`, `/og-image.png` 200; `H`
-   hides the HUD; safe-area insets on a notched phone; the orbit ring closes
-   at the station's antipode and the dashes hold across refreshes. On a
-   throttled connection, Locate must depart on the detailed LOD (not the
+1. Re-check the live deployment after the wave 1–2 merges: `/models/*` and
+   `/textures/*` answering `immutable` with `?v=<asset hash>`; `/robots.txt`,
+   `/sitemap.xml`, `/og-image.png` 200. Then a human visual pass on the
+   penumbra fade, the countdown, the ground track and the Bloom MSAA edges. On
+   a throttled connection, Locate must depart on the detailed LOD (not the
    schematic) at Follow, with the full model appearing only below 200 km.
-2. **D.1 — penumbra eclipse.** The largest fidelity gap left, and it also
-   supplies B.1's day/night countdown. The shadow test is binary in three
-   places (`ISSModel`, `ISSAnimations`, `ISSJointKinematics`' `sunlit`); the
-   real penumbra is ~63 km ≈ 8 s of flight, collapsed into one frame that
-   flips a 2.3× exposure boost, ambient, earthshine, the glint tint and the
-   TRRJ law.
-3. B.1–B.3. **B.2 must adopt D.3 first** — a 2 km ground-track offset
-   z-fights above ~500 km ground distance, so the track needs a
-   depth-independent draw.
+2. **B.3 — next visible pass** (reuse `isSunlit` and the forecaster pattern;
+   needs CSP and `Permissions-Policy` changes for city search and geolocation).
+3. C.5 (CHANGELOG + Dependabot), then D.6's remainder and C.4 accessibility.

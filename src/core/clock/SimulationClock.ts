@@ -7,6 +7,14 @@ export type ClockMode = 'REALTIME' | 'ACCELERATED' | 'PAUSED'
 type TickCallback = (simTime: SimulationTime) => void
 type Unsubscribe = () => void
 
+/**
+ * Largest wall delta a single tick may apply. The runtime ticks every >=100 ms
+ * (recursive setTimeout), so a 100 ms clamp dropped every millisecond of
+ * scheduling jitter in ACCELERATED mode and ran it slow. 1 s still absorbs
+ * tab-suspension spikes.
+ */
+const MAX_TICK_DELTA_MS = 1000
+
 // ─── SimulationClock ─────────────────────────────────────────────────────────
 /**
  * The single authoritative time source for the entire platform.
@@ -45,7 +53,7 @@ export class SimulationClock {
 
   /** Called by the application runtime with wall-clock delta in milliseconds */
   tick(wallDeltaMs: number): SimulationTime {
-    const clampedDelta = Math.min(wallDeltaMs, 100) // guard against tab-suspension spikes
+    const clampedDelta = Math.min(wallDeltaMs, MAX_TICK_DELTA_MS) // guard against tab-suspension spikes
 
     let simDelta: number
 

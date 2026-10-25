@@ -57,11 +57,14 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { sunVisibility } from '@/core/orbital/SunVisibility'
 import { useLoadingStore, type DetailQuality } from '@/stores/loadingStore'
 import { useCameraStore } from '@/stores/cameraStore'
 import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
+import { eclipseLighting } from './eclipseLighting'
+import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
 import {
   FALLBACK_MODEL_URL,
   HIGH_MODEL_URL,
@@ -70,6 +73,11 @@ import {
 } from './modelUrls'
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
+
+// Glint tint: light blue in daylight, deeper blue in Earth's shadow. Shared
+// constants so the frame loop copies them instead of parsing a hex string.
+const GLINT_COLOR_SUNLIT = new THREE.Color('#A8D8FF')
+const GLINT_COLOR_SHADOW = new THREE.Color('#6FAEE0')
 
 // ─── F-03: Use locally-hosted Draco decoder ───────────────────────────────────
 // Instead of the gstatic.com CDN (blocked in offline/private-network environments),
@@ -369,66 +377,81 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         return
       }
       useLoadingStore.getState().setIssDetailPreparing(attempt)
-      const textures = new Set<THREE.Texture>()
-      const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
-      detailedScene.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return
-        meshes.push({ mesh: object, frustumCulled: object.frustumCulled })
-        const materials = Array.isArray(object.material) ? object.material : [object.material]
-        for (const material of materials) {
-          for (const value of Object.values(material)) {
-            if (value instanceof THREE.Texture) textures.add(value)
+      // With Bloom on, the visible frame is drawn into a HalfFloat target, not
+      // the default framebuffer; prepare against the same kind of target.
+      const composerActive = useSettingsStore.getState().postprocessing
+      const prepTarget = composerActive ? createPreparationTarget() : null
+      try {
+        const textures = new Set<THREE.Texture>()
+        const meshes: Array<{ mesh: THREE.Mesh; frustumCulled: boolean }> = []
+        detailedScene.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return
+          meshes.push({ mesh: object, frustumCulled: object.frustumCulled })
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+          for (const material of materials) {
+            for (const value of Object.values(material)) {
+              if (value instanceof THREE.Texture) textures.add(value)
+            }
+          }
+        })
+
+        // Upload textures in time-budgeted batches while the camera stays put. A
+        // resolved GLTF alone is not ready: lazy texture uploads and shader linking
+        // otherwise hitch the first close-up frame. Compile against the actual
+        // scene's lighting.
+        //
+        // The old loop yielded one frame per texture (73 textures ≈ 73 frames ≈
+        // 1.2 s at 60 Hz, 2.4 s at 30 Hz) — pure yielding, since each initTexture
+        // is a sub-millisecond GL call. Uploading until a frame's budget is spent
+        // keeps the GPU work identical while cutting the wait by ~90%.
+        let budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
+        for (const texture of textures) {
+          if (cancelled) return
+          gl.initTexture(texture)
+          if (performance.now() >= budgetEnd) {
+            await nextFrame()
+            if (cancelled) return
+            budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
           }
         }
-      })
-
-      // Upload textures in time-budgeted batches while the camera stays put. A
-      // resolved GLTF alone is not ready: lazy texture uploads and shader linking
-      // otherwise hitch the first close-up frame. Compile against the actual
-      // scene's lighting.
-      //
-      // The old loop yielded one frame per texture (73 textures ≈ 73 frames ≈
-      // 1.2 s at 60 Hz, 2.4 s at 30 Hz) — pure yielding, since each initTexture
-      // is a sub-millisecond GL call. Uploading until a frame's budget is spent
-      // keeps the GPU work identical while cutting the wait by ~90%.
-      let budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
-      for (const texture of textures) {
+        await nextFrame()
         if (cancelled) return
-        gl.initTexture(texture)
-        if (performance.now() >= budgetEnd) {
-          await nextFrame()
-          if (cancelled) return
-          budgetEnd = performance.now() + TEXTURE_UPLOAD_BUDGET_MS
-        }
-      }
-      await nextFrame()
-      if (cancelled) return
-      await gl.compileAsync(detailedScene, camera, scene)
-      await nextFrame()
-      if (cancelled || !groupRef.current) return
+        // compileAsync builds the programs synchronously in its first call (using
+        // the current target), so the target is restored right after the call and
+        // not held across the await — the composer renders in between.
+        const compiled = withPreparationTarget(gl, prepTarget, () =>
+          gl.compileAsync(detailedScene, camera, scene))
+        await compiled
+        await nextFrame()
+        if (cancelled || !groupRef.current) return
 
-      // A zero-area scissor uploads vertex buffers without writing any pixels.
-      // Unlike an offscreen target, it uses the exact on-screen shader variant.
-      const group = groupRef.current
-      const wasVisible = group.visible
-      const previousScissor = gl.getScissor(new THREE.Vector4())
-      const previousScissorTest = gl.getScissorTest()
-      try {
-        group.visible = true
-        for (const { mesh } of meshes) mesh.frustumCulled = false
-        gl.setScissor(0, 0, 0, 0)
-        gl.setScissorTest(true)
-        gl.render(scene, camera)
+        // A zero-area scissor uploads vertex buffers without writing any pixels.
+        // The prime runs against the same kind of target the visible frame uses
+        // (the default framebuffer without Bloom, a HalfFloat target with Bloom),
+        // so it warms the exact shader variant that will be drawn.
+        const group = groupRef.current
+        const wasVisible = group.visible
+        const previousScissor = gl.getScissor(new THREE.Vector4())
+        const previousScissorTest = gl.getScissorTest()
+        try {
+          group.visible = true
+          for (const { mesh } of meshes) mesh.frustumCulled = false
+          gl.setScissor(0, 0, 0, 0)
+          gl.setScissorTest(true)
+          withPreparationTarget(gl, prepTarget, () => gl.render(scene, camera))
+        } finally {
+          gl.setScissor(previousScissor)
+          gl.setScissorTest(previousScissorTest)
+          group.visible = wasVisible
+          for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
+        }
+        await nextFrame()
+        if (!cancelled) {
+          preparedModelUrls.add(spec.url)
+          onReady(attempt)
+        }
       } finally {
-        gl.setScissor(previousScissor)
-        gl.setScissorTest(previousScissorTest)
-        group.visible = wasVisible
-        for (const { mesh, frustumCulled } of meshes) mesh.frustumCulled = frustumCulled
-      }
-      await nextFrame()
-      if (!cancelled) {
-        preparedModelUrls.add(spec.url)
-        onReady(attempt)
+        prepTarget?.dispose()
       }
     }
 
@@ -520,13 +543,18 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       return
     }
     const nonceChanged = seenSelection.current.nonce !== selectionNonce
-    const qualityChanged = seenSelection.current.quality !== requestedQuality
-    seenSelection.current = { quality: requestedQuality, nonce: selectionNonce }
+    // An explicit reselect clears the demotion in this same run, but
+    // `requestedQuality` still holds the stale demoted value until the rerun;
+    // use the quality the request is about to become so no spurious attempt
+    // (e.g. a legacy one) starts for it.
+    const effectiveQuality = nonceChanged ? settingQuality : requestedQuality
+    const qualityChanged = seenSelection.current.quality !== effectiveQuality
+    seenSelection.current = { quality: effectiveQuality, nonce: selectionNonce }
     if (nonceChanged) setDemotedQuality(null)
     if (!nonceChanged && !qualityChanged) return
 
     const detail = store.issDetail
-    if (requestedQuality === 'legacy') {
+    if (effectiveQuality === 'legacy') {
       if (detail.activeQuality !== 'legacy') store.beginISSDetailAttempt('legacy')
       return
     }
@@ -540,7 +568,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       return
     }
     store.beginISSDetailAttempt('locate')
-  }, [requestedQuality, firstTier, selectionNonce])
+  }, [requestedQuality, settingQuality, firstTier, selectionNonce])
 
   // Full-detail tier: only within the INSPECT band (<200 km, 220 km exit; a
   // close FREE view counts too). At Follow the LOD is visually
@@ -629,6 +657,19 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   // uniformly with no camera hotspot. The target object is moved to the ISS
   // center each frame; the light itself sits out along the nadir.
   const earthshineTarget = useMemo(() => new THREE.Object3D(), [])
+
+  // The glint's uniforms must be a stable object. three's renderer captures the
+  // uniforms object when the program is acquired and keeps uploading THAT one;
+  // an inline uniforms object literal is re-created on every render and R3F would
+  // swap it onto the material, leaving the frame loop writing into an object
+  // the GPU never reads (the fade and tint would freeze).
+  const glintUniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(GLINT_COLOR_SUNLIT) },
+      uOpacity: { value: 0.0 },
+    }),
+    [],
+  )
   useEffect(() => {
     scene.add(earthshineTarget)
     return () => { scene.remove(earthshineTarget) }
@@ -687,13 +728,14 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     // when the reticle carried the far range.)
     const glintOpacity = 0.32 * Math.min(1, Math.max(0, (distanceKm - 150.0) / 850.0))
 
-    // 3b. Shadow detection for dynamic color-shifting halo
+    // 3b. Sun visibility across the ~63 km penumbra (core/orbital/SunVisibility):
+    // lighting follows the continuous value, so a terminator crossing is a fade,
+    // not a one-frame switch.
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
     _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
-    const p = worldPos.current.dot(_sunDirVec)
-    const perpSq = worldPos.current.lengthSq() - p * p
-    const isShadowed = p < 0 && perpSq < 6371.0 * 6371.0
+    const shade = 1 - sunVisibility(worldPos.current, _sunDirVec)
+    const lighting = eclipseLighting(shade)
 
     // 3c. Dynamic camera-distance-based local point lights exposure scaling
     // Lights are 0.0 at far planetary ranges (3000 km) and scale smoothly to 1.0 during close zoom (100 km)
@@ -703,20 +745,19 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     const smoothMultiplier = Math.pow(lightFactor, 2.0) // Soft quadratic ease-in for simulated exposure adaptation
 
     // Physical Camera Exposure Adaptation
-    // When the ISS is in shadow, we boost light exposure by 2.3x so modules remain engineered and visible.
-    const shadowExposureBoost = isShadowed ? 2.3 : 1.0
-
+    // The exposure boost ramps with shade from 1.0x (full sun) to 2.3x (umbra),
+    // so modules stay legible and the change across the penumbra is a fade.
     if (lightPrimaryRef.current) {
-      lightPrimaryRef.current.intensity = 1.6 * smoothMultiplier * shadowExposureBoost
+      lightPrimaryRef.current.intensity = 1.6 * smoothMultiplier * lighting.exposureBoost
     }
     if (lightSecondaryRef.current) {
-      lightSecondaryRef.current.intensity = 0.8 * smoothMultiplier * shadowExposureBoost
+      lightSecondaryRef.current.intensity = 0.8 * smoothMultiplier * lighting.exposureBoost
     }
     if (lightAmbientRef.current) {
-      // Dynamic ambient fill: lifts shadowed module details dynamically when zoomed in close.
-      // Soft fill when sunlit (0.24) to keep contrast, and a richer lift when shadowed (0.42) to simulate camera exposure adaptation.
-      const baseAmbientIntensity = isShadowed ? 0.42 : 0.24
-      lightAmbientRef.current.intensity = baseAmbientIntensity * smoothMultiplier
+      // Dynamic ambient fill: lifts shadowed module details when zoomed in close.
+      // Soft fill in full sun (0.24) to keep contrast, ramping to a richer lift
+      // in umbra (0.42) to simulate camera exposure adaptation.
+      lightAmbientRef.current.intensity = lighting.ambient * smoothMultiplier
     }
 
     // 3d. Earthshine key light — physically motivated dark-side illumination.
@@ -726,7 +767,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     // irrelevant at planetary range where the detail model is hidden.
     const earthshine = earthshineRef.current
     if (earthshine) {
-      if (isShadowed) {
+      if (shade > 0) {
         // Direction from Earth's center through the station, extended outward:
         // the light hangs below the station on the planet-facing side.
         _nadirDir.current.copy(worldPos.current).multiplyScalar(-1).normalize()
@@ -742,7 +783,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         earthshine.position.copy(_lightLocal.current)
         // Target lives at scene level (added via effect) — world space.
         earthshineTarget.position.copy(worldPos.current)
-        earthshine.intensity = 0.65 * smoothMultiplier
+        earthshine.intensity = lighting.earthshine * smoothMultiplier
       } else {
         earthshine.intensity = 0.0
       }
@@ -765,12 +806,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       const pulse = 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
-      const mat = auraRef.current.material as THREE.ShaderMaterial
-      if (mat) {
-        mat.uniforms.uOpacity.value = glintOpacity
-        // Daylight (light blue glint) vs. shadow (deeper blue) color shift
-        ;(mat.uniforms.uColor.value as THREE.Color).set(isShadowed ? '#6FAEE0' : '#A8D8FF')
-      }
+      glintUniforms.uOpacity.value = glintOpacity
+      // Daylight (light blue glint) → shadow (deeper blue) color shift, blended by shade
+      glintUniforms.uColor.value.copy(GLINT_COLOR_SUNLIT).lerp(GLINT_COLOR_SHADOW, shade)
     }
   })
 
@@ -848,10 +886,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         <shaderMaterial
           vertexShader={billboardVert}
           fragmentShader={softGlowFrag}
-          uniforms={{
-            uColor: { value: new THREE.Color('#A8D8FF') }, // Light blue glint (shadow shifts deeper blue)
-            uOpacity: { value: 0.0 },
-          }}
+          uniforms={glintUniforms}
           transparent={true}
           depthWrite={false}
           depthTest={true}

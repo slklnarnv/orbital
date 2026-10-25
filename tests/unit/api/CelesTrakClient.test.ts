@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchTLEFromCelesTrak } from '@/core/api/CelesTrakClient'
+import { fetchTLEFromCelesTrak, fetchTLEWithStatus } from '@/core/api/CelesTrakClient'
 
 const VALID_TLE = {
   line1: '1 25544U 98067A   26194.12129675  .00004316  00000+0  86456-4 0  9991',
@@ -29,6 +29,25 @@ describe('CelesTrakClient', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith('/api/tle', expect.any(Object))
+  })
+
+  it('reports the proxy stale flag from the X-TLE-Stale header', async () => {
+    const fetchMock = vi.fn(async () => Response.json(VALID_TLE, { headers: { 'X-TLE-Stale': '1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await expect(fetchTLEWithStatus()).resolves.toMatchObject({
+      tle: { line1: VALID_TLE.line1, line2: VALID_TLE.line2 },
+      stale: true,
+    })
+  })
+
+  it('reports a fresh proxy answer as not stale', async () => {
+    const fetchMock = vi.fn(async () => Response.json(VALID_TLE))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await expect(fetchTLEWithStatus()).resolves.toMatchObject({ stale: false })
   })
 
   it('uses only the CORS-open mirror when the proxy fails', async () => {

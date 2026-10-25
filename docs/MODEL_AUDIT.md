@@ -4,20 +4,9 @@ Date: 2026-09-27 · Scope: `public/models/iss_igoal.glb`, the build pipeline
 (`scripts/build-iss-model.mjs`, `scripts/iss-model-manifest.mjs`), and the
 runtime (`ISSModel.tsx`, `ISSAnimations.tsx`).
 
-> ## ⚠ ERRATA (2026-09-27, plan 001 implementation)
->
-> Finding 8's mechanism explanations and the material fix below are
-> superseded by plan 001 (`plans/001-iss-model-audit-and-repair.md`, M1–M4):
-> (a) the TRRJ shaft is the radiator beam's OWN long axis (native X) — the
-> radiators never "slew about the truss axis" by design; (b) the ~6.7 m
-> mid-assembly origin is a valid pivot on that shaft — the end-edge hinge
-> compensation described here was removed, not kept; (c) the big panel faces
-> are inside the `Truss` primitive (primitive 0 `MLI.Generic` is the base
-> beam), and the runtime light-silver override has been REPLACED by a
-> build-time white `Radiator_Panel_Coating` split plus removed override;
-> (d) the thermal law is now a bounded illustrative autotrack (±105°,
-> 0.75°/sim-s), not ±0.7 rad sun-pointing. Full detail:
-> `docs/ISS_MODEL_CONTEXT.md` errata block and `plans/PROGRESS.md`.
+> This is the audit trail as of 2026-09-27. Plan 001 later superseded parts of
+> findings 2, 6, 8 and 9; each carries a "Superseded by plan 001" lead-in that
+> states what the code does now, with the original claim kept below it.
 
 > Agent briefing: `docs/ISS_MODEL_CONTEXT.md` is the authoritative,
 > self-contained context document for any future model audit/repair session
@@ -54,6 +43,9 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
    with IGOAL itself — the arrays are genuinely full-size (see finding 3).
 
 2. STALE BOUNDS / NORMALIZATION — **CORRECT** (external finding refuted).
+   Superseded by plan 001 (Phase A, independent declared-bounds check) on one point: the "exactly" below compared
+   decoded against decoded; the independent JSON-chunk comparison shows
+   quantization-level deltas (max ≈ 4.2e-4 m), which are expected under Draco.
    Declared POSITION accessor min/max match the decoded vertices exactly on
    this artifact (zero stale accessors; the "652 stale" count was the read
    bug). Decoded whole-model bounds:
@@ -91,7 +83,9 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
    any non-indexed Details primitive).
 
 6. SOLAR-ARRAY ANIMATION BYPASSES NATIVE JOINTS — **CONFIRMED RUNTIME ERROR,
-   fixed**. The GLB carries the real mechanism hierarchy:
+   fixed**. Superseded by plan 001 (M1–M3, S2): the BGAs are no longer parked —
+   `bgaTargetAngle` drives all eight in each wing's LIVE parent frame (2°/sim-s,
+   12°/s wall-clock cap), and the SARJ law is unchanged. The GLB carries the real mechanism hierarchy:
    `PORT_ALPHA_ROT`/`STBD_ALPHA_ROT` (SARJ, each parenting Truss_P4/P5/P6 and
    Truss_S4/S5/S6, located at z = ∓17.78 m) and `PORT_BETA_ROT_2A/4A/2B/4B`,
    `STBD_BETA_ROT_1A/3A/1B/3B` (BGA per wing). The old `ISSAnimations`
@@ -99,12 +93,17 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
    averaged truss line — the probable cause of the "bent inner arrays"
    artifacts. Rewritten to rotate the authored joint nodes directly (SARJ
    tracks the sun one revolution per orbit; BGAs stay parked at their
-   authored pose, matching normal on-orbit ops). Axis convention is resolved
+   authored pose, matching normal on-orbit ops — now superseded, see above). Axis convention is resolved
    numerically from each node's parent world quaternion — necessary because
    the asset mixes unit scales (100, 0.0254, 63.33, …) and rotations per
    subtree.
 
-   ERRATUM (same session, caught in visual review): the first version of the
+   ERRATUM (same session, caught in visual review). Superseded by plan 001
+   (M1): defect (a) stands (it is why joint deltas are premultiplied), but fix
+   (b) was removed — the TRRJ origin lies ON the radiator's own beam axis
+   (native X), so there is no end-edge hinge and no position compensation, and
+   the radiators roll about their beam instead of sweeping about the truss
+   axis. Original text: the first version of the
    joint rotation had two defects that misplace the EATCS radiators —
    (a) the delta was composed POST-multiplied (node-local frame), which the
    TRRJs' ±90° authored base rotations turn into a perpendicular axis, and
@@ -127,7 +126,12 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
    were the read bug plus a two-corner AABB transform error.)
 
 8. RADIATOR MATERIAL — **CONFIRMED SOURCE APPEARANCE DEFECT, fixed at
-   runtime**. The big radiator panel faces use `MLI.Generic` (flat 0.8 gray,
+   runtime**. Superseded by plan 001 (M4): the panel faces are in the long
+   `Truss`-material primitive (primitive 0, `MLI.Generic`, is the short base
+   beam), and the fix is now a build-time split onto a dedicated white
+   `Radiator_Panel_Coating` (`splitRadiatorPanels()` in
+   `scripts/build-iss-model.mjs`); the runtime light-silver override described
+   below was removed. Original claim: the big radiator panel faces use `MLI.Generic` (flat 0.8 gray,
    metalness 0.4, no base-color texture); only the small frames/scissor
    hardware use the shared `Truss` atlas (which does contain dark
    photovoltaic regions on its left band — confirmed by exporting
@@ -137,7 +141,13 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
    `S1_Radiator` subtrees at mount. The shared `Truss` material is untouched
    (197 primitives across modules/airlocks/robotics depend on it).
 
-9. RADIATOR ANIMATION — **PROBABLE ERROR (kept as approximation)**. Real TRRJ
+9. RADIATOR ANIMATION — **PROBABLE ERROR (kept as approximation)**.
+   Superseded by plan 001 (M3): the thermal law is implemented as a bounded,
+   illustrative autotrack (`trrjTargetAngle`: edge-to-Sun in daylight,
+   face-to-Earth in eclipse, ±105° software limit, 0.75°/sim-s), not the
+   sun-pointing + fixed offset below; it is no longer future work (real TRRJs
+   are usually parked, so a parked-operations profile remains optional).
+   Original claim: real TRRJ
    ops orient edge-to-Sun in daylight and face-to-Earth in eclipse; the app
    uses sun-pointing + fixed offset. The joints now animate on the native
    `*_TRRJ_GAMMA_ROT` nodes; the thermal-control-accurate profile remains
@@ -165,7 +175,8 @@ is fixed in this pass; re-running it now reproduces the build report exactly.
   exact measured bounds documented in the constants comment.
 - `src/rendering/iss/ISSAnimations.tsx` — rewritten around the authored
   SARJ/TRRJ joints; synthetic re-parenting machinery removed.
-- Radiator subtrees get a dedicated light-silver material at mount.
+- Radiator subtrees get a dedicated light-silver material at mount (later
+  replaced by the build-time coating split, see finding 8).
 - `scripts/iss-model-inspector.html` — browser harness kept for future model
   forensics (serve via dev server, open directly).
 

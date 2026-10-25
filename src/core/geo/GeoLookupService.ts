@@ -1,4 +1,4 @@
-import { delMany, entries, get, set } from 'idb-keyval'
+import { del, delMany, entries, get, set } from 'idb-keyval'
 import { ApiRateLimiter } from '@/core/api/ApiRateLimiter'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
@@ -36,6 +36,9 @@ const OPEN_METEO_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 const CELL_DEG = 2
 const GEO_CELL_TTL_MS = 30 * 24 * 60 * 60 * 1000   // place names are stable
 const WX_CELL_TTL_MS = 15 * 60 * 1000              // weather is not
+// Weather older than an hour is not "current": the HUD hides it rather than
+// show it as live while the 15 min refetch is rate-limited or failing.
+const WX_DISPLAY_MAX_MS = 60 * 60 * 1000
 const TICK_INTERVAL_MS = 5_000
 const FIRST_TICK_DELAY_MS = 3_000                  // let telemetry leave its 0,0 seed
 const FETCH_TIMEOUT_MS = 9_000
@@ -76,7 +79,9 @@ const WEATHER_LABELS: Record<number, string> = {
 }
 
 export function describeWeatherCode(code: number): string {
-  return WEATHER_LABELS[code] ?? '—'
+  // hasOwn, not a bare index: a non-numeric code such as 'toString' would
+  // otherwise resolve to an inherited Object.prototype member.
+  return Number.isInteger(code) && Object.hasOwn(WEATHER_LABELS, code) ? WEATHER_LABELS[code] : '—'
 }
 
 // ─── Snapshot shape ───────────────────────────────────────────────────────────
@@ -91,7 +96,80 @@ export interface GeoSnapshot {
   utcOffsetSeconds: number | null
   temperatureC: number | null
   weatherCode: number | null
+  /**
+   * Most recent of the two per-field stamps below. Drives the 30-day entry TTL
+   * and the IndexedDB prune, so rows written before the stamps existed keep
+   * working.
+   */
   fetchedAt: number
+  /**
+   * When the place name was last fetched. null: never answered. Absent on rows
+   * written before the stamps existed — read it through ageOf().
+   */
+  placeFetchedAt?: number | null
+  /**
+   * When weather was last fetched. null: no weather yet. Kept separate from
+   * placeFetchedAt so a place fetch can never make old weather look fresh.
+   */
+  weatherFetchedAt?: number | null
+}
+
+/**
+ * Validates a snapshot read back from IndexedDB. Live responses are validated
+ * on arrival; persisted rows must be too, because a corrupt or old-schema row
+ * would otherwise throw inside the HUD (which sits outside the canvas error
+ * boundaries) for the whole 30-day TTL.
+ */
+export function isGeoSnapshot(value: unknown): value is GeoSnapshot {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+
+  const nullableText = (x: unknown): boolean => x === null || (typeof x === 'string' && x.length <= 120)
+  const nullableNumber = (x: unknown, min: number, max: number): boolean =>
+    x === null || (typeof x === 'number' && Number.isFinite(x) && x >= min && x <= max)
+  const optionalStamp = (x: unknown): boolean =>
+    x === undefined || x === null || (typeof x === 'number' && Number.isFinite(x))
+
+  return (
+    nullableText(v.placeName) &&
+    nullableText(v.continent) &&
+    nullableText(v.timezone) &&
+    nullableText(v.tzAbbreviation) &&
+    nullableNumber(v.utcOffsetSeconds, -14 * 3600, 14 * 3600) &&
+    nullableNumber(v.temperatureC, -100, 100) &&
+    (v.weatherCode === null || (typeof v.weatherCode === 'number' && Number.isInteger(v.weatherCode) && v.weatherCode >= 0 && v.weatherCode <= 99)) &&
+    typeof v.fetchedAt === 'number' && Number.isFinite(v.fetchedAt) &&
+    optionalStamp(v.placeFetchedAt) &&
+    optionalStamp(v.weatherFetchedAt)
+  )
+}
+
+/**
+ * Age of a per-field stamp in ms. A missing stamp (row written before the
+ * stamps existed) falls back to the entry-wide fetchedAt.
+ */
+function ageOf(stamp: number | null | undefined, fallback: number): number {
+  return Date.now() - (stamp ?? fallback)
+}
+
+/** Weather age; Infinity when the entry has never carried weather. */
+function weatherAgeOf(snapshot: GeoSnapshot): number {
+  if (snapshot.weatherFetchedAt === null) return Infinity
+  return ageOf(snapshot.weatherFetchedAt, snapshot.fetchedAt)
+}
+
+/** The weather stamp to carry across a place fetch (never advanced by it). */
+function carriedWeatherStamp(existing: GeoSnapshot | undefined): number | null {
+  if (!existing) return null
+  if (existing.weatherFetchedAt !== undefined) return existing.weatherFetchedAt
+  return existing.weatherCode !== null ? existing.fetchedAt : null
+}
+
+/** The place stamp to carry across a weather fetch (never advanced by it). */
+function carriedPlaceStamp(existing: GeoSnapshot | undefined): number | null {
+  if (!existing) return null
+  if (existing.placeFetchedAt !== undefined) return existing.placeFetchedAt
+  return existing.placeName !== null ? existing.fetchedAt : null
 }
 
 /** Ground-track cell key on a CELL_DEG grid — the cache unit. */
@@ -300,35 +378,28 @@ export class GeoLookupService {
     void this._fetchPlace(lat, lon, cellKey)
   }
 
-  /** Returns a fresh-enough snapshot for the cell from memory or IndexedDB. */
+  /** Returns a usable snapshot for the cell from memory or IndexedDB. */
   private async _lookupCell(cellKey: string): Promise<GeoSnapshot | null> {
     const mem = this._memCache.get(cellKey)
-    if (mem && Date.now() - mem.fetchedAt <= WX_CELL_TTL_MS) return mem
-
-    if (mem && Date.now() - mem.fetchedAt <= GEO_CELL_TTL_MS) {
-      // Place still fresh but weather stale — re-fetch weather only, keep the
-      // cached place visible meanwhile.
-      if (!this._wxInFlight && this._wxLimiter.shouldRequest()) {
-        this._wxInFlight = true
-        this._wxLimiter.recordRequest()
-        const [lat, lon] = cellKey.split(',').map(Number)
-        void this._fetchWeather(lat, lon, cellKey)
-      }
+    // Usable = the place is still within its TTL. Weather freshness is judged
+    // separately: stale weather schedules a refetch but never evicts the place.
+    if (mem && ageOf(mem.placeFetchedAt, mem.fetchedAt) <= GEO_CELL_TTL_MS) {
+      this._refreshWeatherIfStale(mem, cellKey)
       return mem
     }
 
+    const key = `${IDB_KEY_PREFIX}${cellKey}`
     try {
-      const stored = await get<GeoSnapshot>(`${IDB_KEY_PREFIX}${cellKey}`)
-      if (stored && Date.now() - stored.fetchedAt <= GEO_CELL_TTL_MS) {
-        this._memCache.set(cellKey, stored)
-        // Same split decision as the memory path above.
-        if (Date.now() - stored.fetchedAt > WX_CELL_TTL_MS && !this._wxInFlight && this._wxLimiter.shouldRequest()) {
-          this._wxInFlight = true
-          this._wxLimiter.recordRequest()
-          const [lat, lon] = cellKey.split(',').map(Number)
-          void this._fetchWeather(lat, lon, cellKey)
+      const stored: unknown = await get(key)
+      if (stored !== undefined) {
+        if (!isGeoSnapshot(stored)) {
+          // Corrupt or old-schema row: drop it and treat the cell as a miss.
+          void del(key).catch(() => { /* silent */ })
+        } else if (ageOf(stored.placeFetchedAt, stored.fetchedAt) <= GEO_CELL_TTL_MS) {
+          this._memCache.set(cellKey, stored)
+          this._refreshWeatherIfStale(stored, cellKey)
+          return stored
         }
-        return stored
       }
     } catch {
       // IndexedDB unavailable — memory cache still covers this session
@@ -337,19 +408,35 @@ export class GeoLookupService {
     return null
   }
 
+  /** Re-fetches weather only, keeping the cached place visible meanwhile. */
+  private _refreshWeatherIfStale(snapshot: GeoSnapshot, cellKey: string): void {
+    if (weatherAgeOf(snapshot) <= WX_CELL_TTL_MS) return
+    if (this._wxInFlight || !this._wxLimiter.shouldRequest()) return
+    this._wxInFlight = true
+    this._wxLimiter.recordRequest()
+    const [lat, lon] = cellKey.split(',').map(Number)
+    void this._fetchWeather(lat, lon, cellKey)
+  }
+
   private _applySnapshot(snapshot: GeoSnapshot): void {
-    const state = useGeoStore.getState()
+    // Place, timezone and offset are place-stable facts; only weather expires.
+    const weatherCurrent = weatherAgeOf(snapshot) <= WX_DISPLAY_MAX_MS
     useGeoStore.setState({
       status: 'ready',
       snapshot,
       placeName: snapshot.placeName,
       continent: snapshot.continent,
       tzAbbr: snapshot.tzAbbreviation,
-      temperatureC: snapshot.temperatureC,
-      weatherLabel: snapshot.weatherCode !== null ? describeWeatherCode(snapshot.weatherCode) : null,
+      temperatureC: weatherCurrent ? snapshot.temperatureC : null,
+      weatherLabel: weatherCurrent && snapshot.weatherCode !== null
+        ? describeWeatherCode(snapshot.weatherCode)
+        : null,
+      // Never fall back to the previous cell's clock: a snapshot without an
+      // offset (place answered, weather not yet) must not freeze another
+      // ground point's time under this one.
       localTime: snapshot.utcOffsetSeconds !== null
         ? formatLocalClock(Date.now(), snapshot.utcOffsetSeconds)
-        : state.localTime,
+        : null,
       updatedAt: Date.now(),
     })
   }
@@ -366,6 +453,7 @@ export class GeoLookupService {
 
       const place = placeFromBigDataCloud(payload)
       const existing = this._memCache.get(cellKey)
+      const now = Date.now()
       this._memCache.set(cellKey, {
         placeName: place?.placeName ?? null,
         continent: place?.continent ?? null,
@@ -374,7 +462,11 @@ export class GeoLookupService {
         utcOffsetSeconds: existing?.utcOffsetSeconds ?? null,
         temperatureC: existing?.temperatureC ?? null,
         weatherCode: existing?.weatherCode ?? null,
-        fetchedAt: Date.now(),
+        // Only the place stamp advances: carried weather keeps its own age, so
+        // old weather is never re-stamped as fresh by a place fetch.
+        placeFetchedAt: now,
+        weatherFetchedAt: carriedWeatherStamp(existing),
+        fetchedAt: now,
       })
       this._geoLimiter.recordSuccess()
       this._placeAnswered.add(cellKey)
@@ -401,6 +493,7 @@ export class GeoLookupService {
       const wx = weatherFromOpenMeteo(payload)
       if (!wx) throw new Error('Malformed payload')
       const existing = this._memCache.get(cellKey)
+      const now = Date.now()
       this._memCache.set(cellKey, {
         placeName: existing?.placeName ?? null,
         continent: existing?.continent ?? null,
@@ -409,9 +502,10 @@ export class GeoLookupService {
         utcOffsetSeconds: wx.utcOffsetSeconds,
         temperatureC: wx.temperatureC,
         weatherCode: wx.weatherCode,
-        // Weather freshness governs the whole entry's cache clock, so a fresh
-        // weather read refreshes fetchedAt even when the place came from IDB.
-        fetchedAt: Date.now(),
+        // Only the weather stamp advances; the carried place keeps its own age.
+        placeFetchedAt: carriedPlaceStamp(existing),
+        weatherFetchedAt: now,
+        fetchedAt: now,
       })
       this._wxLimiter.recordSuccess()
       this._persistCell(cellKey)

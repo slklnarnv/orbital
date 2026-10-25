@@ -27,9 +27,19 @@ describe('SimulationClock', () => {
 
     const time = clock.tick(5 * 60 * 1000)
 
-    expect(time.epochMs).toBe(2_000)
-    expect(time.deltaMs).toBe(100)
-    expect(time.simDeltaMs).toBe(1_000)
+    expect(time.epochMs).toBe(1_000 + 10_000)
+    expect(time.deltaMs).toBe(1_000)
+    expect(time.simDeltaMs).toBe(10_000)
+  })
+
+  it('keeps accelerated time on rate despite scheduling jitter', () => {
+    const clock = new SimulationClock(0)
+    clock.setMode('ACCELERATED')
+    clock.setTimeScale(300)
+
+    for (let i = 0; i < 10; i++) clock.tick(105)
+
+    expect(clock.now().epochMs).toBe(10 * 105 * 300)
   })
 
   it('keeps PAUSED simulation time fixed while reporting wall delta', () => {

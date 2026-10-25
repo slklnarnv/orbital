@@ -19,6 +19,10 @@ const BLOOM_STRENGTH = 0.26
 const BLOOM_RADIUS = 0.4
 const BLOOM_THRESHOLD = 2.4
 
+// The composer bypasses the Canvas's antialiased backbuffer, so the scene
+// target carries its own MSAA (WebGL2). Bloom off never uses this path.
+const COMPOSER_MSAA_SAMPLES = 4
+
 /**
  * Postprocessing — HDR bloom + OutputPass compositing.
  *
@@ -28,7 +32,9 @@ const BLOOM_THRESHOLD = 2.4
  * frame is current — the same ordering the direct pipeline relied on.
  * OutputPass applies ACES tone mapping + sRGB (since r152, materials render
  * linear into the composer's target), so the custom shaders' tonemapping
- * includes keep behaving exactly as before.
+ * includes keep behaving exactly as before. The composer's scene target is
+ * multisampled (COMPOSER_MSAA_SAMPLES), since it bypasses the Canvas's
+ * antialiased backbuffer.
  */
 export const Postprocessing = React.memo(function Postprocessing(): null {
   const gl = useThree((state) => state.gl)
@@ -44,7 +50,12 @@ export const Postprocessing = React.memo(function Postprocessing(): null {
   const lensFlare = useSettingsStore((state) => state.lensFlare)
 
   useEffect(() => {
-    const composer = new EffectComposer(gl)
+    const target = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType,
+      samples: COMPOSER_MSAA_SAMPLES,
+    })
+    target.texture.name = 'EffectComposer.rt1'
+    const composer = new EffectComposer(gl, target)
     composer.addPass(new RenderPass(scene, camera))
 
     const bloom = new UnrealBloomPass(

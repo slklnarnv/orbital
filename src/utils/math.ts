@@ -32,12 +32,3 @@ export interface Vec3 {
 export function vec3Length(v: Vec3): number {
   return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
-
-/** Linear interpolation of Vec3 */
-export function lerpVec3(a: Vec3, b: Vec3, t: number): Vec3 {
-  return {
-    x: lerp(a.x, b.x, t),
-    y: lerp(a.y, b.y, t),
-    z: lerp(a.z, b.z, t),
-  };
-}

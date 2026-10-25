@@ -83,3 +83,18 @@ export function formatUtcClockParts(epochMs: number): UtcClockParts {
     date: `${year}.${doy}`,
   }
 }
+
+/**
+ * Formats a countdown in milliseconds: "mm:ss" under an hour, "h:mm:ss" from
+ * one hour up. Negative or non-finite input is unknown: "—".
+ * Example: 761000 -> "12:41", 3725000 -> "1:02:05"
+ */
+export function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const total = Math.floor(ms / 1000)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const ss = (total % 60).toString().padStart(2, '0')
+  if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${ss}`
+  return `${minutes.toString().padStart(2, '0')}:${ss}`
+}

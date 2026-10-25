@@ -10,7 +10,7 @@ camera, shader, asset, or scene changes.
 2. Press Locate. While “Loading ISS” or “Preparing ISS” is shown, the camera must
    stay put and repeated presses must not restart the request.
 3. From the initial overview, confirm “Locating ISS” starts only after preparation
-   and the original two-second flight remains smooth, with no target snap,
+   and a short (~2 s) flight remains smooth, with no target snap,
    low-poly arrival, or model-loading stall. Repeat from a local ISS view.
 4. Repeat Locate: no new model request or preparation delay should occur.
 5. While tracking the station at any zoom and orientation, press Locate again.
@@ -53,9 +53,12 @@ cold-Locate path were not measured — run the checklist below for those.
    show Model A. Note any single-frame hitch from the full model's first draw.
 4. Zoom back above 220 km: the full asset may remain ready; the LOD must still
    render Follow. Re-enter Inspect: no second download.
-5. Fail the full asset (dev `?failAssets=iss_igoal.glb`): the LOD must remain
-   on screen and the HUD must not report low detail. Fail the LOD instead: the
-   legacy model (or Model A) is the fallback and Locate completes.
+5. Fail the full asset. Dev server only (`npm run dev`, `?failAssets=iss_igoal.glb`);
+   on a production build use DevTools request blocking instead. The needle must be
+   the full file name: `iss_igoal.glb` blocks only the full asset, while
+   `iss_igoal_locate.glb` blocks only the LOD (a bare `iss_igoal` matches both).
+   The LOD must remain on screen and the HUD must not report low detail. Fail the
+   LOD instead: the legacy model (or Model A) is the fallback and Locate completes.
 6. With `issModelQuality: legacy`, Locate must load the legacy model and never
    request either IGOAL tier.
 
@@ -65,7 +68,7 @@ cold-Locate path were not measured — run the checklist below for those.
    Earth-center distance. Close rotation should remain below 10% of the far-view
    response after sensitivity settles. Scroll steps should become finer near Earth.
 2. Locate the ISS, then scroll between Inspect, Follow, and Approach. Confirm that
-   rotation and zoom remain smooth across labels, and that the 60 km close-up limit
+   rotation and zoom remain smooth across labels, and that the 70 km close-up limit
    does not change when crossing a mode boundary. Orbiting must retain tracking.
 3. Pan by a few pixels with the right mouse button. Tracking must release immediately
    into Free mode, without changing orbit distance or suddenly changing sensitivity.
@@ -74,7 +77,7 @@ cold-Locate path were not measured — run the checklist below for those.
    remain at least 6,500 km from Earth's center. Continue rotating along the boundary:
    motion should slide, not stick. Repeat with a fast Free pan through the globe;
    both the eye and pivot must stop together, preserving their separation.
-5. Select Reset View from Free or ISS tracking. Confirm a 2.2-second eased return
+5. Select Reset View from Free or ISS tracking. Confirm a 2.2 s eased return (plus up to ~0.8 s to settle roll)
    to a 25,000 km Earth overview (farther in portrait), not a quick damping snap.
    Check an outward/upward-facing Free view too. The pivot must finish at Earth's
    center without a final orientation jump. Reset must not wait for ISS loading.
@@ -92,8 +95,8 @@ cold-Locate path were not measured — run the checklist below for those.
    the station crest into an already centered view. Test the opposite hemisphere,
    near a pole, and an outward-facing Free view; no surface crossings, waypoint
    pauses, horizon flips, or final tracking-handoff jumps. Repeat in portrait and
-   with moving simulation time. Near-station Locate should retain the shorter
-   two-second path.
+   with moving simulation time. A near-station Locate should be a short (~2 s)
+   flight.
 9. Drag during Reset View or the extended Locate route. The camera must release
    immediately without later resuming the cancelled flight, and without a roll
    snap at the release frame. Scrolling the wheel during a flight must cancel it
@@ -120,3 +123,36 @@ cold-Locate path were not measured — run the checklist below for those.
 3. Inspect the Earth day side, city lights on the night side, the terminator, cloud
    limb, atmosphere limb, sun disc, and lens ring for gross visual regressions.
 4. Record the browser, WebGL version, and renderer class with the smoke result.
+
+## Penumbra and countdown
+
+1. Open the production preview and raise the clock to 300x (Follow the station).
+   Wait for a terminator crossing (one every 30 to 60 simulated minutes).
+2. Through the crossing the ISS lighting (key light, ambient, earthshine) and the
+   glint tint must fade over several frames, not switch in one. The TRRJ law
+   switches at the midpoint of that fade; radiators must not jump.
+3. The line under the gauges reads "Daylight · sunset in mm:ss" or "Eclipse ·
+   sunrise in mm:ss", counts down, and hits 00:00 at the crossing, then flips to
+   the opposite phase with a fresh countdown. After a seek it recomputes at once.
+
+## Ground track
+
+1. HUD globe: the track is dotted behind the station and solid ahead, and it is a
+   sine-like curve (the Earth turns under the orbit), not a great circle.
+2. Open Render settings and switch "Ground track" on (default off). At 25,000 km,
+   13,600 km and in Follow the 3D track and the footprint ring must not flicker or
+   z-fight with the surface. The limb must hide the far side of the track, and the
+   station model must occlude the track where it passes in front.
+3. Switch it off again: the track and footprint disappear and the scene matches
+   the calibrated default look.
+
+## Automated smoke
+
+`npm run test:e2e` builds the production bundle, serves it with `vite preview`
+and runs the Playwright smoke specs in `tests/e2e/` on software WebGL, with the
+network stubbed. It covers a clean boot, Locate reaching "Follow · Locked",
+Space pausing, `H` hiding the HUD, settings surviving a reload, and a TLE failure
+degrading to Cached, Recovery or Fallback. CI runs it as the `e2e` job after
+`verify`; the job is advisory (not a required status check — `verify` is the
+merge gate), so a red `e2e` is a prompt to look, not a blocked merge. It does
+not replace the visual checks above.

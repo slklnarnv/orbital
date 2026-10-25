@@ -25,16 +25,20 @@ interface SettingsStore {
   /** Screen-space lens flare — halo + iris ghosts around the sun, gated by
    *  Earth occlusion. A composer pass, so it needs `postprocessing` on. */
   lensFlare: boolean
+  /** Optional 3D ground track + visibility footprint on the globe
+   *  (see rendering/earth/GroundTrack.tsx). Off keeps the calibrated look. */
+  groundTrack: boolean
   setIssModelQuality: (quality: IssModelQuality) => void
   setPostprocessing: (on: boolean) => void
   setOrbitLineStyle: (style: OrbitLineStyle) => void
   setLensFlare: (on: boolean) => void
+  setGroundTrack: (on: boolean) => void
 }
 
 const MODEL_QUALITIES: readonly IssModelQuality[] = ['high', 'legacy']
 const ORBIT_LINE_STYLES: readonly OrbitLineStyle[] = ['continuous', 'dashed']
 
-type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare'>>
+type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare' | 'groundTrack'>>
 
 /** Keeps only known, well-typed persisted settings (exported for tests). */
 export function sanitizePersistedSettings(persisted: unknown): PersistedSettings {
@@ -49,6 +53,7 @@ export function sanitizePersistedSettings(persisted: unknown): PersistedSettings
   }
   if (typeof raw.postprocessing === 'boolean') out.postprocessing = raw.postprocessing
   if (typeof raw.lensFlare === 'boolean') out.lensFlare = raw.lensFlare
+  if (typeof raw.groundTrack === 'boolean') out.groundTrack = raw.groundTrack
   return out
 }
 
@@ -60,6 +65,7 @@ export const useSettingsStore = create<SettingsStore>()(
       postprocessing: true,
       orbitLineStyle: 'continuous',
       lensFlare: false,
+      groundTrack: false,
       setIssModelQuality: (issModelQuality) => set((state) => ({
         issModelQuality,
         selectionNonce: state.selectionNonce + 1,
@@ -67,6 +73,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setPostprocessing: (postprocessing) => set({ postprocessing }),
       setOrbitLineStyle: (orbitLineStyle) => set({ orbitLineStyle }),
       setLensFlare: (lensFlare) => set({ lensFlare }),
+      setGroundTrack: (groundTrack) => set({ groundTrack }),
     }),
     {
       name: 'orbital-settings',
@@ -77,6 +84,7 @@ export const useSettingsStore = create<SettingsStore>()(
         postprocessing: state.postprocessing,
         orbitLineStyle: state.orbitLineStyle,
         lensFlare: state.lensFlare,
+        groundTrack: state.groundTrack,
       }),
       // localStorage is user-editable and outlives schema changes. Zustand's
       // default merge spreads whatever is stored over the defaults, so a

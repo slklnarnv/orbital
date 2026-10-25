@@ -1,4 +1,5 @@
 import type { Vec3 } from '@/utils/math'
+import { JULIAN_DATE_J2000 } from '@/utils/constants'
 
 // ─── Coordinate Conversions ───────────────────────────────────────────────────
 // Pure math — ZERO Three.js imports. Safe in core/ layer.
@@ -105,7 +106,7 @@ export function temeToGeodetic(
  */
 export function sunDirectionTEME(julianDate: number): Vec3 {
   const DEG2RAD = Math.PI / 180
-  const d = julianDate - 2451545.0 // days since J2000
+  const d = julianDate - JULIAN_DATE_J2000 // days since J2000
 
   // Mean longitude and anomaly (degrees)
   const L = (280.460 + 0.9856474 * d) % 360

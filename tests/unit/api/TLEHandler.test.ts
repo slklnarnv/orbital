@@ -57,6 +57,41 @@ describe('/api/tle', () => {
     }
   })
 
+  // A valid TLE followed by padding: only the size cap can reject it.
+  const OVERSIZED_TLE = `${VALID_TLE}\n${'# padding\n'.repeat(2_000)}`
+
+  it('rejects oversized upstream bodies even when they contain a valid TLE', async () => {
+    const upstream = vi.fn(async () => new Response(OVERSIZED_TLE, { status: 200 }))
+    const response = await createTLEHandler(upstream as typeof fetch)(request())
+
+    expect(response.status).toBe(502)
+  })
+
+  it('rejects an upstream that declares an oversized content-length', async () => {
+    const upstream = vi.fn(async () => new Response(VALID_TLE, {
+      status: 200,
+      headers: { 'Content-Length': '1000000' },
+    }))
+    const response = await createTLEHandler(upstream as typeof fetch)(request())
+
+    expect(response.status).toBe(502)
+  })
+
+  it('serves the valid upstream when another returns an oversized body', async () => {
+    const upstream = vi.fn(async (input: RequestInfo | URL) => (
+      String(input).includes('celestrak.org')
+        ? new Response(OVERSIZED_TLE, { status: 200 })
+        : new Response(VALID_TLE, { status: 200 })
+    ))
+    const response = await createTLEHandler(upstream as typeof fetch)(request())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      line1: expect.stringContaining('25544U'),
+      source: 'celestrak',
+    })
+  })
+
   it('returns 502 and no-store when every upstream payload is invalid', async () => {
     const upstream = vi.fn(async () => new Response('not a TLE', { status: 200 }))
     const response = await createTLEHandler(upstream as typeof fetch)(request())

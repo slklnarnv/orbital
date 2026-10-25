@@ -1,4 +1,4 @@
-import { fetchTLEFromCelesTrak } from '../api/CelesTrakClient'
+import { fetchTLEWithStatus } from '../api/CelesTrakClient'
 import { tleCache } from '../api/TLECache'
 import { ApiRateLimiter } from '../api/ApiRateLimiter'
 import { networkMonitor } from './NetworkMonitor'
@@ -64,6 +64,9 @@ export class TelemetryManager {
     this._started = true
     const generation = ++this._lifecycleGeneration
     networkMonitor.start()
+    // A session that STARTS offline never emits the online→offline step, so seed
+    // the flag from the live state or the first reconnect skips the eager retry.
+    this._wasOffline = !networkMonitor.isOnline
 
     // Subscribe to network changes to trigger mode recalculation and recovery
     this._unsubscribeNetworkStatus = telemetryBus.on('NETWORK_STATUS', () => {
@@ -184,7 +187,11 @@ export class TelemetryManager {
     const cached = await tleCache.get(this._entity.config.noradId)
     if (!this.isActive(generation)) return
 
-    if (cached) {
+    // The runtime's first step can start the live fetch while this await is
+    // pending; if a network TLE already won the race, the cache is older by
+    // construction and must not replace it (the next refresh is 4 h away).
+    const current = this._entity.currentTLE
+    if (cached && !(current && current.source !== 'fallback')) {
       const installed = await this._installCandidate(cached, generation, false)
       if (!this.isActive(generation)) return
       if (!installed) await tleCache.remove(this._entity.config.noradId)
@@ -220,12 +227,20 @@ export class TelemetryManager {
     }
 
     try {
-      const tle = await fetchTLEFromCelesTrak(this._entity.config.noradId)
+      const result = await fetchTLEWithStatus(this._entity.config.noradId)
       if (!this.isActive(generation)) return
 
-      if (tle && await this._installCandidate(tle, generation, true)) {
+      if (result && await this._installCandidate(result.tle, generation, true)) {
         if (!this.isActive(generation)) return
-        this._rateLimiter.recordSuccess()
+        if (result.stale) {
+          // The proxy answered from its warm memo after an upstream failure
+          // (HTTP 200 + X-TLE-Stale). The TLE is usable, but recordSuccess()
+          // would rest the next fetch 4 h away even if upstream recovers in
+          // minutes — keep the short exponential retry ramp instead.
+          this._rateLimiter.recordFailure()
+        } else {
+          this._rateLimiter.recordSuccess()
+        }
         networkMonitor.recordSuccess()
         this._recalculateMode()
       } else {
@@ -251,15 +266,31 @@ export class TelemetryManager {
       if (previousTLE) this._entity.loadTLE(previousTLE)
       else this._entity.clearTLE()
       this._hasValidatedState = previousValidatedState
+      this._interpolation.cancel()
     }
+
+    // Propagate the OLD element set at the same instant as the new one, before
+    // it is replaced: the blend offset must be the element-set disagreement at
+    // one time, not old-at-tick-N minus new-at-tick-N+k (which folds orbital
+    // motion into the offset).
+    const simNow = simulationClock.now()
+    const previousAtNowRaw = previousTLE ? this._entity.propagate(simNow) : null
+    const previousAtNow = previousAtNowRaw && this._isFiniteOrbitalState(previousAtNowRaw)
+      ? previousAtNowRaw
+      : null
 
     if (!this._entity.loadTLE(tle)) return false
 
-    const propagated = this._entity.propagate(simulationClock.now())
+    const propagated = this._entity.propagate(simNow)
     if (!propagated || !this._isFiniteOrbitalState(propagated)) {
       rollback()
       return false
     }
+
+    // Start the blend BEFORE any await: ticks that run during the IndexedDB
+    // write already render the new TLE, and would otherwise snap unblended.
+    // rollback() cancels it if the install fails below.
+    this._interpolation.onTLEUpdate(previousAtNow ?? previousState, propagated)
 
     try {
       if (persist) await tleCache.set(this._entity.config.noradId, tle)
@@ -274,7 +305,6 @@ export class TelemetryManager {
     }
 
     this._hasValidatedState = true
-    this._interpolation.onTLEUpdate(previousState)
     if (!previousState) this._lastState = propagated
     telemetryBus.emit('TLE_REFRESHED', {
       entityId: this._entity.config.id,

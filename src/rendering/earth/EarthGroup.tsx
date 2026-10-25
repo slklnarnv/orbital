@@ -5,6 +5,8 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { EarthSurface } from './EarthSurface'
 import { CloudLayer } from './CloudLayer'
 import { AtmosphereShell } from './AtmosphereShell'
+import { GroundTrack } from './GroundTrack'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 /**
  * EarthGroup represents the entire Earth coordinate frame.
@@ -15,6 +17,7 @@ import { AtmosphereShell } from './AtmosphereShell'
  */
 export function EarthGroup(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
+  const groundTrack = useSettingsStore((state) => state.groundTrack)
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -35,6 +38,9 @@ export function EarthGroup(): JSX.Element {
 
       {/* 3. Outer atmospheric glowing shell at 1.025× radius */}
       <AtmosphereShell />
+
+      {/* 4. Optional ground track + visibility footprint (Earth-fixed lines) */}
+      {groundTrack && <GroundTrack />}
     </group>
   )
 }

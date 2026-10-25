@@ -37,6 +37,8 @@ export function SettingsGear(): JSX.Element {
   const setOrbitLineStyle = useSettingsStore((state) => state.setOrbitLineStyle)
   const lensFlare = useSettingsStore((state) => state.lensFlare)
   const setLensFlare = useSettingsStore((state) => state.setLensFlare)
+  const groundTrack = useSettingsStore((state) => state.groundTrack)
+  const setGroundTrack = useSettingsStore((state) => state.setGroundTrack)
   // Loading indicator for the pending model candidate.
   const issDetail = useLoadingStore((state) => state.issDetail)
   const isLoadingModel = issDetail.status === 'loading' || issDetail.status === 'preparing'
@@ -106,7 +108,7 @@ export function SettingsGear(): JSX.Element {
           className="hud-settings-popover hud-text"
         >
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
-            RENDER SETTINGS
+            Render settings
           </span>
 
           <span className="hud-label" style={{ marginTop: 10, color: 'var(--hud-mid)' }}>
@@ -200,6 +202,15 @@ export function SettingsGear(): JSX.Element {
               className={`hud-label hud-option${lensFlare && postprocessing ? ' hud-option--on' : ''}`}
             >
               Lens flare
+            </button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={groundTrack}
+              onClick={() => setGroundTrack(!groundTrack)}
+              className={`hud-label hud-option${groundTrack ? ' hud-option--on' : ''}`}
+            >
+              Ground track
             </button>
           </div>
 
