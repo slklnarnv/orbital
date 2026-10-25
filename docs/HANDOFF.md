@@ -209,15 +209,22 @@ landed through its own PR.
 
 ### Geo service facts (easy to get wrong)
 
-- **BigDataCloud** `reverse-geocode-client` for place naming — NOT OSM
-  Nominatim; Nominatim's public reverse endpoint returns "Unable to geocode"
-  over open ocean at every zoom (verified). BigDataCloud gives
-  country+continent over land and the marine region in `locality` over water.
+- **Place names are offline** (`src/core/geo/PlaceIndex.ts`): point-in-
+  polygon against Natural Earth 1:50m countries + marine polygons,
+  `src/data/place-index.json`, rebuilt by `scripts/build-place-index.mjs`
+  (pinned commit; never hand-edit). It ships as a hashed `/assets/` file
+  fetched once on the first lookup. Land → country + continent (Russia split
+  at 60° E); water → the most specific marine polygon; coastal gaps snap to
+  the nearest water within 3°. NOT a geocoding API: free reverse-geocoding
+  endpoints (BigDataCloud's client API) allow only the device's own location,
+  and Nominatim answers "Unable to geocode" over open ocean.
 - **Open-Meteo** forecast for temperature, WMO weather code, IANA timezone and
   UTC offset (local clock derives from the offset, not the tz name).
-- Both keyless/CORS. Rate limited via `ApiRateLimiter` (~10 s cadence,
-  exponential backoff). Cache: 2° ground cells in memory + IndexedDB
-  (`idb-keyval`, prefix `geo_cell_`), places 30 days, weather 15 min.
+- Open-Meteo is keyless/CORS. Rate limited via `ApiRateLimiter` (~10 s
+  cadence, exponential backoff); the place limiter only backs off a failed
+  index load. Cache: 2° ground cells in memory + IndexedDB (`idb-keyval`,
+  prefix `geo_v2_`; BigDataCloud-era `geo_cell_` rows are pruned at start),
+  places 30 days, weather 15 min.
 - Ticks every 5 s; first tick delayed 3 s and gated on a real telemetry fix
   (the store's 0,0 seed must not trigger a lookup).
 - Every failure keeps the last good snapshot on screen.
@@ -407,10 +414,9 @@ The established pattern (see `CelesTrakClient.ts` + `api/tle.ts`):
 
 **Implication for new external-data features**: any fetcher that proves
 unreliable in the field should get a matching serverless proxy
-(e.g. `api/geo.ts` proxying BigDataCloud + Open-Meteo for
-`GeoLookupService`, which currently fetches direct-from-browser — fine today
-because both are CORS-open and reliable, but it has no server-side fallback
-path yet). Follow the `api/tle.ts` structure: multiple upstreams, server-side
+(e.g. `api/weather.ts` proxying Open-Meteo for `GeoLookupService`, which
+currently fetches weather direct-from-browser — fine today because it is
+CORS-open and reliable, but it has no server-side fallback path yet). Follow the `api/tle.ts` structure: multiple upstreams, server-side
 validation, CORS headers, and a direct-browser fallback in the client. Also
 note new `api/*.ts` functions need an entry in `vercel.json` → `functions`.
 

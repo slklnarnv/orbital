@@ -32,14 +32,6 @@ export async function stubNetwork(page: Page, opts: StubOptions = {}): Promise<v
     route.fulfill({ status: 503, body: 'unavailable' }),
   )
 
-  await page.route('https://api.bigdatacloud.net/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ countryName: 'Australia', continent: 'Oceania', locality: '' }),
-    }),
-  )
-
   await page.route('https://api.open-meteo.com/**', (route) =>
     route.fulfill({
       status: 200,

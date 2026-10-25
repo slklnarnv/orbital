@@ -3,6 +3,8 @@ import { ApiRateLimiter } from '@/core/api/ApiRateLimiter'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
 import { useGeoStore } from '@/stores/geoStore'
+import placeIndexUrl from '@/data/place-index.json?url'
+import { PlaceIndex, type Place, type PlaceIndexData } from '@/core/geo/PlaceIndex'
 
 // ─── Geo Lookup Service ───────────────────────────────────────────────────────
 /**
@@ -10,27 +12,28 @@ import { useGeoStore } from '@/stores/geoStore'
  * (country + continent, or ocean/sea), local time at the ground point, and
  * current weather.
  *
- * Two free, keyless, CORS-enabled services, queried sparingly:
- *  - BigDataCloud reverse-geocode-client — place naming; over water its
- *    locality resolves to the marine region ("Pacific Ocean"), over land to
- *    the country, with the continent alongside
- *  - Open-Meteo forecast — weather + IANA timezone + UTC offset
+ * Two sources:
+ *  - Place naming is offline: PlaceIndex (Natural Earth countries + marine
+ *    polygons, a same-origin asset fetched once on the first lookup). Over
+ *    land it names the country with its continent, over water the ocean or
+ *    sea. Free reverse-geocoding endpoints such as BigDataCloud's client API
+ *    allow only the calling device's own location, never the ISS ground point.
+ *  - Open-Meteo forecast (free, keyless, CORS-open) — weather + IANA timezone
+ *    + UTC offset
  *
  * Results are cached per ground-track cell (2° grid) in memory and IndexedDB,
- * so revisited ground persists across sessions and the services see roughly
- * one request pair per ~30 s of flight — well inside their fair-use policies.
- * Every failure path degrades silently: the HUD keeps showing the last good
- * snapshot and the service retries on backoff.
+ * so revisited ground persists across sessions and Open-Meteo sees roughly one
+ * request per ~30 s of flight — well inside its fair-use policy. Every failure
+ * path degrades silently: the HUD keeps showing the last good snapshot and the
+ * service retries on backoff.
  *
  * DEPLOYMENT NOTE: this app is hosted on Vercel, and telemetry fetches go
  * through a same-origin serverless proxy (api/tle.ts) because end-user
- * networks can be unreliable. These two lookups currently fetch
- * direct-from-browser (both providers are CORS-open). If field reliability
- * becomes a problem, add an api/geo.ts proxy following the api/tle.ts
- * pattern and flip this service to proxy-first — see docs/HANDOFF.md.
+ * networks can be unreliable. The weather lookup currently fetches
+ * direct-from-browser. If field reliability becomes a problem, add an
+ * api/weather.ts proxy following the api/tle.ts pattern — see docs/HANDOFF.md.
  */
 
-const GEOCODE_ENDPOINT = 'https://api.bigdatacloud.net/data/reverse-geocode-client'
 const OPEN_METEO_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 
 const CELL_DEG = 2
@@ -43,7 +46,32 @@ const TICK_INTERVAL_MS = 5_000
 const FIRST_TICK_DELAY_MS = 3_000                  // let telemetry leave its 0,0 seed
 const FETCH_TIMEOUT_MS = 9_000
 
-const IDB_KEY_PREFIX = 'geo_cell_'
+// v2: place names from PlaceIndex. Rows under the old prefix carry
+// BigDataCloud's names and are dropped by the startup prune.
+const IDB_KEY_PREFIX = 'geo_v2_'
+const LEGACY_IDB_KEY_PREFIX = 'geo_cell_'
+
+/** Resolves the place under a ground point; rejects when the index cannot load. */
+export type PlaceResolver = (lat: number, lon: number) => Promise<Place | null>
+
+let placeIndexPromise: Promise<PlaceIndex> | null = null
+
+/** Fetches and decodes the place index once; a failed load is retried on the next call. */
+function loadPlaceIndex(): Promise<PlaceIndex> {
+  placeIndexPromise ??= (async () => {
+    const response = await fetch(placeIndexUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 2) })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = (await response.json()) as PlaceIndexData
+    if (typeof data?.scale !== 'number' || !Array.isArray(data.places)) throw new Error('Malformed place index')
+    return new PlaceIndex(data)
+  })().catch((error: unknown) => {
+    placeIndexPromise = null
+    throw error
+  })
+  return placeIndexPromise
+}
+
+const resolvePlaceOffline: PlaceResolver = async (lat, lon) => (await loadPlaceIndex()).lookup(lat, lon)
 
 // ─── WMO weather codes → HUD vocabulary ───────────────────────────────────────
 
@@ -179,30 +207,6 @@ export function cellKeyFor(lat: number, lon: number): string {
   return `${latCell},${lonCell}`
 }
 
-/**
- * Extracts the display place from a BigDataCloud reverse-geocode response.
- * Over land: the country with its continent. Over water: the locality field
- * carries the marine region ("Pacific Ocean"). Null when neither is present.
- */
-export function placeFromBigDataCloud(payload: unknown): { placeName: string; continent: string | null } | null {
-  if (!payload || typeof payload !== 'object') return null
-  const p = payload as { countryName?: unknown; continent?: unknown; locality?: unknown }
-
-  const str = (v: unknown): string | null => (typeof v === 'string' && v.trim().length > 0 ? v.trim() : null)
-
-  const country = str(p.countryName)
-  if (country) {
-    return { placeName: country, continent: str(p.continent) }
-  }
-
-  const locality = str(p.locality)
-  if (locality) {
-    return { placeName: locality, continent: null }
-  }
-
-  return null
-}
-
 interface OpenMeteoCurrent {
   temperature_2m?: number
   weather_code?: number
@@ -245,8 +249,10 @@ export function formatLocalClock(epochMs: number, utcOffsetSeconds: number): str
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class GeoLookupService {
-  private _geoLimiter = new ApiRateLimiter({
-    normalIntervalMs: 11_000,   // BigDataCloud fair use: well under 1 req/s sustained
+  // Local lookups need no cadence; the limiter only backs off a failing
+  // index load.
+  private _placeLimiter = new ApiRateLimiter({
+    normalIntervalMs: 0,
     baseDelayMs: 30_000,
     maxDelayMs: 10 * 60_000,
   })
@@ -260,7 +266,7 @@ export class GeoLookupService {
   private _timerId: ReturnType<typeof setInterval> | null = null
   private _tickTimeoutId: ReturnType<typeof setTimeout> | null = null
   private _hasRealFix = false
-  private _geoInFlight = false
+  private _placeInFlight = false
   private _wxInFlight = false
   private _unsubscribe: (() => void) | null = null
   /**
@@ -270,6 +276,8 @@ export class GeoLookupService {
    * full 30-day place TTL); this set retries the latter once per session.
    */
   private _placeAnswered = new Set<string>()
+
+  constructor(private readonly _resolvePlace: PlaceResolver = resolvePlaceOffline) {}
 
   start(): void {
     if (this._timerId !== null) return  // idempotent (StrictMode-style remounts)
@@ -300,7 +308,12 @@ export class GeoLookupService {
       const now = Date.now()
       const expired: IDBValidKey[] = []
       for (const [key, value] of await entries<IDBValidKey, GeoSnapshot>()) {
-        if (typeof key !== 'string' || !key.startsWith(IDB_KEY_PREFIX)) continue
+        if (typeof key !== 'string') continue
+        if (key.startsWith(LEGACY_IDB_KEY_PREFIX)) {
+          expired.push(key)
+          continue
+        }
+        if (!key.startsWith(IDB_KEY_PREFIX)) continue
         const fetchedAt = (value as Partial<GeoSnapshot> | undefined)?.fetchedAt
         if (typeof fetchedAt !== 'number' || now - fetchedAt > GEO_CELL_TTL_MS) expired.push(key)
       }
@@ -372,10 +385,10 @@ export class GeoLookupService {
   }
 
   private _requestPlace(lat: number, lon: number, cellKey: string): void {
-    if (this._geoInFlight || !this._geoLimiter.shouldRequest()) return
-    this._geoInFlight = true
-    this._geoLimiter.recordRequest()
-    void this._fetchPlace(lat, lon, cellKey)
+    if (this._placeInFlight || !this._placeLimiter.shouldRequest()) return
+    this._placeInFlight = true
+    this._placeLimiter.recordRequest()
+    void this._lookupPlace(lat, lon, cellKey)
   }
 
   /** Returns a usable snapshot for the cell from memory or IndexedDB. */
@@ -441,17 +454,9 @@ export class GeoLookupService {
     })
   }
 
-  private async _fetchPlace(lat: number, lon: number, cellKey: string): Promise<void> {
-    const url = `${GEOCODE_ENDPOINT}?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&localityLanguage=en`
+  private async _lookupPlace(lat: number, lon: number, cellKey: string): Promise<void> {
     try {
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload: unknown = await response.json()
-
-      const place = placeFromBigDataCloud(payload)
+      const place = await this._resolvePlace(lat, lon)
       const existing = this._memCache.get(cellKey)
       const now = Date.now()
       this._memCache.set(cellKey, {
@@ -468,15 +473,15 @@ export class GeoLookupService {
         weatherFetchedAt: carriedWeatherStamp(existing),
         fetchedAt: now,
       })
-      this._geoLimiter.recordSuccess()
+      this._placeLimiter.recordSuccess()
       this._placeAnswered.add(cellKey)
       this._persistCell(cellKey)
       this._applySnapshot(this._memCache.get(cellKey)!)
     } catch {
-      this._geoLimiter.recordFailure()
+      this._placeLimiter.recordFailure()
       useGeoStore.setState((s) => (s.status === 'idle' ? { status: 'unavailable' } : {}))
     } finally {
-      this._geoInFlight = false
+      this._placeInFlight = false
     }
   }
 
@@ -521,7 +526,13 @@ export class GeoLookupService {
   private _persistCell(cellKey: string): void {
     const snapshot = this._memCache.get(cellKey)
     if (!snapshot) return
-    void set(`${IDB_KEY_PREFIX}${cellKey}`, snapshot).catch(() => { /* silent */ })
+    // idb-keyval throws synchronously when IndexedDB does not exist at all;
+    // that must not turn a good answer into a failed lookup.
+    try {
+      void set(`${IDB_KEY_PREFIX}${cellKey}`, snapshot).catch(() => { /* silent */ })
+    } catch {
+      // IndexedDB unavailable — memory cache still covers this session
+    }
   }
 }
 

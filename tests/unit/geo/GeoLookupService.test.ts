@@ -1,16 +1,20 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
 import { useGeoStore } from '@/stores/geoStore'
 import {
   GeoLookupService,
+  type PlaceResolver,
   cellKeyFor,
   describeWeatherCode,
   formatLocalClock,
   isGeoSnapshot,
-  placeFromBigDataCloud,
   weatherFromOpenMeteo,
 } from '@/core/geo/GeoLookupService'
+
+const JAPAN = { placeName: 'Japan', continent: 'Asia' }
 
 describe('cellKeyFor', () => {
   it('snaps a position onto its 2-degree ground cell', () => {
@@ -25,41 +29,6 @@ describe('cellKeyFor', () => {
     // 179.9 rounds to the 180 cell — rendering only; cache key is stable either way
     const key = cellKeyFor(10.0, 179.9)
     expect(key).toBe('10,180')
-  })
-})
-
-describe('placeFromBigDataCloud', () => {
-  it('resolves the marine region from locality over open water', () => {
-    const place = placeFromBigDataCloud({
-      continent: '',
-      countryName: '',
-      locality: 'Pacific Ocean',
-    })
-    expect(place).toEqual({ placeName: 'Pacific Ocean', continent: null })
-  })
-
-  it('names the country and continent over land', () => {
-    const place = placeFromBigDataCloud({
-      continent: 'Asia',
-      countryName: 'Japan',
-      locality: 'Shibuya',
-    })
-    expect(place).toEqual({ placeName: 'Japan', continent: 'Asia' })
-  })
-
-  it('prefers the country over the finer locality', () => {
-    const place = placeFromBigDataCloud({
-      continent: 'Europe',
-      countryName: 'United Kingdom',
-      locality: 'England',
-    })
-    expect(place).toEqual({ placeName: 'United Kingdom', continent: 'Europe' })
-  })
-
-  it('returns null for empty or malformed payloads', () => {
-    expect(placeFromBigDataCloud({ countryName: '', locality: '' })).toBeNull()
-    expect(placeFromBigDataCloud({ error: true })).toBeNull()
-    expect(placeFromBigDataCloud(null)).toBeNull()
   })
 })
 
@@ -175,6 +144,7 @@ describe('GeoLookupService time-control gate', () => {
 
   let service: GeoLookupService
   let fetchMock: ReturnType<typeof vi.fn>
+  let placeMock: ReturnType<typeof vi.fn<PlaceResolver>>
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -184,22 +154,21 @@ describe('GeoLookupService time-control gate', () => {
     simulationClock.setMode('REALTIME')
     simulationClock.setTimeScale(1)
 
-    // One mock answers both endpoints so a passed gate performs real
-    // fetches and the limiters record successes (no backoff skew).
-    fetchMock = vi.fn(async (url: unknown) => {
-      const payload = String(url).includes('open-meteo')
-        ? {
-            timezone: 'Asia/Tokyo',
-            timezone_abbreviation: 'JST',
-            utc_offset_seconds: 32400,
-            current: { temperature_2m: 21.4, weather_code: 2 },
-          }
-        : { countryName: 'Japan', continent: 'Asia', locality: '' }
-      return { ok: true, json: async () => payload }
-    })
+    // Both sources answer, so a passed gate performs real lookups and the
+    // limiters record successes (no backoff skew).
+    fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        timezone: 'Asia/Tokyo',
+        timezone_abbreviation: 'JST',
+        utc_offset_seconds: 32400,
+        current: { temperature_2m: 21.4, weather_code: 2 },
+      }),
+    }))
     vi.stubGlobal('fetch', fetchMock)
+    placeMock = vi.fn<PlaceResolver>(async () => JAPAN)
 
-    service = new GeoLookupService()
+    service = new GeoLookupService(placeMock)
   })
 
   afterEach(() => {
@@ -215,10 +184,13 @@ describe('GeoLookupService time-control gate', () => {
 
     await vi.advanceTimersByTimeAsync(3_000 + 21_000)
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(placeMock).not.toHaveBeenCalled()
 
     simulationClock.setMode('REALTIME')
     await vi.advanceTimersByTimeAsync(6_000)
-    expect(fetchMock.mock.calls.length).toBe(2) // place + weather for the cell
+    // Place + weather for the cell.
+    expect(placeMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('fills in once per cell while paused, so a paused seek gets its fix', async () => {
@@ -227,51 +199,35 @@ describe('GeoLookupService time-control gate', () => {
     simulationClock.setMode('PAUSED')
 
     await vi.advanceTimersByTimeAsync(3_000 + 6_000)
-    expect(fetchMock.mock.calls.length).toBe(2)
+    expect(placeMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
 
     // Seek to a different ground cell while paused: a fill-in fires for the
-    // NEW cell. (The geo/weather limiters may split it across ticks — the
-    // weather limiter's interval is shorter — so assert on the call targets,
-    // not an exact count.)
-    const callsAfterFirstCell = fetchMock.mock.calls.length
+    // NEW cell. (The weather limiter may delay its half by a tick, so assert
+    // on the call targets, not an exact count.)
     useTelemetryStore.setState(BUENOS_AIRES)
     await vi.advanceTimersByTimeAsync(12_000)
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterFirstCell)
+    expect(placeMock).toHaveBeenCalledWith(BUENOS_AIRES.latitude, BUENOS_AIRES.longitude)
     const targets = fetchMock.mock.calls.map((call) => String(call[0]))
     expect(targets.some((url) => url.includes('latitude=-33.87'))).toBe(true)
   })
 
   it('retries a failed place lookup for a cell whose weather was cached', async () => {
-    // First place request fails; weather succeeds and caches the cell with
-    // placeName null. The cached entry must not pin "—" for the place TTL.
-    let placeCalls = 0
-    fetchMock.mockImplementation(async (url: unknown) => {
-      if (String(url).includes('open-meteo')) {
-        return {
-          ok: true,
-          json: async () => ({
-            timezone: 'Asia/Tokyo',
-            timezone_abbreviation: 'JST',
-            utc_offset_seconds: 32400,
-            current: { temperature_2m: 21.4, weather_code: 2 },
-          }),
-        }
-      }
-      placeCalls += 1
-      if (placeCalls === 1) return { ok: false, status: 503, json: async () => ({}) }
-      return { ok: true, json: async () => ({ countryName: 'Japan', continent: 'Asia', locality: '' }) }
-    })
+    // First place lookup fails (the index did not load); weather succeeds and
+    // caches the cell with placeName null. The cached entry must not pin "—"
+    // for the place TTL.
+    placeMock.mockRejectedValueOnce(new Error('index unavailable'))
 
     service.start()
     useTelemetryStore.setState(TOKYO)
 
     await vi.advanceTimersByTimeAsync(3_000 + 1_000)
-    expect(placeCalls).toBe(1)
+    expect(placeMock).toHaveBeenCalledTimes(1)
     expect(useGeoStore.getState().placeName).toBeNull()
 
-    // Past the geo limiter's failure backoff the place is re-requested.
+    // Past the place limiter's failure backoff the place is re-requested.
     await vi.advanceTimersByTimeAsync(120_000)
-    expect(placeCalls).toBe(2)
+    expect(placeMock).toHaveBeenCalledTimes(2)
     expect(useGeoStore.getState().placeName).toBe('Japan')
   })
 
@@ -283,10 +239,12 @@ describe('GeoLookupService time-control gate', () => {
 
     await vi.advanceTimersByTimeAsync(3_000 + 21_000)
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(placeMock).not.toHaveBeenCalled()
 
     doc.visibilityState = 'visible'
     await vi.advanceTimersByTimeAsync(6_000)
-    expect(fetchMock.mock.calls.length).toBe(2)
+    expect(placeMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -301,10 +259,9 @@ describe('GeoLookupService freshness and clock', () => {
     utc_offset_seconds: 32400,
     current: { temperature_2m: 21.4, weather_code: 2 },
   }
-  const PLACE_OK = { countryName: 'Japan', continent: 'Asia', locality: '' }
-
   let service: GeoLookupService
   let fetchMock: ReturnType<typeof vi.fn>
+  let placeMock: ReturnType<typeof vi.fn<PlaceResolver>>
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -316,7 +273,8 @@ describe('GeoLookupService freshness and clock', () => {
 
     fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    service = new GeoLookupService()
+    placeMock = vi.fn<PlaceResolver>(async () => JAPAN)
+    service = new GeoLookupService(placeMock)
   })
 
   afterEach(() => {
@@ -327,13 +285,9 @@ describe('GeoLookupService freshness and clock', () => {
 
   it('does not carry the previous cell\'s local time onto a cell without an offset', async () => {
     let weatherFails = false
-    fetchMock.mockImplementation(async (url: unknown) => {
-      if (String(url).includes('open-meteo')) {
-        if (weatherFails) return { ok: false, status: 503, json: async () => ({}) }
-        return { ok: true, json: async () => WEATHER_OK }
-      }
-      return { ok: true, json: async () => PLACE_OK }
-    })
+    fetchMock.mockImplementation(async () => (weatherFails
+      ? { ok: false, status: 503, json: async () => ({}) }
+      : { ok: true, json: async () => WEATHER_OK }))
 
     service.start()
     useTelemetryStore.setState(TOKYO)
@@ -347,6 +301,7 @@ describe('GeoLookupService freshness and clock', () => {
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]))
     expect(urls.some((url) => url.includes('open-meteo') && url.includes('latitude=-33.87'))).toBe(true)
+    expect(placeMock).toHaveBeenCalledWith(BUENOS_AIRES.latitude, BUENOS_AIRES.longitude)
     const state = useGeoStore.getState()
     expect(state.snapshot?.utcOffsetSeconds).toBeNull()
     expect(state.localTime).toBeNull()
@@ -354,13 +309,9 @@ describe('GeoLookupService freshness and clock', () => {
 
   it('hides weather older than an hour but keeps the place', async () => {
     let weatherFails = false
-    fetchMock.mockImplementation(async (url: unknown) => {
-      if (String(url).includes('open-meteo')) {
-        if (weatherFails) return { ok: false, status: 503, json: async () => ({}) }
-        return { ok: true, json: async () => WEATHER_OK }
-      }
-      return { ok: true, json: async () => PLACE_OK }
-    })
+    fetchMock.mockImplementation(async () => (weatherFails
+      ? { ok: false, status: 503, json: async () => ({}) }
+      : { ok: true, json: async () => WEATHER_OK }))
 
     service.start()
     useTelemetryStore.setState(TOKYO)
@@ -382,17 +333,15 @@ describe('GeoLookupService freshness and clock', () => {
 
   it('does not let a place refetch make old weather displayable again', async () => {
     let weatherCalls = 0
-    fetchMock.mockImplementation(async (url: unknown) => {
-      if (String(url).includes('open-meteo')) {
-        weatherCalls += 1
-        if (weatherCalls > 1) return { ok: false, status: 503, json: async () => ({}) }
-        return { ok: true, json: async () => WEATHER_OK }
-      }
-      // Place keeps failing until the weather is past the display window.
-      if (Date.now() < Date.UTC(2026, 8, 28, 12, 0, 0) + 61 * MINUTE) {
-        return { ok: false, status: 503, json: async () => ({}) }
-      }
-      return { ok: true, json: async () => PLACE_OK }
+    fetchMock.mockImplementation(async () => {
+      weatherCalls += 1
+      if (weatherCalls > 1) return { ok: false, status: 503, json: async () => ({}) }
+      return { ok: true, json: async () => WEATHER_OK }
+    })
+    // Place keeps failing until the weather is past the display window.
+    placeMock.mockImplementation(async () => {
+      if (Date.now() < Date.UTC(2026, 8, 28, 12, 0, 0) + 61 * MINUTE) throw new Error('index unavailable')
+      return JAPAN
     })
 
     service.start()
@@ -408,5 +357,51 @@ describe('GeoLookupService freshness and clock', () => {
     expect(state.temperatureC).toBeNull()
     // The place fetch advanced only its own stamp.
     expect(state.snapshot?.placeFetchedAt).toBeGreaterThan(state.snapshot?.weatherFetchedAt ?? Infinity)
+  })
+})
+
+describe('GeoLookupService default place source', () => {
+  const TOKYO = { latitude: 35.68, longitude: 139.77 }
+  const INDEX_JSON = readFileSync(path.resolve(__dirname, '../../../src/data/place-index.json'), 'utf8')
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('names the cell from the same-origin place index, never a geocoding API', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.UTC(2026, 8, 28, 12, 0, 0))
+    useTelemetryStore.setState(useTelemetryStore.getInitialState(), true)
+    useGeoStore.setState(useGeoStore.getInitialState(), true)
+    simulationClock.setMode('REALTIME')
+
+    const fetchMock = vi.fn(async (url: unknown) => {
+      if (String(url).includes('place-index')) return { ok: true, json: async () => JSON.parse(INDEX_JSON) }
+      return {
+        ok: true,
+        json: async () => ({
+          timezone: 'Asia/Tokyo',
+          timezone_abbreviation: 'JST',
+          utc_offset_seconds: 32400,
+          current: { temperature_2m: 21.4, weather_code: 2 },
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const service = new GeoLookupService()
+    service.start()
+    useTelemetryStore.setState(TOKYO)
+    await vi.advanceTimersByTimeAsync(3_000 + 1_000)
+    service.stop()
+
+    expect(useGeoStore.getState().placeName).toBe('Japan')
+    expect(useGeoStore.getState().continent).toBe('Asia')
+    const hosts = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => /^https?:/.test(url))
+      .map((url) => new URL(url).host)
+    expect(hosts).toEqual(['api.open-meteo.com'])
   })
 })

@@ -6,6 +6,40 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Place names: BigDataCloud → offline Natural Earth index (2026-10-25)
+
+- **Symptom (live only).** Every BigDataCloud request logged a `connect-src`
+  violation for `https://api-bdc.io/data/reverse-geocode-client?...`; the
+  "Passing over" place lookup always fell back.
+- **Cause.** `GeoLookupService` calls `api.bigdatacloud.net` — still the host
+  BigDataCloud's docs and its own JS client use — but it now answers 307 →
+  `api-bdc.io` (verified with curl). CSP checks each redirect hop, and
+  `connect-src` allowed only the first host.
+- **Policy.** Allowing the redirect host would have fixed the console, but
+  BigDataCloud's fair-use policy allows the free client endpoint only for
+  the calling device's own, current location (violations are IP-banned,
+  402). The ISS ground point is not that.
+- **Fix.** Place names are offline. `scripts/build-place-index.mjs` turns
+  Natural Earth v5.1.2 (pinned commit, public domain) 1:50m countries and
+  marine polygons into `src/data/place-index.json` (DP-simplified at 0.02°,
+  0.01° delta-encoded, ~490 KiB); `src/core/geo/PlaceIndex.ts` does the
+  point-in-polygon lookup (bbox prefilter; land, then the most specific
+  water body; lake/river holes and border slivers → the country; coastal
+  gaps → nearest water within 3°; Russia split at 60° E).
+  `GeoLookupService` fetches the index once as a hashed `/assets/` file and
+  takes an injectable `PlaceResolver`; its IndexedDB prefix is now
+  `geo_v2_`, and BigDataCloud-era `geo_cell_` rows are pruned. Both
+  BigDataCloud hosts left `connect-src`; Open-Meteo is unchanged.
+- **Found on the way.** idb-keyval throws synchronously when IndexedDB does
+  not exist; `_persistCell` let that turn a good answer into a failure (30 s
+  backoff, HUD not updated). Guarded.
+- **Tests.** `ConnectSrcCsp.test.ts`: `connect-src` must equal the external
+  hosts in `src/` plus known redirect targets (it failed on the CSP before
+  this change). `PlaceIndex.test.ts`: known answers, specificity, the Urals
+  split, gap snapping, and a 0.5° sweep of the whole ISS band with no
+  unnamed point. Geo service tests inject the resolver, and one runs the
+  default resolver against the real index (only Open-Meteo is fetched).
+
 ## Follow flicker + Bloom frame rate (2026-10-25)
 
 Measured on the live site with the owner's GPU (AMD Radeon integrated,
