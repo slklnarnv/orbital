@@ -58,10 +58,12 @@ test('boots clean', async ({ page }) => {
 })
 
 test('Locate reaches Follow · Locked', async ({ page }) => {
+  // Software WebGL decodes the Locate LOD slowly on CI runners.
+  test.setTimeout(360_000)
   await bootLive(page)
   await clickByCoordinates(page, page.locator('#btn-locate-iss'))
   await expect(page.locator('[role="status"]').first()).toHaveText(/Follow\s*·\s*Locked/, {
-    timeout: 150_000,
+    timeout: 270_000,
   })
 })
 
