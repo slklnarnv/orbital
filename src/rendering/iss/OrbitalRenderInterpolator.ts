@@ -110,6 +110,18 @@ export class OrbitalRenderInterpolator {
     return this.sampleTransition(frameTimeSeconds, result)
   }
 
+  /**
+   * Show `snapshot` exactly this frame, with no blend. For a paused clock the
+   * snapshot is propagated at the clock's own time every frame, so a scrub or
+   * seek moves the station in step with the Earth (which reads the same clock)
+   * instead of trailing it through 10 Hz snapshots. Continuity checks on the
+   * next ordinary snapshot are measured from here.
+   */
+  snapTo(snapshot: OrbitalState, frameTimeSeconds: number, result: THREE.Vector3): THREE.Vector3 {
+    this.reseed(snapshot, frameTimeSeconds)
+    return result.copy(this.target)
+  }
+
   /** Snap every channel of the interpolation state onto the new snapshot. */
   private reseed(snapshot: OrbitalState, frameTimeSeconds: number): void {
     copyWorldPosition(snapshot.positionECI, this.target)

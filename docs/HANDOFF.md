@@ -242,6 +242,20 @@ landed through its own PR.
   `controls.update(0)` after moving the target (see the tracking branch of
   `CameraController` — this was the close-range jitter fix, verified 0 px over
   240 frames at 60 km; 2026-09 measurement).
+- Tracking (Follow/Inspect) is **station-locked**: each frame the eye and
+  `camera.up` are rotated about the station by the station's own attitude
+  change (`StationFrameCarry.ts`, in the tracking branch of
+  `CameraController`; reset whenever a flight runs). Before, the offset was
+  fixed in inertial space, so scrubbing the orbit tape or running 300×
+  swung the view around the station as its Earth-facing frame turned. The
+  re-base follows `syncRenderedPoseToControls`' order: read the pose, adopt
+  the up, set the pose.
+- While the clock is paused, `ISSGroup` propagates at the clock's time every
+  frame (`OrbitalRenderInterpolator.snapTo`) and snaps the attitude
+  (`AttitudeFollower.snap`): every scrub, nudge, Set time and Watch moves the
+  station in step with the Earth instead of trailing it through 10 Hz
+  snapshots. Shadow-map redraws are capped at ~6.7 Hz while seeking
+  (`SEEK_MIN_INTERVAL_MS`).
 - `controls.moveTo(x, y, z, false)` snaps the target immediately. It is appropriate
   for tracking, but must not run during a cinematic flight. Every Locate and Reset
   View uses `CameraFlightPath`, sampled by the frame-owned transition lifecycle; a

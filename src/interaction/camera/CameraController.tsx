@@ -11,6 +11,7 @@ import { CameraNavigationConstraint } from './CameraNavigationConstraint'
 import { CameraFlightPath } from './CameraFlightPath'
 import { FlightHorizon } from './FlightHorizon'
 import { FreeOrbitControls } from './FreeOrbitControls'
+import { MIN_CARRY_ANGLE_RAD, StationFrameCarry, carryPose } from './StationFrameCarry'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
@@ -44,6 +45,10 @@ const _rightVec = new THREE.Vector3()
 const _syncUp = new THREE.Vector3()
 const _syncEye = new THREE.Vector3()
 const _syncTargetA = new THREE.Vector3()
+const _carryRotation = new THREE.Quaternion()
+const _carryEye = new THREE.Vector3()
+const _carryTarget = new THREE.Vector3()
+const _carryUp = new THREE.Vector3()
 const _rollReference = new THREE.Vector3()
 
 /**
@@ -124,6 +129,7 @@ export const CameraController = React.memo(function CameraController({
   const recenterElapsedRef = useRef(0)
   const freeOrbitRef = useRef<FreeOrbitControls | null>(null)
   const freeZoomEntryRef = useRef<number | null>(null)
+  const stationCarryRef = useRef(new StationFrameCarry())
   // The framing the Reset View button measures against: the camera pose at first
   // mount, replaced by each completed Reset. Any user orbit, zoom, or pan
   // deviates from it and makes the button appear.
@@ -307,6 +313,10 @@ export const CameraController = React.memo(function CameraController({
     // guarantees the camera and visible spacecraft use one identical motion sample.
     if (renderedISS) _currentISSPos.copy(renderedISS.position)
 
+    // A flight owns the camera; station-locked tracking restarts from the
+    // landed pose rather than replaying the rotation made during the flight.
+    if (isTransitioning) stationCarryRef.current.reset()
+
     if (isTransitioning && transition && !transition.isCompleted) {
       if (!state || !renderedISS) return
 
@@ -432,6 +442,7 @@ export const CameraController = React.memo(function CameraController({
     if (!state || !renderedISS) return
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
+    const stationCarry = stationCarryRef.current
     if (useCameraStore.getState().isTracking && !isTransitioning) {
 
       // Tracking can set the target directly; unlike a flight it has no
@@ -443,14 +454,36 @@ export const CameraController = React.memo(function CameraController({
         false // Direct mutation, no slow transition interpolation
       )
 
-      // JITTER FIX: drei's CameraControls update loop runs at useFrame priority −1,
-      // BEFORE ISSGroup advances the spacecraft this frame. Left to its own schedule,
-      // the rendered camera would aim one frame behind the rendered ISS, and the
-      // interpolation's frame-to-frame step variance (0–160 m) shows up as visible
-      // micro-jitter at close range. update(0) re-derives the eye from this frame's
-      // target with zero damping, so the rendered camera and the rendered spacecraft
-      // move as one rigid body regardless of zoom distance.
+      // Station-locked framing (StationFrameCarry.ts): ride along with this
+      // frame's station rotation so a scrub or accelerated time keeps the
+      // user's viewpoint on the station instead of swinging around it. Same
+      // order as syncRenderedPoseToControls — read the pose in the current
+      // up-space, then adopt the carried up, then set the pose.
+      const rotation = stationCarry.step(renderedISS.quaternion, _carryRotation)
+      if (rotation && 2 * Math.acos(Math.min(1, Math.abs(rotation.w))) > MIN_CARRY_ANGLE_RAD) {
+        controls.getPosition(_carryEye, false)
+        controls.getTarget(_carryTarget, false)
+        _carryUp.copy(camera.up)
+        carryPose(_carryEye, _carryTarget, _carryUp, rotation)
+        camera.up.copy(_carryUp)
+        controls.updateCameraUp()
+        void controls.setLookAt(
+          _carryEye.x, _carryEye.y, _carryEye.z,
+          _carryTarget.x, _carryTarget.y, _carryTarget.z, false,
+        )
+      }
+
+      // JITTER FIX: drei's CameraControls runs its own update at useFrame
+      // priority −1, before this controller retargets at priority 0 (ISSGroup
+      // has already moved the station at −2). Left to that schedule, the
+      // rendered camera would aim one frame behind the rendered ISS, and the
+      // interpolation's frame-to-frame step variance (0–160 m) shows up as
+      // visible micro-jitter at close range. update(0) re-derives the eye from
+      // this frame's target with zero damping, so the rendered camera and the
+      // rendered spacecraft move as one rigid body regardless of zoom distance.
       controls.update(0)
+    } else {
+      stationCarry.reset()
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────

@@ -80,6 +80,19 @@ export class AttitudeFollower {
     private readonly stiffness: number,
   ) {}
 
+  /**
+   * Show `target` exactly, dropping any easing in progress. Used while the
+   * clock is paused: scrubs and seeks are the user moving time, not a glitch
+   * to smooth over, and an eased attitude would turn the station against the
+   * station-locked tracking camera.
+   */
+  snap(target: THREE.Quaternion): THREE.Quaternion {
+    this.offset.identity()
+    this.lastTarget.copy(target)
+    this.hasTarget = true
+    return this.current.copy(target)
+  }
+
   /** Advance one frame toward `target`; writes and returns the shown attitude. */
   step(target: THREE.Quaternion, deltaSec: number): THREE.Quaternion {
     const jumped = !this.hasTarget || this.lastTarget.angleTo(target) > ATTITUDE_JUMP_RAD

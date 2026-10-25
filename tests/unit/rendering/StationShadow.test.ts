@@ -6,6 +6,7 @@ import {
   SHADOW_HALF_EXTENT,
   SHADOW_MAP_SIZE,
   SUN_LIGHT_DISTANCE,
+  SEEK_MIN_INTERVAL_MS,
   ShadowRefreshScheduler,
   aimSunLightAt,
   configureStationShadow,
@@ -122,5 +123,28 @@ describe('cached shadow map alignment (Follow-mode flicker)', () => {
     expect(scene).toBeLessThan(composer)
     // Any priority > 0 takes over R3F's render loop; only the composer may.
     expect([stationPose, cameraControls, scene].every((priority) => priority <= 0)).toBe(true)
+  })
+})
+
+describe('ShadowRefreshScheduler while seeking', () => {
+  const sun = (deg: number) => new THREE.Vector3(Math.cos(deg * DEG), Math.sin(deg * DEG), 0)
+  it('redraws at most every SEEK_MIN_INTERVAL_MS during a scrub', () => {
+    const scheduler = new ShadowRefreshScheduler()
+    let redraws = 0
+    // One second of a scrub at 60 fps, the sun swinging 2° per frame.
+    for (let frame = 0; frame < 60; frame++) {
+      if (scheduler.shouldRefresh(frame * (1000 / 60), sun(frame * 2), [], true)) redraws += 1
+    }
+    expect(redraws).toBeLessThanOrEqual(Math.ceil(1000 / SEEK_MIN_INTERVAL_MS) + 1)
+    expect(redraws).toBeGreaterThanOrEqual(6)
+  })
+
+  it('keeps the normal floor when not seeking', () => {
+    const scheduler = new ShadowRefreshScheduler()
+    let redraws = 0
+    for (let frame = 0; frame < 60; frame++) {
+      if (scheduler.shouldRefresh(frame * (1000 / 60), sun(frame * 2), [])) redraws += 1
+    }
+    expect(redraws).toBeGreaterThanOrEqual(19)
   })
 })

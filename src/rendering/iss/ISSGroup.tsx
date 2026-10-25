@@ -26,6 +26,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
+import { simulationClock } from '@/core/clock/SimulationClock'
+import { issEntity } from '@/core/entities/ISSEntity'
 import { FRAME_PRIORITY } from '../framePriority'
 import { ISSModel } from './ISSModel'
 import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
@@ -95,13 +97,24 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
     const state = telemetryManager.lastState
     if (!state) return
 
-    // Smooth render motion between the application runtime's 10 Hz snapshots.
-    // The interpolator also owns the canonical TEME → Three.js axis mapping.
-    interpolator.sample(
-      state,
-      clock.elapsedTime,
-      groupRef.current.position,
-    )
+    // A paused clock only moves by seeks (the orbit-tape scrub, nudges, Set
+    // time, Watch). Propagate at the clock's own time every frame then: the
+    // Earth reads the same clock each frame, while the 10 Hz snapshots would
+    // trail it and alternate between blending and snapping — the station
+    // stuttered against the planet during a scrub. One SGP4 call per frame.
+    const paused = simulationClock.mode === 'PAUSED'
+    const exact = paused ? issEntity.propagate(simulationClock.now()) : null
+    if (exact) {
+      interpolator.snapTo(exact, clock.elapsedTime, groupRef.current.position)
+    } else {
+      // Smooth render motion between the application runtime's 10 Hz snapshots.
+      // The interpolator also owns the canonical TEME → Three.js axis mapping.
+      interpolator.sample(
+        state,
+        clock.elapsedTime,
+        groupRef.current.position,
+      )
+    }
 
     // ─── Attitude: LVLH + TEA yaw bias (stationAttitude.ts) ───
     // V-bar from the velocity blended on the position's schedule, so the
@@ -110,9 +123,10 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
     interpolator.sampleVelocity(clock.elapsedTime, _velocity)
     if (!lvlhAttitude(groupRef.current.position, _velocity, _targetQuat)) return
 
-    // Jumps (first capture, a seek, a TLE swap) ease in; orbital motion is
-    // followed exactly — a plain slerp lagged ~12° at 300×.
-    groupRef.current.quaternion.copy(follower.step(_targetQuat, delta))
+    // Jumps (first capture, a TLE swap) ease in; orbital motion is followed
+    // exactly — a plain slerp lagged ~12° at 300×. Paused, time only moves
+    // by seeks, which show the attitude for the new instant at once.
+    groupRef.current.quaternion.copy(exact ? follower.snap(_targetQuat) : follower.step(_targetQuat, delta))
   }, FRAME_PRIORITY.stationPose)
 
   return (

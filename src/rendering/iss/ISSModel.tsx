@@ -774,6 +774,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null)
   const shadowScheduler = useMemo(() => new ShadowRefreshScheduler(), [])
   const lastShadowUrlRef = useRef<string | null>(null)
+  const lastShadowEpochRef = useRef(0)
   const _stationQuat = useRef(new THREE.Quaternion())
   const _sunInStation = useRef(new THREE.Vector3())
   const jointAnglesRef = useRef<number[]>([])
@@ -863,7 +864,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         const angles = jointAnglesRef.current
         angles.length = 0
         for (const joint of sharedJointStates.values()) angles.push(joint.applied)
-        if (shadowScheduler.shouldRefresh(performance.now(), _sunInStation.current, angles)) {
+        const seeking = simulationClock.mode === 'PAUSED' && simTime.epochMs !== lastShadowEpochRef.current
+        lastShadowEpochRef.current = simTime.epochMs
+        if (shadowScheduler.shouldRefresh(performance.now(), _sunInStation.current, angles, seeking)) {
           sunLight.shadow.needsUpdate = true
         }
       }
