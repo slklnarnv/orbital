@@ -6,6 +6,37 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## IGOAL source-material + KTX2 rebuild (2026-10-25)
+
+With both NASA IGOAL sources available (the owner's `ISSTEST.zip`), the model
+was analysed against them and rebuilt (`docs/ISS_MODEL_CONTEXT.md` §1):
+
+- **Materials.** FBX2glTF had dropped all 38 metallic-roughness maps and put
+  its Phong conversion (metallic 0.4 / roughness 0.272) on every material.
+  The build now grafts the source GLB's authored materials by name (factors,
+  metallic-roughness maps, the MLI and GEDI albedo the FBX lacks, normal
+  strengths) and renders the genuine cutouts (ELC grating, iROSA hex panels)
+  as MASK. The FBX is byte-identical to the audited source (`c3c43b9c…`).
+- **Textures.** KTX2 / Basis ETC1S (`ktx create`, quality 255; on par with
+  the WebP q80 they replace). Texture memory: full ~700 → ≤228 MiB, LOD ~97 →
+  ~20 MiB; transcoding runs in workers. Transfer (brotli): full 16.5 → 25 MB,
+  LOD 4.4 → 5.7 MB (the new metallic-roughness maps plus ETC1S overhead).
+  Runtime: `KTX2Loader` on drei's `useGLTF`, transcoder in `public/basis/`.
+- **LOD.** Derived from the high build's lossless master; normal and
+  metallic-roughness maps at 256 px; 418 emptied leaf nodes removed (703 →
+  285 nodes; every rig node kept).
+- **Environment.** `RoomEnvironment` replaced by `orbitalEnvironment.ts`:
+  Earth below (70°), space above, turned onto the station's nadir every frame
+  and dimmed with the daylight below (0.03–0.45).
+- **Animation.** Only the visible detail model animates; joint state is
+  handed to the next tier, so a swap mid-slew no longer snaps
+  (`freshHandoff`). The SARJs stay uncapped by design (docs corrected).
+- **Measured, not adopted:** meshopt + quantization (geometry memory 214 →
+  113 MB, faster parse, but ≈ +9 MB transfer and a 50+ MB raw GLB in git).
+- Tests: graft, KTX2 encode plan, published-asset material contract,
+  `pruneEmptyLeaves`, environment rotation (against three's own sampling
+  matrix), `freshHandoff`.
+
 ## Improve-skill audit + waves 1–2 (2026-10-24/25)
 
 A deep audit (six auditors, every finding re-read) produced plans 002–016;

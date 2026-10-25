@@ -2,8 +2,8 @@ import React, { Suspense, useCallback, useMemo, useRef, useEffect, Component, ty
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { EnvironmentLayer } from './EnvironmentLayer'
+import { createOrbitalEnvironmentScene, ORBITAL_ENV_INTENSITY } from './orbitalEnvironment'
 import { PostprocessingGate } from '../post/Postprocessing'
 import { EarthGroup } from '../earth/EarthGroup'
 import { ISSGroup } from '../iss/ISSGroup'
@@ -121,12 +121,12 @@ const AdaptiveDpr = React.memo(function AdaptiveDpr(): null {
 })
 
 /**
- * RuntimeEnvironment — locally generated image-based lighting for PBR
- * indirect specular. Without an environment term, metallic surfaces (solar
- * panel backs, radiators) render flat: nothing mirrors the Earth or stars.
- * RoomEnvironment is procedural (no CDN fetch) and PMREM-processed once;
- * scene.environmentIntensity keeps it subordinate to the calibrated
- * sun + earthshine + fill rig. Custom Earth/ISS shader materials ignore
+ * RuntimeEnvironment — locally generated image-based lighting for PBR.
+ * Without an environment term, metallic surfaces render flat: nothing
+ * mirrors the Earth. The orbital environment (./orbitalEnvironment) is a
+ * procedural Earth-below / space-above map, PMREM-processed once; the ISS
+ * frame loop turns it onto the station's nadir and scales it by the daylight
+ * on the Earth below. Custom Earth/ISS shader materials ignore
  * scene.environment, so only glTF PBR materials are affected.
  */
 const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
@@ -135,7 +135,7 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
 
   useEffect(() => {
     let pmrem: THREE.PMREMGenerator | null = null
-    let room: RoomEnvironment | null = null
+    let source: ReturnType<typeof createOrbitalEnvironmentScene> | null = null
     // Keep the render target, not just its texture: three ignores dispose() on a
     // render-target texture, so only the target's dispose() frees the
     // framebuffer and depth attachments.
@@ -143,20 +143,20 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
 
     const release = () => {
       envTarget?.dispose()
-      room?.dispose()
+      source?.dispose()
       pmrem?.dispose()
       envTarget = null
-      room = null
+      source = null
       pmrem = null
     }
 
     const build = () => {
       release()
       pmrem = new THREE.PMREMGenerator(gl)
-      room = new RoomEnvironment()
-      envTarget = pmrem.fromScene(room, 0.04)
+      source = createOrbitalEnvironmentScene()
+      envTarget = pmrem.fromScene(source.scene, 0.04)
       scene.environment = envTarget.texture
-      scene.environmentIntensity = 0.28
+      scene.environmentIntensity = ORBITAL_ENV_INTENSITY
     }
 
     // The PMREM output lives in a render target: its GPU contents are lost
@@ -171,6 +171,7 @@ const RuntimeEnvironment = React.memo(function RuntimeEnvironment(): null {
       canvas.removeEventListener('webglcontextrestored', build)
       scene.environment = null
       scene.environmentIntensity = 1.0
+      scene.environmentRotation.set(0, 0, 0)
       release()
     }
   }, [gl, scene])

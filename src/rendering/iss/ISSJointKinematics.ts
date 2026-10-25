@@ -379,6 +379,37 @@ export function trrjAdvance(
   return advanceToward(applied, target, maxStep)
 }
 
+// ─── Hand-off between detail tiers ────────────────────────────────────────────
+
+/** Last applied state of one joint, published by the visible detail model. */
+export interface SharedJointState {
+  applied: number
+  lastEpochMs: number | null
+  /** Wall-clock time of the publication (performance.now()). */
+  wallMs: number
+}
+
+/**
+ * How recently the shared state must have been published to count as the
+ * on-screen pose. A tier swap hands over within a frame or two; anything
+ * older means no detail model was visible in between (far range), and the
+ * joint should take its current target instead of gliding from a stale pose.
+ */
+export const JOINT_HANDOFF_FRESH_MS = 500
+
+/**
+ * The shared state to continue from when a joint's instance becomes the
+ * visible one: a fresh hand-off (a tier swap, possibly mid-slew) is continued
+ * exactly; a stale or missing one returns null and the joint adopts its
+ * target as on any first frame.
+ */
+export function freshHandoff(
+  shared: SharedJointState | undefined,
+  nowWallMs: number,
+): SharedJointState | null {
+  return shared && nowWallMs - shared.wallMs <= JOINT_HANDOFF_FRESH_MS ? shared : null
+}
+
 // ─── Oscillators (A1: each entry owns its spec) ───────────────────────────────
 
 export interface OscillatorEntry {

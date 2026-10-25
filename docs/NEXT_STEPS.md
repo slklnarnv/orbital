@@ -54,9 +54,16 @@
   counts down; the mobile gauge gap is 10 px; the 3D track and footprint
   render with limb occlusion; no console errors except an external BigDataCloud
   400. No human visual pass yet.
+- **IGOAL rebuild from both sources (2026-10-25)**: the authored PBR
+  materials are grafted from the source GLB (38 metallic-roughness maps, MLI
+  and GEDI albedo, cutouts); every model texture is KTX2 / ETC1S (texture
+  memory ~700 → ≤228 MiB full, ~97 → ~20 MiB LOD); the PBR environment is an
+  Earth-below / space-above map aimed at nadir (`orbitalEnvironment.ts`); the
+  joint state carries across the LOD ⇄ full swap. Details:
+  `plans/PROGRESS.md`, `docs/ISS_MODEL_CONTEXT.md` §1.
 - **Locate LOD + two-tier detail (2026-10-23)**: Locate/Follow load
-  `iss_igoal_locate.glb` (5.27 MiB, 784k triangles, 703 nodes, full rig); the
-  full 20.5 MB `iss_igoal.glb` loads only inside the 200/220 km Inspect band;
+  `iss_igoal_locate.glb` (now 6.53 MiB, 787k triangles, 285 nodes, full rig);
+  the full 28.1 MiB `iss_igoal.glb` loads only inside the 200/220 km Inspect band;
   `__BUILD_ID__` is an asset-content hash. Earlier the same week: PRs #14
   (texture-upload batching, immutable versioned assets, `H` HUD toggle,
   safe-area insets, OG metadata, LICENSE/NOTICE) and #15 (orbit-ring closure,
@@ -67,7 +74,10 @@
 1. Re-check the live deployment after the wave 1-2 merges: console free of CSP
    errors; `/api/tle` 200 with its cache header; `/api/tle?x=1` 404;
    `/models/*` and `/textures/*` answering `immutable` with `?v=<asset hash>`;
-   `/robots.txt`, `/sitemap.xml` and `/og-image.png` all 200. Then a human
+   `/robots.txt`, `/sitemap.xml`, `/og-image.png` and
+   `/basis/basis_transcoder.wasm` all 200. A human look at the rebuilt
+   materials and the orbital environment at Follow and Inspect, day and
+   night (metal mirroring Earth below, MLI blankets, ELC grating). Then a human
    visual pass on the penumbra fade at a terminator crossing (300x), the
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
@@ -163,8 +173,9 @@ can be extended. "Touches" lists the files expected to change.
    textures + the fallback model, runtime cache (network-first) for
    `/api/tle`; manifest + icons. The OFFLINE mode already exists.
 2. **Bundle + textures.** `React.lazy` the postprocessing chain and the IGOAL
-   pipeline; convert Earth textures to KTX2/Basis (`toktx`) with a WebP
-   fallback. Measure first (C.2 follows A.2's numbers).
+   pipeline; convert Earth textures to KTX2/Basis (`ktx create`; the ISS
+   models already are, see `encodeTexturesKtx2`) with a WebP fallback.
+   Measure first (C.2 follows A.2's numbers).
 3. **Mobile.** Check pinch, two-finger slide, lifting one finger mid-gesture,
    portrait HUD; fix what breaks. Add a 390×844 case to the Playwright suite.
 4. **Accessibility.** `aria-live="polite"` region announcing the place below
@@ -197,9 +208,10 @@ can be extended. "Touches" lists the files expected to change.
       "ISS unavailable" state). **LANDED 2026-10-23 for the LOD**: hover/focus
       already starts the first tier, and a 5 s boot-idle warm was added. The
       full high model is NOT prefetched — it loads at Inspect.
-   c. Only if the full Inspect load still feels slow: decode/VRAM cost —
-      KTX2/Basis textures and meshopt instead of Draco+WebP (fold into C.2).
-      This does not reduce the LOD's cold-network path.
+   c. Decode/VRAM cost. **KTX2/Basis textures LANDED 2026-10-25** for both
+      model tiers. Meshopt + quantization instead of Draco was measured and not
+      adopted (`docs/ISS_MODEL_CONTEXT.md` §9.4: half the geometry memory,
+      but ≈ +9 MB transfer and a 50+ MB raw GLB in git).
 
 Suggested order now: B.3 → A.2 → C.2 (A.3, B.1 and B.2 landed 2026-10-25;
 C.6a/C.6b and the Locate LOD landed 2026-10-23; C.2 remains for the

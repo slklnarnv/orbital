@@ -18,6 +18,7 @@ import * as THREE from 'three'
 import {
   GIMBAL_SINGULARITY_EPSILON,
   IGOAL_JOINT_DEFS,
+  JOINT_HANDOFF_FRESH_MS,
   IGOAL_OSCILLATOR_SPECS,
   IGOAL_TRRJ_LIMITS,
   RIG_SCHEMA_VERSION,
@@ -25,6 +26,7 @@ import {
   applyJointAngle,
   applyOscillators,
   bgaTargetAngle,
+  freshHandoff,
   parseRigMetadata,
   resolveJoint,
   resolveOscillators,
@@ -690,3 +692,17 @@ function beamWorld(root: THREE.Object3D, local: THREE.Vector3): THREE.Vector3 {
   const beam = root.getObjectByName('P1_Radiator')!
   return beam.localToWorld(local.clone())
 }
+
+describe('freshHandoff (detail-tier swap continuity)', () => {
+  const shared = { applied: 0.7, lastEpochMs: 1_000_000, wallMs: 10_000 }
+
+  it('continues the published pose across a swap, mid-slew included', () => {
+    expect(freshHandoff(shared, 10_000 + 16)).toBe(shared)
+    expect(freshHandoff(shared, 10_000 + JOINT_HANDOFF_FRESH_MS)).toBe(shared)
+  })
+
+  it('ignores a stale pose (no detail model was visible in between) and a missing one', () => {
+    expect(freshHandoff(shared, 10_000 + JOINT_HANDOFF_FRESH_MS + 1)).toBeNull()
+    expect(freshHandoff(undefined, 10_000)).toBeNull()
+  })
+})

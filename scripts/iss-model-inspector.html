@@ -22,6 +22,7 @@
       import * as THREE from 'three'
       import { GLTFLoader } from '/node_modules/three/examples/jsm/loaders/GLTFLoader.js'
       import { DRACOLoader } from '/node_modules/three/examples/jsm/loaders/DRACOLoader.js'
+      import { KTX2Loader } from '/node_modules/three/examples/jsm/loaders/KTX2Loader.js'
       import { OrbitControls } from '/node_modules/three/examples/jsm/controls/OrbitControls.js'
 
       const logEl = document.getElementById('log')
@@ -46,7 +47,8 @@
       scene.add(fill)
 
       const draco = new DRACOLoader().setDecoderPath('/draco/')
-      const loader = new GLTFLoader().setDRACOLoader(draco)
+      const ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer)
+      const loader = new GLTFLoader().setDRACOLoader(draco).setKTX2Loader(ktx2)
 
       loader.load(
         '/models/iss_igoal.glb',

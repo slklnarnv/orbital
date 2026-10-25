@@ -1,8 +1,10 @@
 # ISS Model — Full Context Briefing for Audit/Repair Agents
 
 > Status 2026-10-25: this briefing describes the code as implemented by plan
-> 001 (rig data, the TRRJ axis, the build-time radiator coating, BGA tracking)
-> and the Locate LOD. §3 is audit history and stays in the past tense.
+> 001 (rig data, the TRRJ axis, the build-time radiator coating, BGA tracking),
+> the Locate LOD, and the source-material / KTX2 rebuild (authored PBR grafted
+> from the source GLB, GPU-compressed textures, the orbital environment, joint
+> hand-off between tiers). §3 is audit history and stays in the past tense.
 
 Read this completely before touching anything. Every number in here was
 verified by decoded-vertex measurement AND cross-checked in the browser with
@@ -25,40 +27,57 @@ intentional and the entire camera/LOD system is calibrated to it. **Never
 "fix" the scale.**
 
 **The model asset** (the subject of this briefing):
-`public/models/iss_igoal.glb` — 20.5 MB, Draco-compressed, built from a
-172 MB FBX ("International Space Station (ISS) (D) (IGOAL)").
+`public/models/iss_igoal.glb` — 28.1 MiB (≈25 MB over the wire with brotli),
+Draco geometry + KTX2 (Basis ETC1S) textures, built from the two IGOAL
+sources below.
 
-**FBX SOURCE — local disk, NOT in the repo**:
-a local copy of the IGOAL FBX (not in the repo; ask the owner) — rebuild
-recipe in §1.1 below. Do not guess a path.
+**SOURCES — NOT in the repo**: the owner publishes them as the
+`source-assets-igoal` release asset `ISSTEST.zip` (315 MB). Both IGOAL files
+come from NASA IGOAL's config-controlled `ISS_External_26.05_revA.blend`
+(the May 2026 configuration), exported by Blender 5.0.1.
 
-| File in the owner's source folder | What it is |
+| File in `ISSTEST/` | What it is |
 |:--|:--|
-| `International Space Station (ISS) (D) (IGOAL).fbx` (172 MB) | **THE source of record** — the only file `build-iss-model.mjs` accepts |
-| `International Space Station (ISS) (D) (IGOAL).glb` (65 MB) | Sketchfab-style export of the same art — **DECOY: single merged mesh, no part hierarchy**; the FBX pipeline exists precisely because of this |
-| `ISS_stationary.glb / .gltf + .bin / .usdz` | A different "stationary" export variant — not used |
-| `International Space Station (ISS) (C) (High Res)/` | Older (C) variant — not used |
+| `International Space Station (ISS) (D) (IGOAL).fbx` (172 MB, sha256 `c3c43b9c…`) | **Geometry source of record**: 702 named nodes, the real part hierarchy, lossless PNG textures. No animation stacks, pivots or custom properties (the rig is ours, §5). |
+| `International Space Station (ISS) (D) (IGOAL).glb` (65 MB, sha256 `3b03742f…`) | **Material source of record**: a direct Blender glTF export. Its geometry is ONE merged mesh (unusable), but its 44 materials are exactly what Blender renders — packed metallic-roughness maps, factors, normal strengths, and albedo maps the FBX does not embed (MLI blankets, GEDI). Images are mostly JPEG. |
+| `ISS_stationary.glb / .gltf + .bin / .usdz` | A different, older ~250k-triangle model — not used |
+| `International Space Station (ISS) (C) (High Res)/` | NASA JSC's 2011 LightWave model set — not used |
 | `isscomplete.3ds`, `isstextures.zip` | Legacy format + loose textures — not used |
 
-The uncompressed conversion intermediate `.tmp-iss-build/igoal_raw.glb`
-(291 MB, output of FBX2glTF before optimization) is also on disk, so the
-optimization stage can be studied without re-converting.
+After a build, `.tmp-iss-build/` holds the uncompressed FBX2glTF output
+`igoal_raw.glb` (291 MB) and the master `iss_igoal_master.glb` the Locate LOD
+is derived from.
 
-### 1.1 Full rebuild recipe (from the FBX)
+### 1.1 Full rebuild recipe (from the sources)
+
+Needs KTX-Software ≥ 4.3 (`ktx` on PATH, or `KTX_BIN=/path/to/ktx`; the
+Linux tarball also needs `LD_LIBRARY_PATH=<ktx>/lib`).
 
 ```bash
-node scripts/build-iss-model.mjs "path/to/International Space Station (ISS) (D) (IGOAL).fbx"
+node scripts/build-iss-model.mjs "ISSTEST/International Space Station (ISS) (D) (IGOAL).fbx" \
+                                 "ISSTEST/International Space Station (ISS) (D) (IGOAL).glb"
+npm run build:iss-lod
 ```
 
-What it does (all steps are in `scripts/build-iss-model.mjs`):
+What it does (all steps are in `scripts/build-iss-model.mjs`, ~3.5 min):
 1. FBX2glTF (`--binary --pbr-metallic-roughness`; **never add
    `--no-flip-v`** — the V-flip is required for the FBX UVs) →
    `.tmp-iss-build/igoal_raw.glb` (~1 min).
-2. Fixes ~13 falsely-transparent materials to OPAQUE, repairs a BMP whose
-   mimeType FBX2glTF mangles, strips the baked `COLOR_0` vertex-colour layer
-   (Nauka's stale hull shading), then dedupe / prune (`keepLeaves`, which keeps
-   the six empty attachment frames) / weld + WebP re-encode (≤2048 px) via
-   sharp.
+2. Fixes ~13 falsely-transparent materials to OPAQUE and repairs a BMP whose
+   mimeType FBX2glTF mangles. Then **grafts the source GLB's materials by
+   name** (`applySourceMaterials`, before dedupe): FBX2glTF drops every
+   metallic-roughness map and stamps its Phong conversion (metallic 0.4,
+   roughness 0.272) on all 47 materials. The graft restores the factors and
+   38 metallic-roughness maps, adds the albedo maps the FBX lacks (MLI
+   blankets, GEDI; FBX images win where both exist), sets the authored normal
+   strengths (MLI 3, ELC_Payloads_04 2), and renders the genuine alpha
+   cutouts `CUTOUT_MATERIALS` = ELC_Base (deck grating, perforated plates) and
+   IROSA (hex-hole panels) as MASK 0.5, double-sided. `Truss` is BLEND in the
+   source too, but its alpha also hides the radiator edge rails, so it stays
+   OPAQUE. Then strips the baked `COLOR_0` vertex-colour layer (Nauka's stale
+   hull shading), dedupe / prune (`keepLeaves`, which keeps the six empty
+   attachment frames) / weld, and resizes textures to lossless PNG ≤2048 px
+   (metallic-roughness ≤1024).
 3. EATCS panel split (`splitRadiatorPanels()`): ±Y-facing triangles
    (|n_y| > 0.7) inside the `Truss`-material primitives of
    `P1_Radiator`/`S1_Radiator` move onto a dedicated white Z-93-style
@@ -66,19 +85,27 @@ What it does (all steps are in `scripts/build-iss-model.mjs`):
    roughness 0.55). The shared `Truss` material is untouched.
 4. Selective decimation: only nodes matching `/details/i` are simplified
    (ratio 0.5) — arrays, trusses, radiators, modules stay full-res.
-5. Draco (14-bit positions, 10-bit normals — raised from default 8 to avoid
-   visible banding, 12-bit UVs).
-6. The runtime rig subset from `scripts/iss-rig-manifest.mjs` is written into
-   the scene extras (`extras.orbitalRig`), and the build writes a CANDIDATE:
+5. The runtime rig subset from `scripts/iss-rig-manifest.mjs` is written into
+   the scene extras (`extras.orbitalRig`) and the master
+   (`.tmp-iss-build/iss_igoal_master.glb`: uncompressed geometry, PNG
+   textures) is saved for the Locate LOD.
+6. Textures → KTX2 / Basis ETC1S (`encodeTexturesKtx2`, `ktx create
+   --encode basis-lz --qlevel 255 --generate-mipmap`): colour slots sRGB,
+   normal / metallic-roughness linear, alpha kept only where a MASK material
+   reads it. Measured on par with the WebP q80 it replaced (albedo 36.1 vs
+   36.7 dB PSNR, normals 3.9° vs 3.5° mean angular error), at ≤228 MiB of GPU
+   texture memory for 113 textures — the WebP set decoded to ~700 MiB of RGBA8
+   for 73. Then Draco (14-bit positions, 10-bit normals — raised from default
+   8 to avoid visible banding, 12-bit UVs), and the build writes a CANDIDATE:
    `.tmp-iss-build/iss_igoal_candidate.glb`.
 7. Validation of the DECODED candidate: the rig contract (`REQUIRED_NODES`:
    all joint and oscillator nodes, the six protected attachment frames, the 8
-   arrays, the 6 iROSAs, both radiators), `EXT_texture_webp` declared, finite
-   POSITION data, a 35 MiB hard budget and a plausible truss span. Only a fully
-   valid candidate is copied to `public/models/iss_igoal.glb` (current build
-   ≈ 19.6 MiB / 20.5 MB, 703 nodes); a failure leaves the previous asset
-   untouched. The bounds report is written to
-   `.tmp-iss-build/bounds-report.json`.
+   arrays, the 6 iROSAs, both radiators), every texture KTX2 with
+   `KHR_texture_basisu` required, finite POSITION data, a 35 MiB hard budget
+   and a plausible truss span. Only a fully valid candidate is copied to
+   `public/models/iss_igoal.glb` (current build 28.1 MiB, 703 nodes); a
+   failure leaves the previous asset untouched. The bounds report (with both
+   source hashes) is written to `.tmp-iss-build/bounds-report.json`.
 
 `node scripts/iss-model-manifest.mjs public/models/iss_igoal.glb --check-only`
 runs the same rig/format/budget checks (plus the independent declared-bounds
@@ -100,27 +127,34 @@ would still only show at runtime.
 
 ### 1.2 Locate-tier LOD (2026-10-23)
 
-`public/models/iss_igoal_locate.glb` is derived from the published high asset
-by `scripts/build-iss-locate-lod.mjs` — do not hand-edit it. Measured: **5.27
-MiB, 784k triangles, ~1.75M vertices, 240 mesh instances / 234 stored meshes,
-73 WebP textures at 512 px, 703 nodes** (the full rig). It keeps the 12 joints,
-8 oscillators, six protected attachment frames and `extras.orbitalRig`, and its
-decoded truss span is **108.294 m** (high: 108.293), so `IGOAL_LOCATE` shares
-the high model's normalization/pivot constants.
+`public/models/iss_igoal_locate.glb` is derived from the high build's master
+(`.tmp-iss-build/iss_igoal_master.glb`) by `scripts/build-iss-locate-lod.mjs`
+— do not hand-edit it. Measured: **6.53 MiB (≈5.7 MB brotli), 787k
+triangles, ~1.76M vertices, 240 mesh instances / 234 stored meshes, 113 KTX2
+textures (albedo 512 px, normal / metallic-roughness 256 px, ≤20 MiB on GPU),
+285 nodes** — every rig node (12 joints, 8 oscillators, six protected
+attachment frames) plus the structure; the 418 leaves emptied by the strip
+are removed. It keeps `extras.orbitalRig`, and its decoded truss span is
+**108.294 m** (high: 108.293), so `IGOAL_LOCATE` shares the high model's
+normalization/pivot constants.
 
 Derivation: strip detail/handrail meshes except the silhouette keep-list in
 `build-iss-locate-lod.mjs` (76% of the high model's 2.665M triangles are
-`Details_*`), simplify the kept geometry at 0.3 ratio / 0.03 error, resize
-textures to 512, then Draco (position 12 / normal 8 / UV 10). Uniform
+`Details_*`), drop emptied leaves unless the rig names them
+(`pruneEmptyLeaves`), simplify the kept geometry at 0.3 ratio / 0.03 error,
+encode the textures, then Draco (position 12 / normal 8 / UV 10). Uniform
 simplification alone only removes ~14% on this CAD-style mesh; stripping the
 detail meshes is the effective lever. The build writes a candidate, validates
-the full rig/WebP/geometry/budget contract, then publishes.
+the full rig/KTX2/geometry/budget contract, then publishes.
 
 Runtime: the `high` setting loads this LOD first and uses it for Locate/Follow.
 The full `iss_igoal.glb` is requested only inside the 200/220 km Inspect band
 (the `isClose` hysteresis in `ISSModel.tsx`; a close FREE view counts too). A
 high-tier failure keeps the LOD; a LOD failure demotes the requested path to
 legacy. Rebuild after any high-asset rebuild with `npm run build:iss-lod`.
+Both tiers load through drei's `useGLTF` with a `KTX2Loader` (transcoder
+self-hosted in `public/basis/`, copied from `three/examples/jsm/libs/basis`
+at the renderer's version — refresh it on a three upgrade).
 
 **Selection**: `src/stores/settingsStore.ts` (`issModelQuality: 'high' |
 'legacy'`, default `'high'`, persisted). `'high'` → `iss_igoal_locate.glb`
@@ -136,11 +170,12 @@ the LOD. At runtime the mounted asset is logged:
 |:--|:--|
 | `src/rendering/iss/ISSModel.tsx` | LOD selection, normalization constants, GPU prep, eclipse lighting, `[ISS AUDIT]` log |
 | `src/rendering/iss/ISSAnimations.tsx` | Frame-loop orchestration for SARJ/TRRJ/BGA joints + camera oscillators (all part motion) |
-| `src/rendering/iss/ISSJointKinematics.ts` | Pure, unit-tested joint math: rig types, `resolveJoint`, target laws, slew, `parseRigMetadata` |
+| `src/rendering/iss/ISSJointKinematics.ts` | Pure, unit-tested joint math: rig types, `resolveJoint`, target laws, slew, tier hand-off, `parseRigMetadata` |
+| `src/rendering/scene/orbitalEnvironment.ts` | The PBR environment: Earth below / space above, turned onto the station's nadir, scaled by daylight below (§4) |
 | `scripts/iss-rig-manifest.mjs` | Rig contract source of truth: joints, axes, oscillators, TRRJ limits, protected frames, required nodes |
 | `src/rendering/iss/ISSGroup.tsx` | LVLH/TEA flight attitude + inertial position (do not touch for model work) |
-| `scripts/build-iss-model.mjs` | FBX → optimized runtime GLB (needs the FBX argument) |
-| `scripts/build-iss-locate-lod.mjs` | Derives the Locate LOD from the published high GLB (candidate → validate → publish) |
+| `scripts/build-iss-model.mjs` | IGOAL FBX + GLB → optimized runtime GLB + master (needs both source arguments and `ktx`) |
+| `scripts/build-iss-locate-lod.mjs` | Derives the Locate LOD from the high build's master (candidate → validate → publish) |
 | `scripts/iss-model-manifest.mjs` | Forensic per-node manifest of a GLB (REPAIRED — see §6.1) |
 | `scripts/iss-model-inspector.html` | Browser harness: loads the GLB standalone, logs Box3 measurements, `window.__setView` / `__cam` / `__isolate` / `__restore` hooks |
 | `.tmp-iss-build/audit-igoal-fixed/` | Current manifest + tree + exported textures for the shipped GLB |
@@ -153,9 +188,9 @@ Whole model (decoded vertices, exact):
 - Bounds min `(−36.7163, −22.1156, −54.1457)`, max `(36.7112, 8.5104, 54.1469)`
 - Size **73.4275 × 30.6260 × 108.2926 m**, center **(−0.0025, −6.8026, 0.0006)**
 - 703 nodes (all named; includes the six empty attachment frames), 656
-  meshes, 42 materials (including `Radiator_Panel_Coating`), 73 textures,
-  ≈2.66M triangles / ≈6.0M vertices (2,663,723 / 5,997,406 from the stored
-  accessor counts)
+  meshes, 43 materials (including `Radiator_Panel_Coating`), 113 KTX2
+  textures (38 of them metallic-roughness), ≈2.67M triangles / ≈6.0M vertices
+  (2,665,373 / 6,001,154 from the stored accessor counts)
 - Declared POSITION accessor min/max versus decoded vertices: the independent
   JSON-chunk comparison (`checkDeclaredBounds`) reports quantization-level
   deltas only (max ≈ 4.2e-4 m on the shipped asset) — expected under Draco, not
@@ -233,8 +268,9 @@ through world (or parent-relative) matrices/quaternions numerically.
   the truss axis (native Z); their origins sit on the beamline.
   `ISSJointKinematics.ts` encodes this as `axisModel: [1, 0, 0]` for both TRRJ
   joints (`[0, 0, 1]` for the SARJs).
-- Materials: the short base beam (primitive 0) = `MLI.Generic` — flat 0.8
-  gray, metalness 0.4, **no base-color texture**, MLI normal map. The deployed
+- Materials: the short base beam (primitive 0) = `MLI.Generic` — the
+  source's wrinkled white MLI albedo, metallic 0 / roughness 0.5, MLI normal
+  map at strength 3. The deployed
   panel faces and frames live in the long `Truss`-material primitive (the
   atlas `Truss_Diffuse.png` contains dark photovoltaic bands on its left
   edge), and under directional sun the pleated panels self-shade to near-black
@@ -315,6 +351,17 @@ before believing any new "discrepancy", including your own.
   at ISS altitude) through `eclipseLighting()` (`eclipseLighting.ts`) to the
   key-light exposure, ambient and earthshine intensities; the shade-0 and
   shade-1 endpoints equal the old binary sunlit and eclipse values.
+- Environment (image-based lighting for every glTF PBR material):
+  `orbitalEnvironment.ts` replaces the old studio `RoomEnvironment`. The map is
+  an Earth disc of 70° angular radius below (−Y, a thin bright limb) and black
+  space above, PMREM-processed once in `SceneRoot`'s `RuntimeEnvironment`. Each
+  ISS frame `orientOrbitalEnvironment` sets `scene.environmentRotation` so −Y
+  follows the station's nadir (exactly: three negates the Euler angles when it
+  builds the sampling matrix, so the rotation is decomposed and negated — unit
+  tested against that construction) and `scene.environmentIntensity` from 0.03
+  (night below) to 0.45 (subsolar), by the sun's zenith angle at the
+  sub-station point. Metallic hardware therefore mirrors a blue Earth below and
+  dark space above.
 
 ---
 
@@ -327,7 +374,12 @@ by the build), `parseRigMetadata()` validates it (absent → fall back to the
 built-in `IGOAL_JOINT_DEFS`, `IGOAL_OSCILLATOR_SPECS` and `IGOAL_TRRJ_LIMITS`,
 present-but-invalid → the detail fails before anything animates). The `locate`
 and `high` tiers animate (they share the rig); `legacy` and Model A are
-deliberately static.
+deliberately static. Only the VISIBLE detail model animates (hidden candidates
+and far-range models skip the rig). It publishes each joint's applied angle
+per joint id; an instance that becomes visible within 500 ms of the last
+publication (`JOINT_HANDOFF_FRESH_MS` — a tier swap) continues that pose
+exactly, mid-slew included (`freshHandoff`), otherwise it adopts the current
+target.
 
 The 12 driven joints (all axes and normals are in the GLB's native model frame):
 
@@ -339,11 +391,14 @@ The 12 driven joints (all axes and normals are in the GLB's native model frame):
 
 Real TRRJs are usually parked, so the TRRJ law is a labelled illustration, not
 telemetry. The law switches on `isSunlit()` (`SunVisibility.ts`), i.e. at the
-0.5 point of the penumbra — the same edge the old cylinder test used. Every
-slew is also capped at `MAX_WALL_DEG_PER_SECOND = 12` °/s of wall-clock time,
-so a seek or an eclipse transition at 300× reads as a glide. Camera
-oscillators (JEM/ELP/SHP pan/tilt sine sweeps) run for every mounted detail
-model. Do not re-introduce per-wing independent rotation of the arrays
+0.5 point of the penumbra — the same edge the old cylinder test used. BGA and
+TRRJ slews are also capped at `MAX_WALL_DEG_PER_SECOND = 12` °/s of
+wall-clock time, so a seek or an eclipse transition at 300× reads as a glide.
+The SARJs are NOT capped, deliberately: they follow their sun-tracking target
+exactly, which at 300× legitimately moves ~19.5 °/s (a cap would make them
+lag the sun), and a time seek moves them with the station's own position.
+Camera oscillators (JEM/ELP/SHP pan/tilt sine sweeps) run for the visible
+detail model. Do not re-introduce per-wing independent rotation of the arrays
 themselves: the SARJ turns the whole wing set and the BGAs only add the beta
 tilt.
 
@@ -424,9 +479,12 @@ silent in code and obvious only in render.
    setTimeScale(n)`. Restore `setMode('REALTIME'); setTimeScale(1)` after.
    Dev hooks exposed in `main.tsx`: `__orbitalSimulation`, `__orbitalClock`,
    `__orbitalTelemetry`, `__orbitalControls`.
-7. **Texture format**: embedded textures are WebP; the Read tool cannot
-   preview them — convert via `sharp` first. One BMP flavor is hand-decoded
-   in the build script (sharp lacks a BMP loader).
+7. **Texture format**: the runtime assets' textures are KTX2 (Basis ETC1S);
+   neither sharp nor the Read tool decodes them — extract with
+   `ktx extract --transcode rgba8 --level 0 in.ktx2 out.png`, or inspect the
+   PNG textures of `.tmp-iss-build/iss_igoal_master.glb`. One BMP flavor is
+   hand-decoded in the build script (sharp lacks a BMP loader). The source
+   GLB's images are mostly JPEG; the FBX embeds lossless PNGs.
 
 ---
 
@@ -504,6 +562,18 @@ silent in code and obvious only in render.
    MLM meshes (no node), Canadarm2 has a named joint chain under
    `MT_Location` if a pose sweep is ever wanted. (The BGAs are already
    driven, §5.)
-4. **Blanket box detail** (cosmetic): the two bare wings (2A, 3B) show the
+4. **Geometry memory** (measured option, not adopted): Draco decodes to
+   float32 — 214 MB of vertex/index data for the full model. `EXT_meshopt_
+   compression` + `KHR_mesh_quantization` (positions 14-bit, normals 8–10-bit,
+   UVs 12-bit) measured 113 MB on the GPU and a 1.1–1.2 s parse vs Draco's
+   1.7–3.7 s (headless Chromium, 4 cores), but ≈ +9 MB over the wire (25.5 vs
+   16.8 MB brotli at the time) and a 50+ MB raw GLB in git, because meshopt
+   relies on transport compression. Quantization rewrites mesh-node
+   transforms: rig nodes that carry a mesh must first move it onto an
+   identity child (rotating a joint whose origin moved breaks its pivot).
+5. **Draw calls** (Phase D, postponed by owner decision): 980 primitives.
+   `Truss` (197) and `ELC_Base` (361) dominate; animation-safe rigid-island
+   batching (merge only within a joint's static subtree) is the lever.
+6. **Blanket box detail** (cosmetic): the two bare wings (2A, 3B) show the
    blanket-box end hardware more prominently than the iROSA-covered wings;
    correct per asset, listed only so it isn't mistaken for a bug.

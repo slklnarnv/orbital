@@ -1,38 +1,54 @@
-// ─── build-iss-model.mjs — IGOAL FBX → optimized runtime GLB ─────────────────
+// ─── build-iss-model.mjs — IGOAL sources → optimized runtime GLB ──────────────
 //
-// Converts the high-detail "International Space Station (ISS) (D) (IGOAL)" FBX
-// into the deferred-load runtime asset public/models/iss_igoal.glb.
+// Converts the high-detail "International Space Station (ISS) (D) (IGOAL)"
+// sources into the deferred-load runtime asset public/models/iss_igoal.glb,
+// plus the intermediate master the Locate LOD is derived from.
 //
-// Source verification (session analysis, 2026-09):
-//   - The FBX carries 702 named model nodes with a real part hierarchy:
-//     8 solar array wings (P4_Array_2A/4A, P6_2B/4B, S4_1A/3A, S6_1B/3B),
-//     P1/S1_Radiator rotary radiators, JEM/ELP/SHP camera pan/tilt nodes,
-//     Cupola shutters, Canadarm2. Source of record:
-//     C:/Users/Arnav/Downloads/ISSTEST/International Space Station (ISS) (D) (IGOAL).fbx
-//   - The Sketchfab-exported GLB of the same asset merges everything into a
-//     single mesh — which is why this pipeline re-converts from the FBX.
+// Sources (both from NASA IGOAL's ISS_External_26.05_revA.blend, exported by
+// Blender 5.0.1; sha256 of each is printed in the build report):
+//   - The FBX is the GEOMETRY authority: 702 named nodes with the real part
+//     hierarchy — 8 solar array wings (P4_Array_2A/4A, P6_2B/4B, S4_1A/3A,
+//     S6_1B/3B), P1/S1_Radiator rotary radiators, JEM/ELP/SHP camera pan/tilt
+//     nodes, Cupola shutters, Canadarm2. It carries no animation, pivots or
+//     custom properties: the rig lives in scripts/iss-rig-manifest.mjs.
+//   - The GLB of the same scene is the MATERIAL authority. Its geometry is one
+//     merged mesh (unusable), but its materials are exactly what Blender
+//     renders: packed metallic-roughness maps, factors, normal strengths and
+//     the albedo maps the FBX does not embed (MLI blankets, GEDI). FBX2glTF
+//     drops every metallic-roughness map and substitutes its Phong defaults
+//     (metallic 0.4, roughness 0.272) on all 47 materials.
 //
 // Pipeline:
 //   1. FBX2glTF (binary, via npm fbx2gltf) → hierarchy-preserving GLB.
-//   2. glTF-Transform: dedupe, prune (keepLeaves — preserves the six empty
-//      rig attachment frames), weld; textures resized ≤2048 and recompressed
-//      to WebP; EXT_texture_webp registered so the asset is conforming.
-//   3. EATCS panel split: the ±Y-facing panel triangles inside the long
+//   2. Material repairs, then the authored materials grafted by name from the
+//      source GLB (lossless FBX images win where both exist); genuine alpha
+//      cutouts (ELC grating, iROSA perforations) render MASK.
+//   3. glTF-Transform: dedupe, prune (keepLeaves — preserves the six empty
+//      rig attachment frames), weld; textures resized to ≤2048 (metallic-
+//      roughness ≤1024) as lossless PNG.
+//   4. EATCS panel split: the ±Y-facing panel triangles inside the long
 //      `Truss`-material primitives of P1/S1_Radiator get a dedicated white
 //      radiator-coating material; support hardware keeps its materials.
-//   4. Selective decimation: only nodes whose name matches /details/i are
+//   5. Selective decimation: only nodes whose name matches /details/i are
 //      simplified ~50%. Arrays, trusses, modules, radiators stay full-res.
-//   5. Draco compression with raised normal quantization (banding guard).
-//   6. Rig contract validation (scripts/iss-rig-manifest.mjs) + format/budget
+//   6. The master (uncompressed geometry, PNG textures, rig extras) is written
+//      to .tmp-iss-build for scripts/build-iss-locate-lod.mjs.
+//   7. Textures → KTX2 / Basis ETC1S (`ktx create`, KTX-Software ≥4.3): GPU-
+//      compressed, ~4–8× less texture memory than decoded WebP and transcoded
+//      off the main thread. Geometry → Draco with raised normal quantization.
+//   8. Rig contract validation (scripts/iss-rig-manifest.mjs) + format/budget
 //      checks on the DECODED CANDIDATE. Only a fully valid candidate is
 //      published to public/models/iss_igoal.glb; a failure leaves the
 //      previous runtime asset untouched.
 //
-// Usage:  node scripts/build-iss-model.mjs <path-to-IGOAL.fbx>
+// Usage:  node scripts/build-iss-model.mjs <IGOAL.fbx> <IGOAL.glb>
+//         (KTX_BIN names the `ktx` executable when it is not on PATH)
 // Importing this module is side-effect free; the CLI runs via main().
 
-import { access, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import convert from 'fbx2gltf'
@@ -42,6 +58,7 @@ import {
   EXTTextureWebP,
   KHRDracoMeshCompression,
   KHRMaterialsIOR,
+  KHRTextureBasisu,
   KHRMaterialsSpecular,
   KHRMaterialsUnlit,
   KHRTextureTransform,
@@ -68,7 +85,12 @@ const OUT_PATH = path.join(root, 'public/models/iss_igoal.glb')
 const WORK_DIR = path.join(root, '.tmp-iss-build')
 const CANDIDATE_PATH = path.join(WORK_DIR, 'iss_igoal_candidate.glb')
 
+const MASTER_PATH = path.join(WORK_DIR, 'iss_igoal_master.glb')
+
 const MAX_TEXTURE_EDGE = 2048
+// Metallic-roughness maps carry low-frequency data and arrive as JPEG from the
+// source GLB; 1024 keeps their detail at a quarter of the 2048 cost.
+const MAX_DATA_TEXTURE_EDGE = 1024
 const MAX_ASSET_BYTES = 35 * 1024 * 1024 // hard gate on the published candidate
 const DETAILS_RATIO = 0.5 // decimate only "Details_" greeble sub-meshes
 // Error is relative to each primitive's own extent, so small greebles stay
@@ -83,7 +105,8 @@ export async function createIO() {
   return new NodeIO()
     .registerExtensions([
       KHRDracoMeshCompression,
-      EXTTextureWebP, // required: the asset's images are WebP with no fallback
+      EXTTextureWebP, // legacy assets and intermediate stages only
+      KHRTextureBasisu, // runtime assets: every texture is KTX2 / Basis ETC1S
       KHRMaterialsIOR,
       KHRMaterialsSpecular,
       KHRMaterialsUnlit,
@@ -158,12 +181,13 @@ async function decodeBmpToSharpRaw(bytes) {
 export async function repairMaterialsAndTextures(document) {
   // Strip bogus transparency: FBX2glTF flags ~13 module materials (Zvezda,
   // Zarya, JEM, Truss, Cupola, ELC...) as alphaMode BLEND from a vestigial
-  // FBX transparency channel. Their textures carry a stale grayscale mask in
-  // the alpha channel (RGB under "transparent" pixels is intact hull color,
-  // 140-226 — a complete image, not cutouts). Rendering them as BLEND drops
+  // FBX transparency channel. Most of their textures carry a stale grayscale
+  // mask in the alpha channel (RGB under "transparent" pixels is intact hull
+  // color — a complete image, not cutouts). Rendering them as BLEND drops
   // the whole station into three.js's depth-sorted transparent pass, which
-  // ghosts large parts of the model at certain viewing angles. Materials
-  // whose base-color FACTOR is actually semi-transparent stay untouched.
+  // ghosts large parts of the model at certain viewing angles. The genuine
+  // cutouts are restored as MASK by applySourceMaterials (CUTOUT_MATERIALS).
+  // Materials whose base-color FACTOR is semi-transparent stay untouched.
   let opaqueFixed = 0
   for (const material of document.getRoot().listMaterials()) {
     if (material.getAlphaMode() !== 'BLEND') continue
@@ -195,6 +219,210 @@ export async function repairMaterialsAndTextures(document) {
     else console.warn(`[build-iss-model] unrecognized image format for "${texture.getName()}" — left as ${mime}`)
   }
   return opaqueFixed
+}
+
+// ─── Step 2b: authored materials from the Blender source GLB ─────────────────
+
+/**
+ * Materials whose base-colour alpha is a genuine cutout (inspected: the ELC
+ * deck grating and perforated plates, the iROSA hex-hole panels). They render
+ * MASK and double-sided so the far side shows through the holes. `Truss` is
+ * BLEND in the source as well, but its alpha also hides the radiator edge
+ * rails and support members, so it stays OPAQUE.
+ */
+export const CUTOUT_MATERIALS = new Set(['ELC_Base', 'IROSA'])
+export const CUTOUT_ALPHA = 0.5
+
+/**
+ * Read the source GLB's materials without decoding its geometry: factors,
+ * normal strength and the embedded images behind the base-colour, metallic-
+ * roughness and normal slots. Returns Map<materialName, spec>.
+ */
+export function readSourceMaterials(glb) {
+  const buffer = Buffer.from(glb)
+  if (buffer.readUInt32LE(0) !== 0x46546c67) throw new Error('source materials: not a GLB')
+  const jsonLength = buffer.readUInt32LE(12)
+  const json = JSON.parse(buffer.toString('utf8', 20, 20 + jsonLength))
+  const binStart = 20 + jsonLength + 8
+  const image = (textureInfo) => {
+    if (!textureInfo) return null
+    if (textureInfo.extensions?.KHR_texture_transform || (textureInfo.texCoord ?? 0) !== 0) {
+      throw new Error('source materials: texture transforms / secondary UVs are not supported')
+    }
+    const source = json.images[json.textures[textureInfo.index].source]
+    const view = json.bufferViews[source.bufferView]
+    const offset = binStart + (view.byteOffset ?? 0)
+    return {
+      name: source.name ?? `image_${json.textures[textureInfo.index].source}`,
+      mimeType: source.mimeType,
+      bytes: new Uint8Array(buffer.subarray(offset, offset + view.byteLength)),
+    }
+  }
+  const materials = new Map()
+  for (const material of json.materials ?? []) {
+    const pbr = material.pbrMetallicRoughness ?? {}
+    materials.set(material.name, {
+      alphaMode: material.alphaMode ?? 'OPAQUE',
+      baseColorFactor: pbr.baseColorFactor ?? [1, 1, 1, 1],
+      metallicFactor: pbr.metallicFactor ?? 1,
+      roughnessFactor: pbr.roughnessFactor ?? 1,
+      normalScale: material.normalTexture ? (material.normalTexture.scale ?? 1) : null,
+      baseColor: image(pbr.baseColorTexture),
+      metallicRoughness: image(pbr.metallicRoughnessTexture),
+      normal: image(material.normalTexture),
+    })
+  }
+  return materials
+}
+
+/**
+ * Graft the source materials onto the FBX-converted document, by material
+ * name. Run before dedup: FBX2glTF emits untextured look-alikes (e.g. GEDI)
+ * that dedup would otherwise merge before they receive their own maps.
+ *   - factors and metallic-roughness maps come from the source;
+ *   - base-colour and normal maps keep the FBX's lossless images and only fall
+ *     back to the source's (JPEG) ones where the FBX has none;
+ *   - CUTOUT_MATERIALS render MASK, double-sided.
+ */
+export function applySourceMaterials(document, sourceMaterials) {
+  const report = { matched: 0, unmatched: [], metallicRoughness: 0, baseColor: 0, normal: 0, cutouts: [] }
+  const textures = new Map()
+  const textureFor = (image) => {
+    if (!textures.has(image.name)) {
+      textures.set(
+        image.name,
+        document.createTexture(image.name).setImage(image.bytes).setMimeType(image.mimeType),
+      )
+    }
+    return textures.get(image.name)
+  }
+  for (const material of document.getRoot().listMaterials()) {
+    const name = material.getName()
+    const source = sourceMaterials.get(name)
+    if (!source) {
+      report.unmatched.push(name)
+      continue
+    }
+    report.matched += 1
+    material
+      .setBaseColorFactor(source.baseColorFactor)
+      .setMetallicFactor(source.metallicFactor)
+      .setRoughnessFactor(source.roughnessFactor)
+    if (source.metallicRoughness) {
+      material.setMetallicRoughnessTexture(textureFor(source.metallicRoughness))
+      report.metallicRoughness += 1
+    }
+    if (!material.getBaseColorTexture() && source.baseColor) {
+      material.setBaseColorTexture(textureFor(source.baseColor))
+      report.baseColor += 1
+    }
+    if (!material.getNormalTexture() && source.normal) {
+      material.setNormalTexture(textureFor(source.normal))
+      report.normal += 1
+    }
+    if (material.getNormalTexture() && source.normalScale !== null) {
+      material.setNormalScale(source.normalScale)
+    }
+    if (CUTOUT_MATERIALS.has(name)) {
+      material.setAlphaMode('MASK').setAlphaCutoff(CUTOUT_ALPHA).setDoubleSided(true)
+      report.cutouts.push(name)
+    }
+  }
+  return report
+}
+
+// ─── Step 7: KTX2 / Basis ETC1S textures ─────────────────────────────────────
+
+/**
+ * How each texture is sampled: colour slots are sRGB, everything else is
+ * linear data; alpha is kept only where a non-OPAQUE material reads it.
+ * A texture shared between a colour and a data slot cannot be encoded for
+ * both and is rejected.
+ */
+export function classifyTextureUsage(document) {
+  const usage = new Map()
+  const mark = (texture, kind, alpha = false) => {
+    if (!texture) return
+    const entry = usage.get(texture) ?? { color: false, data: false, alpha: false }
+    entry[kind] = true
+    entry.alpha ||= alpha
+    usage.set(texture, entry)
+  }
+  for (const material of document.getRoot().listMaterials()) {
+    mark(material.getBaseColorTexture(), 'color', material.getAlphaMode() !== 'OPAQUE')
+    mark(material.getEmissiveTexture(), 'color')
+    mark(material.getNormalTexture(), 'data')
+    mark(material.getMetallicRoughnessTexture(), 'data')
+    mark(material.getOcclusionTexture(), 'data')
+  }
+  for (const [texture, entry] of usage) {
+    if (entry.color && entry.data) {
+      throw new Error(`texture "${texture.getName()}" is used as both colour and data`)
+    }
+  }
+  return usage
+}
+
+/**
+ * `ktx create` arguments for one texture. ETC1S at quality 255 measured on
+ * par with the WebP q80 it replaces (albedo 36.1 vs 36.7 dB PSNR; normals
+ * 3.9° vs 3.5° mean angular error). Plain RGB normals are deliberate: three.js
+ * does not read the two-channel `--normal-mode` layout.
+ */
+export function ktxCreateArgs(entry, input, output) {
+  const channels = entry.alpha ? 'R8G8B8A8' : 'R8G8B8'
+  return [
+    'create',
+    '--format', entry.color ? `${channels}_SRGB` : `${channels}_UNORM`,
+    '--assign-oetf', entry.color ? 'srgb' : 'linear',
+    '--encode', 'basis-lz',
+    '--clevel', '2',
+    '--qlevel', '255',
+    '--generate-mipmap',
+    input,
+    output,
+  ]
+}
+
+/**
+ * Encode every used texture in place as KTX2 (optionally downscaled first)
+ * and require KHR_texture_basisu. `maxEdge` is a number or a function of the
+ * texture's usage entry. `ktx` (KTX-Software ≥4.3) is a build-time tool only;
+ * KTX_BIN overrides the executable.
+ */
+export async function encodeTexturesKtx2(document, { maxEdge = Infinity, ktx = process.env.KTX_BIN || 'ktx' } = {}) {
+  const usage = classifyTextureUsage(document)
+  if (usage.size === 0) return { encoded: 0 }
+  const run = promisify(execFile)
+  const tmp = await mkdtemp(path.join(WORK_DIR, 'ktx-'))
+  let encoded = 0
+  try {
+    const jobs = [...usage].map(([texture, entry], index) => async () => {
+      let image = sharp(Buffer.from(texture.getImage()))
+      const edge = typeof maxEdge === 'function' ? maxEdge(entry) : maxEdge
+      if (Number.isFinite(edge)) image = image.resize(edge, edge, { fit: 'inside', withoutEnlargement: true })
+      image = entry.alpha ? image.ensureAlpha() : image.removeAlpha()
+      const input = path.join(tmp, `${index}.png`)
+      const output = path.join(tmp, `${index}.ktx2`)
+      await writeFile(input, await image.png().toBuffer())
+      try {
+        await run(ktx, ktxCreateArgs(entry, input, output), { maxBuffer: 16 * 1024 * 1024 })
+      } catch (error) {
+        throw new Error(`ktx create failed for "${texture.getName()}" (is KTX-Software ≥4.3 installed? set KTX_BIN)`, { cause: error })
+      }
+      texture.setImage(new Uint8Array(await readFile(output))).setMimeType('image/ktx2')
+      encoded += 1
+    })
+    // `ktx create` is itself multithreaded; two in flight keeps the cores busy.
+    const queue = [...jobs]
+    await Promise.all([0, 1].map(async () => {
+      while (queue.length > 0) await queue.shift()()
+    }))
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
+  document.createExtension(KHRTextureBasisu).setRequired(true)
+  return { encoded }
 }
 
 // ─── Step 3: EATCS panel material split ──────────────────────────────────────
@@ -309,7 +537,7 @@ export function stripVertexColors(document) {
 
 // ─── Step 4: optimize into a CANDIDATE (not the runtime asset) ───────────────
 
-export async function optimize(rawGlb) {
+export async function optimize(rawGlb, sourceMaterials) {
   const io = await createIO()
 
   console.log('[build-iss-model] Reading raw GLB...')
@@ -318,6 +546,15 @@ export async function optimize(rawGlb) {
   const opaqueFixed = await repairMaterialsAndTextures(document)
   if (opaqueFixed > 0) {
     console.log(`[build-iss-model] forced ${opaqueFixed} falsely-transparent materials to OPAQUE`)
+  }
+  const grafted = applySourceMaterials(document, sourceMaterials)
+  console.log(
+    `[build-iss-model] source materials: ${grafted.matched} matched, ` +
+      `${grafted.metallicRoughness} metallic-roughness / ${grafted.baseColor} base-colour / ` +
+      `${grafted.normal} normal maps added, cutouts: ${grafted.cutouts.join(', ') || 'none'}`,
+  )
+  if (grafted.unmatched.length > 0) {
+    throw new Error(`materials missing from the source GLB: ${grafted.unmatched.join(', ')}`)
   }
   // Before dedup/weld/prune so orphaned colour accessors are dropped.
   stripVertexColors(document)
@@ -329,9 +566,17 @@ export async function optimize(rawGlb) {
     // USLab_PDGFMount) — lost semantics, no triangles.
     prune({ keepLeaves: true }),
     weld(),
+    // Lossless PNG here: the KTX2 encode at the end (and the Locate LOD,
+    // which starts from the master) must not inherit a lossy intermediate.
     textureCompress({
       encoder: sharp,
-      targetFormat: 'webp',
+      targetFormat: 'png',
+      slots: /metallicRoughness/,
+      resize: [MAX_DATA_TEXTURE_EDGE, MAX_DATA_TEXTURE_EDGE],
+    }),
+    textureCompress({
+      encoder: sharp,
+      targetFormat: 'png',
       resize: [MAX_TEXTURE_EDGE, MAX_TEXTURE_EDGE],
     }),
   )
@@ -371,6 +616,21 @@ export async function optimize(rawGlb) {
       `${Math.round(decimatedTrisBefore / 1000)}k → ${Math.round(decimatedTrisAfter / 1000)}k tris`,
   )
 
+  // Emit the validated runtime rig subset into the scene extras; the loader
+  // exposes it as gltf.scene.userData.orbitalRig.
+  const scene = document.getRoot().listScenes()[0]
+  if (scene) scene.setExtras({ orbitalRig: runtimeSubset() })
+  await document.transform(prune({ keepLeaves: true }))
+
+  // The Locate LOD's source: full geometry, lossless textures, rig extras.
+  console.log('[build-iss-model] Writing master GLB...')
+  await mkdir(WORK_DIR, { recursive: true })
+  await io.write(MASTER_PATH, document)
+
+  console.log('[build-iss-model] Encoding KTX2 textures...')
+  const { encoded } = await encodeTexturesKtx2(document)
+  console.log(`[build-iss-model] ${encoded} textures → KTX2 / ETC1S`)
+
   await document.transform(
     draco({
       method: 'edgebreaker',
@@ -381,13 +641,7 @@ export async function optimize(rawGlb) {
     prune({ keepLeaves: true }),
   )
 
-  // Emit the validated runtime rig subset into the scene extras; the loader
-  // exposes it as gltf.scene.userData.orbitalRig.
-  const scene = document.getRoot().listScenes()[0]
-  if (scene) scene.setExtras({ orbitalRig: runtimeSubset() })
-
   console.log('[build-iss-model] Writing candidate GLB...')
-  await mkdir(WORK_DIR, { recursive: true })
   await io.write(CANDIDATE_PATH, document)
   return document
 }
@@ -410,15 +664,24 @@ export async function validateCandidate(candidatePath) {
     throw new Error(`rig contract violations: ${rig.errors.join('; ')}`)
   }
 
-  const hasWebp = root_.listTextures().some((t) => t.getMimeType() === 'image/webp')
+  // Every runtime texture is GPU-compressed KTX2: a stray PNG/WebP would decode
+  // to RGBA8 and quietly spend 4–8× the texture memory budgeted for it.
   const extensionsUsed = root_.listExtensionsUsed().map((e) => e.extensionName)
-  if (hasWebp && !extensionsUsed.includes('EXT_texture_webp')) {
-    throw new Error('asset has WebP images but does not declare EXT_texture_webp (nonconforming)')
-  }
-  for (const texture of root_.listTextures()) {
-    if (texture.getMimeType() === 'image/webp' && !texture.getSize()) {
-      throw new Error(`WebP texture "${texture.getName()}" has unreadable dimensions (extension not registered?)`)
+  const textures = root_.listTextures()
+  if (textures.length > 0) {
+    const basisu = root_.listExtensionsUsed().find((e) => e.extensionName === 'KHR_texture_basisu')
+    if (!basisu?.isRequired()) {
+      throw new Error('asset has textures but does not require KHR_texture_basisu (nonconforming)')
     }
+  }
+  let texturePixels = 0
+  for (const texture of textures) {
+    if (texture.getMimeType() !== 'image/ktx2') {
+      throw new Error(`texture "${texture.getName()}" is ${texture.getMimeType()}, not KTX2`)
+    }
+    const size = texture.getSize()
+    if (!size) throw new Error(`KTX2 texture "${texture.getName()}" has unreadable dimensions`)
+    texturePixels += size[0] * size[1]
   }
 
   let tris = 0
@@ -486,7 +749,9 @@ export async function validateCandidate(candidatePath) {
     meshInstances: sceneInstances,
     storedMeshes: root_.listMeshes().length,
     materials: root_.listMaterials().length,
-    textures: root_.listTextures().length,
+    textures: textures.length,
+    // ETC1S transcodes to ≤1 byte/texel on GPU formats; mip chains add ⅓.
+    textureGpuMiBUpperBound: Number(((texturePixels * 4) / 3 / (1024 * 1024)).toFixed(1)),
     triangles: tris,
     vertices: verts,
     bounds: {
@@ -510,14 +775,17 @@ export async function validateCandidate(candidatePath) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const fbxPath = process.argv[2]
-  if (!fbxPath) fail('usage: node scripts/build-iss-model.mjs <path-to-IGOAL.fbx>')
+  const [fbxPath, sourceGlbPath] = process.argv.slice(2)
+  if (!fbxPath || !sourceGlbPath) fail('usage: node scripts/build-iss-model.mjs <IGOAL.fbx> <IGOAL.glb>')
   if (!(await exists(fbxPath))) fail(`FBX not found: ${fbxPath}`)
+  if (!(await exists(sourceGlbPath))) fail(`source GLB not found: ${sourceGlbPath}`)
 
   const fbxHash = createHash('sha256').update(await readFile(fbxPath)).digest('hex')
+  const sourceGlb = await readFile(sourceGlbPath)
+  const glbHash = createHash('sha256').update(sourceGlb).digest('hex')
 
   const rawGlb = await convertFbx(fbxPath)
-  await optimize(rawGlb)
+  await optimize(rawGlb, readSourceMaterials(sourceGlb))
 
   let summary
   try {
@@ -534,19 +802,20 @@ async function main() {
   console.log(`nodes:            ${summary.nodes} (mesh instances: ${summary.meshInstances}, stored meshes: ${summary.storedMeshes})`)
   console.log(`triangles:        ${(summary.triangles / 1e6).toFixed(2)} M`)
   console.log(`vertices:         ${(summary.vertices / 1e6).toFixed(2)} M`)
-  console.log(`textures:         ${summary.textures}`)
+  console.log(`textures:         ${summary.textures} KTX2 (≤${summary.textureGpuMiBUpperBound} MiB on GPU)`)
   console.log(`extensions:       ${summary.extensionsUsed.join(', ')}`)
   console.log(`bounds (m):       ${summary.bounds.size.join(' × ')} (conservative)`)
   console.log(`bounds center:    [${summary.bounds.center.join(', ')}]`)
   console.log(`trrj limits:      ±${TRRJ_LIMITS.softwareLimitDeg}° software, ${TRRJ_LIMITS.slewDegPerSimSecond}°/sim-s`)
   console.log(`published:        ${path.relative(root, OUT_PATH)} — ${mib.toFixed(1)} MiB`)
   console.log(`source fbx sha256: ${fbxHash}`)
+  console.log(`source glb sha256: ${glbHash}`)
   if (summary.rigWarnings.length > 0) console.warn(`rig warnings: ${summary.rigWarnings.join('; ')}`)
   console.log('─────────────────────────────────────────────────────────')
 
   await writeFile(
     path.join(WORK_DIR, 'bounds-report.json'),
-    JSON.stringify({ mib, ...summary }, null, 2),
+    JSON.stringify({ mib, sourceFbxSha256: fbxHash, sourceGlbSha256: glbHash, ...summary }, null, 2),
   )
   console.log('[build-iss-model] done.')
 }

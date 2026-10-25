@@ -21,6 +21,10 @@
 //     Slew-limited, so seeks and singularity holds never snap.
 //   - Pan/tilt TV cameras sweep with a slow sinusoidal idle.
 //
+// Only the VISIBLE detail model animates; it publishes each joint's state so
+// the next tier (Locate LOD ⇄ full model) continues the same pose — a swap in
+// the middle of a slew neither snaps nor restarts it.
+//
 // The legacy detailed model and Model A are DELIBERATELY STATIC (empty
 // config): their value is proven reliability; the IGOAL model carries the
 // animation showpiece.
@@ -48,6 +52,7 @@ import {
   applyJointAngle,
   applyOscillators,
   bgaTargetAngle,
+  freshHandoff,
   resolveJoint,
   resolveOscillators,
   sarjTargetAngle,
@@ -58,6 +63,7 @@ import {
   type OscillatorSpec,
   type ResolvedJoint,
   type RigMetadataParse,
+  type SharedJointState,
   type TrrjLimits,
 } from './ISSJointKinematics'
 
@@ -109,6 +115,8 @@ interface JointRuntime {
 export interface IssAnimationsProps {
   rootRef: React.RefObject<THREE.Group | null>
   quality: DetailQuality
+  /** The model is on screen. Hidden models skip the rig entirely. */
+  active: boolean
   /** Validated scene-extras rig metadata (absent for pre-rebuild assets). */
   rigMetadata?: RigMetadataParse
   /** Detail contract failure (missing/unresolvable rig) — must not animate
@@ -117,6 +125,21 @@ export interface IssAnimationsProps {
 }
 
 const DEG2RAD = Math.PI / 180
+
+/** Joint state published by the visible detail model, keyed by joint id. */
+const sharedJointStates = new Map<string, SharedJointState>()
+
+function publishJointState(state: JointRuntime, wallMs: number): void {
+  const id = state.joint.def.id
+  const shared = sharedJointStates.get(id)
+  if (shared) {
+    shared.applied = state.applied
+    shared.lastEpochMs = state.lastEpochMs
+    shared.wallMs = wallMs
+  } else {
+    sharedJointStates.set(id, { applied: state.applied, lastEpochMs: state.lastEpochMs, wallMs })
+  }
+}
 // Slew limits are in simulation seconds; at 300× that alone would let the
 // BGAs (2°/sim-s) and TRRJs (0.75°/sim-s) sweep 225–600°/s on screen after a
 // seek or an eclipse transition. This caps the on-screen rate too, so every
@@ -125,7 +148,7 @@ const MAX_WALL_DEG_PER_SECOND = 12
 // The TRRJ law switches at the penumbra midpoint (sunVisibility = 0.5), the
 // same edge the old cylinder test used.
 
-export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAnimationsProps): null {
+export function ISSAnimations({ rootRef, quality, active, rigMetadata, onError }: IssAnimationsProps): null {
   const config = useMemo(() => configForQuality(quality, rigMetadata), [quality, rigMetadata])
   const jointsRef = useRef<JointRuntime[]>([])
   const oscillatorsRef = useRef<ReturnType<typeof resolveOscillators>>([])
@@ -176,11 +199,17 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
   useFrame((_, delta) => {
     const root = rootRef.current
     if (!root) return
+    if (!active) {
+      // Re-enter through the hand-off (or the target) when shown again.
+      for (const state of jointsRef.current) state.initialized = false
+      return
+    }
+    const nowWallMs = performance.now()
 
     const simTime = simulationClock.now()
     const epochMs = simTime.epochMs
 
-    // Camera idle sweeps run for every mounted detail model (empty config on
+    // Camera idle sweeps run for the visible detail model (empty config on
     // the static fallbacks).
     applyOscillators(oscillatorsRef.current, epochMs / 1000)
     if (jointsRef.current.length === 0) return
@@ -209,6 +238,14 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
 
     for (const state of jointsRef.current) {
       const { joint } = state
+      if (!state.initialized) {
+        const handoff = freshHandoff(sharedJointStates.get(joint.def.id), nowWallMs)
+        if (handoff) {
+          state.applied = handoff.applied
+          state.lastEpochMs = handoff.lastEpochMs
+          state.initialized = true
+        }
+      }
 
       if (joint.def.role === 'bga') {
         // Live parent frame: the SARJ above this BGA was applied earlier in
@@ -236,6 +273,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
           state.applied = advanceToward(state.applied, target, step)
         }
         applyJointAngle(joint, state.applied, _deltaQuat.current)
+        publishJointState(state, nowWallMs)
         continue
       }
 
@@ -256,6 +294,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
           state.applied = wrapPi(state.applied + wrapPi(target - state.applied))
         }
         applyJointAngle(joint, state.applied, _deltaQuat.current)
+        publishJointState(state, nowWallMs)
         continue
       }
 
@@ -289,6 +328,7 @@ export function ISSAnimations({ rootRef, quality, rigMetadata, onError }: IssAni
         state.applied = trrjAdvance(state.applied, target, step, limitRad)
       }
       applyJointAngle(joint, state.applied, _deltaQuat.current)
+      publishJointState(state, nowWallMs)
     }
   })
 
