@@ -8,7 +8,7 @@
 ## Current state (2026-10-25)
 
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 397 unit tests in 43 files, production build. CI
+  lint (0 warnings), 425 unit tests in 46 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).
@@ -60,6 +60,13 @@
   memory ~700 → ≤228 MiB full, ~97 → ~20 MiB LOD); authored metalness halved
   for brightness parity; the joint state carries across the LOD ⇄ full swap. Details:
   `plans/PROGRESS.md`, `docs/ISS_MODEL_CONTEXT.md` §1.
+- **Parked model items, re-opened (2026-10-25)**: rigid batching landed
+  (993 → 217 draw primitives full, 438 → 176 LOD); the station attitude
+  follows its LVLH target with no lag at 300×; station self-shadowing from
+  the sun ("Shadows" setting, default on; cached 2048² map redrawn only
+  when the sun or a joint moves 0.15°). TRRJ law, radiator texture,
+  Canadarm2/ERA and meshopt were re-reviewed and kept as they are, with
+  reasons in `docs/ISS_MODEL_CONTEXT.md` §9.
 - **Locate LOD + two-tier detail (2026-10-23)**: Locate/Follow load
   `iss_igoal_locate.glb` (now 6.20 MiB, 787k triangles, 176 draw primitives,
   full rig); the full 27.1 MiB `iss_igoal.glb` (217 draw primitives) loads only

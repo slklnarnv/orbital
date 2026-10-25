@@ -38,6 +38,8 @@ export function SettingsGear(): JSX.Element {
   const lensFlare = useSettingsStore((state) => state.lensFlare)
   const setLensFlare = useSettingsStore((state) => state.setLensFlare)
   const groundTrack = useSettingsStore((state) => state.groundTrack)
+  const shadows = useSettingsStore((state) => state.shadows)
+  const setShadows = useSettingsStore((state) => state.setShadows)
   const setGroundTrack = useSettingsStore((state) => state.setGroundTrack)
   // Loading indicator for the pending model candidate.
   const issDetail = useLoadingStore((state) => state.issDetail)
@@ -211,6 +213,15 @@ export function SettingsGear(): JSX.Element {
               className={`hud-label hud-option${groundTrack ? ' hud-option--on' : ''}`}
             >
               Ground track
+            </button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={shadows}
+              onClick={() => setShadows(!shadows)}
+              className={`hud-label hud-option${shadows ? ' hud-option--on' : ''}`}
+            >
+              Shadows
             </button>
           </div>
 

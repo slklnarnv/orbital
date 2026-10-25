@@ -37,6 +37,12 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   (`rendering/earth/GroundTrack.tsx`) is the "Ground track" setting, default
   off; depth is a constant clip-space bias (`groundTrackDepth.ts`), not
   `depthTest: false`; keep its colours <= 1.0 (bloom threshold).
+- **Station shadows** (`rendering/iss/stationShadow.ts`): the "Shadows"
+  setting, default on. The sun light (`SunLight`) stays `SUN_LIGHT_DISTANCE`
+  up-sun of its target; ISSModel aims the target at the station. The map is
+  cached (`autoUpdate = false`); if a shadow looks stale, check that
+  `ShadowRefreshScheduler` sees the change (sun in station frame, joint
+  angles) before touching bias.
 - **Geo freshness** (`GeoLookupService.ts`): place 30 days; weather refreshes
   after 15 min and is hidden past 1 h; local time is null without a UTC offset,
   never another cell's clock; persisted rows must pass `isGeoSnapshot`.

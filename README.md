@@ -90,7 +90,7 @@ npm run build:iss-lod
 
 ## Render settings
 
-The gear popover switches the ISS model quality, the orbit-line style (continuous or dashed with an on-screen-constant dash pitch), HDR bloom, and the "Ground track" switch (an optional 3D track and visibility footprint on the globe, off by default). Bloom composites the frame through UnrealBloom and an output pass; with it off, rendering is exactly the direct pipeline. When bloom is on, a lens-flare pass — a warm halo and faint iris ghosts, gated by Earth occlusion and the frame edge — is available and defaults to off.
+The gear popover switches the ISS model quality, the orbit-line style (continuous or dashed with an on-screen-constant dash pitch), HDR bloom, the "Ground track" switch (an optional 3D track and visibility footprint on the globe, off by default), and "Shadows" (the station shadowing itself in sunlight, on by default). Bloom composites the frame through UnrealBloom and an output pass; with it off, rendering is exactly the direct pipeline. When bloom is on, a lens-flare pass — a warm halo and faint iris ghosts, gated by Earth occlusion and the frame edge — is available and defaults to off.
 
 ## Camera controls
 

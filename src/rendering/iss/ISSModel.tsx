@@ -66,6 +66,13 @@ import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
 import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
+import { sharedJointStates } from './ISSRigAnimator'
+import {
+  SUN_LIGHT_NAME,
+  ShadowRefreshScheduler,
+  aimSunLightAt,
+  configureStationShadow,
+} from './stationShadow'
 import {
   FALLBACK_MODEL_URL,
   HIGH_MODEL_URL,
@@ -374,7 +381,18 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
     [gl],
   )
   const detailedGltf = useGLTF(spec.url, true, true, extendLoader)
-  const detailedScene = useMemo(() => detailedGltf.scene.clone(), [detailedGltf.scene])
+  const detailedScene = useMemo(() => {
+    const clone = detailedGltf.scene.clone()
+    // The detail model casts and receives the station's cached self-shadow
+    // (stationShadow.ts); nothing else in the scene does.
+    clone.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.castShadow = true
+        object.receiveShadow = true
+      }
+    })
+    return clone
+  }, [detailedGltf.scene])
   // Validated rig contract from the asset's scene extras (emitted by
   // build-iss-model.mjs as extras.orbitalRig). Absent = pre-rebuild asset
   // (built-in joint definitions apply); present-but-invalid = the asset does
@@ -709,6 +727,23 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   const _lightLocal = useRef(new THREE.Vector3())
   const _parentQuat = useRef(new THREE.Quaternion())
 
+  // ─── Station self-shadow (stationShadow.ts) ───
+  const shadowsOn = useSettingsStore((state) => state.shadows)
+  const shadowsOnRef = useRef(shadowsOn)
+  shadowsOnRef.current = shadowsOn
+  // The visible detail model (null when none is on screen); a change forces
+  // a shadow redraw for the new geometry.
+  const visibleDetailUrlRef = useRef<string | null>(null)
+  visibleDetailUrlRef.current = issDetail.status === 'ready' && showDetail
+    ? candidateSpec?.url ?? null
+    : committedShown ? committedSpec?.url ?? null : null
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null)
+  const shadowScheduler = useMemo(() => new ShadowRefreshScheduler(), [])
+  const lastShadowUrlRef = useRef<string | null>(null)
+  const _stationQuat = useRef(new THREE.Quaternion())
+  const _sunInStation = useRef(new THREE.Vector3())
+  const jointAnglesRef = useRef<number[]>([])
+
   useFrame((state) => {
     if (!groupRef.current) return
 
@@ -766,6 +801,39 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
     const shade = 1 - sunVisibility(worldPos.current, _sunDirVec)
     const lighting = eclipseLighting(shade)
+
+    // 3a. Station self-shadow: the sun light's shadow box follows the
+    // station; the cached map is redrawn only when the sun direction in the
+    // station frame or a joint has moved enough to show.
+    if (!sunLightRef.current) {
+      const found = scene.getObjectByName(SUN_LIGHT_NAME)
+      if (found instanceof THREE.DirectionalLight) sunLightRef.current = found
+    }
+    const sunLight = sunLightRef.current
+    if (sunLight) {
+      const wantShadow = shadowsOnRef.current
+      if (sunLight.castShadow !== wantShadow) {
+        if (wantShadow) configureStationShadow(sunLight)
+        sunLight.castShadow = wantShadow
+        shadowScheduler.invalidate()
+      }
+      const visibleUrl = visibleDetailUrlRef.current
+      if (wantShadow && visibleUrl) {
+        aimSunLightAt(sunLight, worldPos.current, _sunDirVec)
+        if (visibleUrl !== lastShadowUrlRef.current) {
+          lastShadowUrlRef.current = visibleUrl
+          shadowScheduler.invalidate()
+        }
+        groupRef.current.getWorldQuaternion(_stationQuat.current).invert()
+        _sunInStation.current.copy(_sunDirVec).applyQuaternion(_stationQuat.current)
+        const angles = jointAnglesRef.current
+        angles.length = 0
+        for (const joint of sharedJointStates.values()) angles.push(joint.applied)
+        if (shadowScheduler.shouldRefresh(performance.now(), _sunInStation.current, angles)) {
+          sunLight.shadow.needsUpdate = true
+        }
+      }
+    }
 
     // 3c. Dynamic camera-distance-based local point lights exposure scaling
     // Lights are 0.0 at far planetary ranges (3000 km) and scale smoothly to 1.0 during close zoom (100 km)

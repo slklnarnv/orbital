@@ -392,6 +392,19 @@ before believing any new "discrepancy", including your own.
   but with black space above, every surface not facing Earth lost its fill —
   daylight mean luminance 79 vs 106, and the array backs went black in
   eclipse — against the app's calibrated, legible look.
+- Self-shadowing (`stationShadow.ts`, setting "Shadows", default on): the
+  scene's one sun light (`SunLight`, EnvironmentLayer) casts it. The light
+  sits `SUN_LIGHT_DISTANCE` (2000 km) up-sun from its target, and ISSModel
+  aims the target at the visible station each frame, so the shadow camera is
+  a ±70 km box around the station (2048² map ≈ 7 cm of hardware per texel,
+  PCF, bias −0.0002 / normalBias 0.05). Only the visible model casts and
+  receives. The map is cached (`shadow.autoUpdate = false`): each frame only
+  re-fits the matrices to the moving station, and `ShadowRefreshScheduler`
+  redraws it when the sun in the station frame or any joint angle moves
+  0.15° (at most every 50 ms, at least every 2 s). At 1× that is one redraw
+  every ~2 s; a redraw is one depth pass of the 217-primitive model.
+  Earth's shadow on the station is NOT this map — it stays the analytic
+  `sunVisibility` term above.
 
 ---
 
@@ -594,20 +607,29 @@ silent in code and obvious only in render.
 
 ## 9. Open items (ranked)
 
-1. **Faithful parked-TRRJ operations** (optional): the implemented TRRJ law
-   (edge-to-Sun in daylight, face-to-Earth in eclipse, `trrjTargetAngle`) is an
-   illustrative autotrack; real TRRJs are usually parked. If fidelity matters,
-   change only the angle law in `ISSJointKinematics.ts` — the joint plumbing
-   (axis, frames, limits, slew) already exists.
-2. **Radiator texture fidelity** (optional): the current coating is a flat
-   white material with no radiator texture. A faithful upgrade would re-UV the
-   panel faces to white radiator texels or bake a dedicated radiator texture at
-   build time — build-time UV surgery in `build-iss-model.mjs`, NOT runtime.
-3. **ERA / Canadarm2 poses** (optional): geometry exists; ERA is merged into
-   MLM meshes (no node), Canadarm2 has a named joint chain under
-   `MT_Location` if a pose sweep is ever wanted. (The BGAs are already
-   driven, §5.)
-4. **Geometry memory** (measured option, not adopted): Draco decodes to
+1. **TRRJ law** (re-reviewed 2026-10-25, kept): `trrjTargetAngle` runs
+   edge-to-Sun in daylight and face-to-Earth in eclipse. The daylight half
+   is the published autotrack mode (the TRRJ "keeps the radiators edge-on to
+   the Sun" — Boeing P1 truss release, 2002; Lockheed Martin, 2007). The
+   eclipse half is the cold-side choice: the control trades heat rejection
+   against ammonia freeze (NASA ICES radiator paper; SAE 981732), and facing
+   warm Earth is the protective pose. In operations the joints are often
+   parked at fixed angles instead, which needs flight data the app does not
+   have; if it ever does, change only the angle law — the plumbing (axis,
+   frames, ±105° limits, slew) exists.
+2. **Radiator texture** (re-reviewed 2026-10-25, no change): the geometry
+   already models each wing's 8 panels with ~5 cm hinge gaps at ~2.65 m
+   pitch (measured on the master), and the real Z-93 face sheets are
+   uniform white, so the flat `Radiator_Panel_Coating` is faithful. The
+   sources carry no radiator art; the only missing detail is the flow-tube
+   lines, under a pixel at every camera distance but Inspect.
+3. **ERA / Canadarm2 poses** (re-reviewed 2026-10-25, no change): ERA is
+   merged into the MLM meshes (no node to drive); Canadarm2 has a named
+   joint chain under `MT_Location`, but its real pose varies with each
+   operation and is usually a long-held park, so an invented sweep would
+   be less accurate than the authored park pose. (The BGAs are driven, §5.)
+4. **Geometry memory** (re-reviewed 2026-10-25, still not adopted; download
+   would regress): Draco decodes to
    float32 — 214 MB of vertex/index data for the full model. `EXT_meshopt_
    compression` + `KHR_mesh_quantization` (positions 14-bit, normals 8–10-bit,
    UVs 12-bit) measured 113 MB on the GPU and a 1.1–1.2 s parse vs Draco's
@@ -624,3 +646,6 @@ silent in code and obvious only in render.
 6. **Blanket box detail** (cosmetic): the two bare wings (2A, 3B) show the
    blanket-box end hardware more prominently than the iROSA-covered wings;
    correct per asset, listed only so it isn't mistaken for a bug.
+7. **Self-shadowing**: LANDED 2026-10-25 (§4): the arrays shade the truss
+   and the modules shade each other; a cached map refreshed on sun or joint
+   motion, toggle in settings.

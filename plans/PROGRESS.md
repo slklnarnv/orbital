@@ -22,6 +22,17 @@
   position so the target turns every frame instead of stepping at 10 Hz.
 - **Hidden detail model's matrix updates**: measured 0.03 ms/frame on the
   batched assets (512 objects) — closed, no change.
+- **Self-shadowing landed.** The sun light casts a 2048² PCF map fitted
+  to a ±70 km box around the visible station (the light follows its target,
+  aimed at the station each frame). The map is cached and redrawn only when
+  the sun in the station frame or a joint moves 0.15° (≥ 50 ms, ≤ 2 s apart),
+  about once every 2 s at 1×. Setting "Shadows", default on.
+- **Re-reviewed, kept** (reasons in `docs/ISS_MODEL_CONTEXT.md` §9): the
+  TRRJ law (daylight edge-on is the published autotrack; eclipse
+  face-to-Earth is the freeze-protective pose), the radiator coating (the
+  geometry already has the 8 panels per wing; real face sheets are uniform
+  white), Canadarm2/ERA (no driveable ERA node; the arm's real pose is a
+  per-operation park), meshopt (download would grow ≈ 9 MB).
 
 ## ISS animation audit (2026-10-25)
 
