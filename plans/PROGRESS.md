@@ -6,6 +6,16 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Docs pass + live re-check (2026-10-25)
+
+- README rewritten for a public reader: a primer on what the view shows, a
+  Mermaid pipeline diagram, a controls table and four live-site screenshots
+  (`docs/images/*.webp`, 28–54 KiB each, outside `public/` so they never
+  ship with the app). NOTICE lists the Basis transcoder.
+- Live re-check (NEXT_STEPS item 1) passed: endpoints, cache headers, a
+  console free of CSP violations, IGOAL at Locate, 60 fps on the owner's
+  integrated GPU. The human visual pass remains open.
+
 ## Place names: BigDataCloud → offline Natural Earth index (2026-10-25)
 
 - **Symptom (live only).** Every BigDataCloud request logged a `connect-src`
