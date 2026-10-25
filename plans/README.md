@@ -87,13 +87,15 @@ Wave 2 (planned at `aa206a1`, after wave 1 merged):
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [011](011-penumbra-sun-visibility.md) | Penumbra sun visibility (roadmap D.1) | P1 | M | 006 | TODO |
-| [012](012-day-night-countdown.md) | Day/night countdown in the HUD (B.1) | P2 | M | 011, 004 | TODO |
+| [011](011-penumbra-sun-visibility.md) | Penumbra sun visibility (roadmap D.1) | P1 | M | 006 | DONE |
+| [012](012-day-night-countdown.md) | Day/night countdown in the HUD (B.1) | P2 | M | 011, 004 | DONE |
 | [013](013-playwright-smoke-suite.md) | Playwright smoke suite + CI job (A.3) | P2 | M | 003 | TODO |
-| [014](014-ground-track-hud.md) | Ground-track sampler + HUD globe track (B.2 first cut) | P2 | S–M | — | TODO |
-| [015](015-ground-track-3d.md) | Optional 3D ground track + footprint with constant-ulp depth bias (B.2 + D.3) | P3 | M | 014 | TODO |
+| [014](014-ground-track-hud.md) | Ground-track sampler + HUD globe track (B.2 first cut) | P2 | S–M | — | DONE |
+| [015](015-ground-track-3d.md) | Optional 3D ground track + footprint with constant-ulp depth bias (B.2 + D.3) | P3 | M | 014 | DONE |
 
-A final docs pass follows wave 2: fold both errata banners, fix the drift the
+| [016](016-docs-pass.md) | Docs pass: fold errata banners, fix drift, record waves 1–2 | P1 | M | 002–015 | TODO |
+
+The docs pass (016): fold both errata banners, fix the drift the
 audit found (60→70 km clearance, `lerpLookAt`, MiB units, flight formulas,
 test counts, layout, LIVE/HYBRID wording), and record everything that landed.
 
