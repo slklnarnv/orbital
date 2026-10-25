@@ -1,4 +1,4 @@
-import { delMany, entries, get, set } from 'idb-keyval'
+import { del, delMany, entries, get, set } from 'idb-keyval'
 import { ApiRateLimiter } from '@/core/api/ApiRateLimiter'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
@@ -79,7 +79,9 @@ const WEATHER_LABELS: Record<number, string> = {
 }
 
 export function describeWeatherCode(code: number): string {
-  return WEATHER_LABELS[code] ?? '—'
+  // hasOwn, not a bare index: a non-numeric code such as 'toString' would
+  // otherwise resolve to an inherited Object.prototype member.
+  return Number.isInteger(code) && Object.hasOwn(WEATHER_LABELS, code) ? WEATHER_LABELS[code] : '—'
 }
 
 // ─── Snapshot shape ───────────────────────────────────────────────────────────
@@ -110,6 +112,36 @@ export interface GeoSnapshot {
    * placeFetchedAt so a place fetch can never make old weather look fresh.
    */
   weatherFetchedAt?: number | null
+}
+
+/**
+ * Validates a snapshot read back from IndexedDB. Live responses are validated
+ * on arrival; persisted rows must be too, because a corrupt or old-schema row
+ * would otherwise throw inside the HUD (which sits outside the canvas error
+ * boundaries) for the whole 30-day TTL.
+ */
+export function isGeoSnapshot(value: unknown): value is GeoSnapshot {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+
+  const nullableText = (x: unknown): boolean => x === null || (typeof x === 'string' && x.length <= 120)
+  const nullableNumber = (x: unknown, min: number, max: number): boolean =>
+    x === null || (typeof x === 'number' && Number.isFinite(x) && x >= min && x <= max)
+  const optionalStamp = (x: unknown): boolean =>
+    x === undefined || x === null || (typeof x === 'number' && Number.isFinite(x))
+
+  return (
+    nullableText(v.placeName) &&
+    nullableText(v.continent) &&
+    nullableText(v.timezone) &&
+    nullableText(v.tzAbbreviation) &&
+    nullableNumber(v.utcOffsetSeconds, -14 * 3600, 14 * 3600) &&
+    nullableNumber(v.temperatureC, -100, 100) &&
+    (v.weatherCode === null || (typeof v.weatherCode === 'number' && Number.isInteger(v.weatherCode) && v.weatherCode >= 0 && v.weatherCode <= 99)) &&
+    typeof v.fetchedAt === 'number' && Number.isFinite(v.fetchedAt) &&
+    optionalStamp(v.placeFetchedAt) &&
+    optionalStamp(v.weatherFetchedAt)
+  )
 }
 
 /**
@@ -356,12 +388,18 @@ export class GeoLookupService {
       return mem
     }
 
+    const key = `${IDB_KEY_PREFIX}${cellKey}`
     try {
-      const stored = await get<GeoSnapshot>(`${IDB_KEY_PREFIX}${cellKey}`)
-      if (stored && ageOf(stored.placeFetchedAt, stored.fetchedAt) <= GEO_CELL_TTL_MS) {
-        this._memCache.set(cellKey, stored)
-        this._refreshWeatherIfStale(stored, cellKey)
-        return stored
+      const stored: unknown = await get(key)
+      if (stored !== undefined) {
+        if (!isGeoSnapshot(stored)) {
+          // Corrupt or old-schema row: drop it and treat the cell as a miss.
+          void del(key).catch(() => { /* silent */ })
+        } else if (ageOf(stored.placeFetchedAt, stored.fetchedAt) <= GEO_CELL_TTL_MS) {
+          this._memCache.set(cellKey, stored)
+          this._refreshWeatherIfStale(stored, cellKey)
+          return stored
+        }
       }
     } catch {
       // IndexedDB unavailable — memory cache still covers this session

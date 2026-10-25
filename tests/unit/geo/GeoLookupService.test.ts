@@ -7,6 +7,7 @@ import {
   cellKeyFor,
   describeWeatherCode,
   formatLocalClock,
+  isGeoSnapshot,
   placeFromBigDataCloud,
   weatherFromOpenMeteo,
 } from '@/core/geo/GeoLookupService'
@@ -95,6 +96,63 @@ describe('describeWeatherCode', () => {
 
   it('degrades unknown codes to an em dash', () => {
     expect(describeWeatherCode(142)).toBe('—')
+  })
+
+  it('labels a known code', () => {
+    expect(describeWeatherCode(2)).toBe('Partly cloudy')
+  })
+
+  it('never resolves inherited prototype members or non-integers', () => {
+    expect(describeWeatherCode('toString' as unknown as number)).toBe('—')
+    expect(describeWeatherCode(2.5)).toBe('—')
+  })
+})
+
+describe('isGeoSnapshot', () => {
+  const VALID = {
+    placeName: 'Japan',
+    continent: 'Asia',
+    timezone: 'Asia/Tokyo',
+    tzAbbreviation: 'JST',
+    utcOffsetSeconds: 32400,
+    temperatureC: 21.4,
+    weatherCode: 2,
+    fetchedAt: 1_700_000_000_000,
+    placeFetchedAt: 1_700_000_000_000,
+    weatherFetchedAt: 1_700_000_000_000,
+  }
+
+  it('accepts a valid row and an old-schema row without the per-field stamps', () => {
+    expect(isGeoSnapshot(VALID)).toBe(true)
+    const { placeFetchedAt: _p, weatherFetchedAt: _w, ...oldSchema } = VALID
+    expect(isGeoSnapshot(oldSchema)).toBe(true)
+  })
+
+  it('accepts null fields', () => {
+    expect(isGeoSnapshot({
+      ...VALID,
+      placeName: null,
+      continent: null,
+      timezone: null,
+      tzAbbreviation: null,
+      utcOffsetSeconds: null,
+      temperatureC: null,
+      weatherCode: null,
+      weatherFetchedAt: null,
+    })).toBe(true)
+  })
+
+  it('rejects wrong types and out-of-range values', () => {
+    expect(isGeoSnapshot({ ...VALID, placeName: {} })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, weatherCode: '2' })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, weatherCode: 2.5 })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, utcOffsetSeconds: 1e9 })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, temperatureC: 500 })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, placeName: 'x'.repeat(121) })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, fetchedAt: Number.NaN })).toBe(false)
+    expect(isGeoSnapshot({ ...VALID, weatherFetchedAt: '1' })).toBe(false)
+    expect(isGeoSnapshot(null)).toBe(false)
+    expect(isGeoSnapshot('row')).toBe(false)
   })
 })
 
