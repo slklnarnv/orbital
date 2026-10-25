@@ -37,6 +37,12 @@ describe('sanitizePersistedSettings', () => {
     expect(useSettingsStore.getState().groundTrack).toBe(false)
   })
 
+  it('keeps a boolean shadows setting, drops a non-boolean one, and defaults it on', () => {
+    expect(sanitizePersistedSettings({ shadows: false })).toEqual({ shadows: false })
+    expect(sanitizePersistedSettings({ shadows: 1 })).toEqual({})
+    expect(useSettingsStore.getState().shadows).toBe(true)
+  })
+
   it('ignores unknown keys, including prototype-shaped ones', () => {
     const parsed = JSON.parse('{"__proto__":{"polluted":true},"selectionNonce":99,"extra":1}')
     const out = sanitizePersistedSettings(parsed)

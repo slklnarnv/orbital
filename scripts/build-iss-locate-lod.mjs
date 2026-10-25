@@ -41,8 +41,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { draco, prune, simplifyPrimitive } from '@gltf-transform/functions'
 import { MeshoptSimplifier } from 'meshoptimizer'
-import { createIO, encodeTexturesKtx2, validateCandidate } from './build-iss-model.mjs'
-import { REQUIRED_NODES } from './iss-rig-manifest.mjs'
+import { batchRigidMeshes, createIO, encodeTexturesKtx2, pruneEmptyLeaves, validateCandidate } from './build-iss-model.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WORK_DIR = path.join(root, '.tmp-iss-build')
@@ -85,24 +84,8 @@ export function stripDetailMeshes(document, { keep = KEEP_DETAIL_PATTERN, strip 
   return { strippedNodes, keptDetailNodes }
 }
 
-/**
- * Remove nodes left with neither a mesh nor children (meshes stripped above),
- * repeatedly, so whole emptied branches go. Rig-named nodes always stay —
- * including the protected empty attachment frames.
- */
-export function pruneEmptyLeaves(document, keep = new Set(REQUIRED_NODES)) {
-  let removed = 0
-  for (let changed = true; changed;) {
-    changed = false
-    for (const node of document.getRoot().listNodes()) {
-      if (node.getMesh() || node.listChildren().length > 0 || keep.has(node.getName())) continue
-      node.dispose()
-      removed += 1
-      changed = true
-    }
-  }
-  return { emptyNodesRemoved: removed }
-}
+// Shared with the high build (the strip above leaves the same emptied leaves).
+export { pruneEmptyLeaves }
 
 /**
  * Simplify every primitive still reachable after the strip. The high asset is
@@ -138,13 +121,15 @@ export async function simplifyKeptPrimitives(document, { ratio = SIMPLIFY_RATIO,
 /**
  * Transform the master document into the Locate document in place: strip,
  * drop emptied leaves, prune the orphaned meshes/accessors/materials,
- * simplify, encode 512 px KTX2 textures, then Draco.
+ * simplify, batch the rigid geometry, encode KTX2 textures, then Draco.
  */
 export async function buildLocateDocument(document) {
   const stripped = stripDetailMeshes(document)
   const emptied = pruneEmptyLeaves(document)
   await document.transform(prune({ keepLeaves: true }))
   const simplified = await simplifyKeptPrimitives(document)
+  const { primitivesBefore, primitivesAfter, emptyNodesRemoved: batchEmptied } = batchRigidMeshes(document)
+  await document.transform(prune({ keepLeaves: true }))
   await encodeTexturesKtx2(document, {
     maxEdge: (usage) => (usage.color ? MAX_COLOR_TEXTURE_EDGE : MAX_DATA_TEXTURE_EDGE),
   })
@@ -157,7 +142,12 @@ export async function buildLocateDocument(document) {
     }),
   )
   await document.transform(prune({ keepLeaves: true }))
-  return { ...stripped, ...emptied, ...simplified }
+  return {
+    ...stripped,
+    ...simplified,
+    emptyNodesRemoved: emptied.emptyNodesRemoved + batchEmptied,
+    batchedPrimitives: `${primitivesBefore} → ${primitivesAfter}`,
+  }
 }
 
 function fail(message) {
@@ -211,6 +201,7 @@ async function main() {
   console.log(`triangles:        ${(report.triangles / 1000).toFixed(0)}k (strip: ${report.strippedNodes} nodes, simplify: ${report.simplified} prims)`)
   console.log(`vertices:         ${(report.vertices / 1000).toFixed(0)}k`)
   console.log(`textures:         ${report.textures} KTX2`)
+  console.log(`draw primitives:  ${report.batchedPrimitives} (rigid batching)`)
   console.log(`extensions:       ${report.extensionsUsed.join(', ')}`)
   console.log(`bounds (m):       ${report.bounds.size.join(' × ')}`)
   console.log(`source sha256:    ${report.sourceSha256}`)

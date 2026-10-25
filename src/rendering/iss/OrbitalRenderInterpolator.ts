@@ -29,6 +29,14 @@ function copyWorldPosition(
   target.set(positionECI.x, positionECI.z, -positionECI.y)
 }
 
+/** Same TEME → world swap for the velocity vector. */
+function copyWorldVelocity(
+  velocityECI: OrbitalState['velocityECI'],
+  target: THREE.Vector3,
+): void {
+  target.set(velocityECI.x, velocityECI.z, -velocityECI.y)
+}
+
 /**
  * Smooths application-owned orbital snapshots for frame-rate rendering.
  *
@@ -37,6 +45,9 @@ function copyWorldPosition(
  * interpolator consumes each immutable snapshot once and blends to it over the
  * observed sample interval without changing simulation truth or running SGP4 in the
  * render loop.
+ *
+ * Velocity blends on the same schedule (`sampleVelocity`), so the attitude
+ * built from it turns every frame instead of stepping at 10 Hz.
  *
  * Discontinuous snapshots — explicit clock seeks or telemetry gaps — are an
  * exception: both translation and the interpolator's own state reseed at the
@@ -48,6 +59,9 @@ export class OrbitalRenderInterpolator {
   private readonly origin = new THREE.Vector3()
   private readonly target = new THREE.Vector3()
   private readonly current = new THREE.Vector3()
+  private readonly velocityOrigin = new THREE.Vector3()
+  private readonly velocityTarget = new THREE.Vector3()
+  private readonly velocityCurrent = new THREE.Vector3()
   private readonly lastSnapshotPosition = new THREE.Vector3()
   private lastSnapshot: OrbitalState | null = null
   private lastSnapshotFrameSeconds = 0
@@ -66,6 +80,7 @@ export class OrbitalRenderInterpolator {
 
     if (snapshot !== this.lastSnapshot) {
       this.sampleTransition(frameTimeSeconds, this.current)
+      this.sampleVelocity(frameTimeSeconds, this.velocityCurrent)
 
       const observedInterval = frameTimeSeconds - this.lastSnapshotFrameSeconds
       copyWorldPosition(snapshot.positionECI, this.target)
@@ -74,6 +89,8 @@ export class OrbitalRenderInterpolator {
         this.reseed(snapshot, frameTimeSeconds)
       } else {
         this.origin.copy(this.current)
+        this.velocityOrigin.copy(this.velocityCurrent)
+        copyWorldVelocity(snapshot.velocityECI, this.velocityTarget)
         this.transitionStartSeconds = frameTimeSeconds
         this.transitionDurationSeconds = Math.min(
           observedInterval > 0 ? observedInterval : DEFAULT_SAMPLE_INTERVAL_SECONDS,
@@ -97,6 +114,8 @@ export class OrbitalRenderInterpolator {
   private reseed(snapshot: OrbitalState, frameTimeSeconds: number): void {
     copyWorldPosition(snapshot.positionECI, this.target)
     this.origin.copy(this.target)
+    copyWorldVelocity(snapshot.velocityECI, this.velocityTarget)
+    this.velocityOrigin.copy(this.velocityTarget)
     this.lastSnapshotPosition.copy(this.target)
     this.lastSnapshot = snapshot
     this.lastSnapshotFrameSeconds = frameTimeSeconds
@@ -121,14 +140,24 @@ export class OrbitalRenderInterpolator {
     return stepKm > plausibleKm
   }
 
-  private sampleTransition(frameTimeSeconds: number, result: THREE.Vector3): THREE.Vector3 {
-    if (this.transitionDurationSeconds <= 0) return result.copy(this.target)
+  /**
+   * World-frame velocity at the frame time, blended on the position's
+   * schedule. Call after `sample()` for the same frame.
+   */
+  sampleVelocity(frameTimeSeconds: number, result: THREE.Vector3): THREE.Vector3 {
+    return result.lerpVectors(this.velocityOrigin, this.velocityTarget, this.progress(frameTimeSeconds))
+  }
 
-    const progress = THREE.MathUtils.clamp(
+  private progress(frameTimeSeconds: number): number {
+    if (this.transitionDurationSeconds <= 0) return 1
+    return THREE.MathUtils.clamp(
       (frameTimeSeconds - this.transitionStartSeconds) / this.transitionDurationSeconds,
       0,
       1,
     )
-    return result.lerpVectors(this.origin, this.target, progress)
+  }
+
+  private sampleTransition(frameTimeSeconds: number, result: THREE.Vector3): THREE.Vector3 {
+    return result.lerpVectors(this.origin, this.target, this.progress(frameTimeSeconds))
   }
 }

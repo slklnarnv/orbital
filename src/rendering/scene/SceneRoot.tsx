@@ -198,6 +198,10 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.0 // Calibrated highlight compression for deep blacks
           gl.outputColorSpace = THREE.SRGBColorSpace // Photographic color space
+          // Shadow maps exist only for the station's cached self-shadow; each
+          // light opts in (castShadow) and redraws on demand (stationShadow.ts).
+          gl.shadowMap.enabled = true
+          gl.shadowMap.type = THREE.PCFShadowMap
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
           // DEV DEBUG HOOK: scene access for runtime diagnostics (matching __orbitalControls)
           if (import.meta.env.DEV) {

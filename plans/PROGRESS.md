@@ -6,6 +6,34 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Parked model items, re-opened (2026-10-25)
+
+- **Rigid batching (plan 001 Phase D) landed.** `batchRigidMeshes` merges
+  static geometry per (rigid part × module × material): 993 → 217 draw
+  primitives on the full model, 438 → 176 on the LOD, 703 → 294 nodes; the
+  files also shrank (full 24.2 MB, LOD 5.5 MB brotli). Joints and cameras
+  turn exactly what they did (the rig simulation passes on the batched
+  assets); mirrored parts keep their facing (unit test); identical-view
+  renders differ only by sub-pixel edge shifts.
+- **Attitude lag at 300× fixed.** The station's attitude slerped toward its
+  LVLH target and trailed it by rate ÷ stiffness (~12° of pitch at 300×).
+  `AttitudeFollower` now follows the target exactly and eases in only jumps
+  (first capture, seek, TLE swap); the interpolator blends velocity like
+  position so the target turns every frame instead of stepping at 10 Hz.
+- **Hidden detail model's matrix updates**: measured 0.03 ms/frame on the
+  batched assets (512 objects) — closed, no change.
+- **Self-shadowing landed.** The sun light casts a 2048² PCF map fitted
+  to a ±70 km box around the visible station (the light follows its target,
+  aimed at the station each frame). The map is cached and redrawn only when
+  the sun in the station frame or a joint moves 0.15° (≥ 50 ms, ≤ 2 s apart),
+  about once every 2 s at 1×. Setting "Shadows", default on.
+- **Re-reviewed, kept** (reasons in `docs/ISS_MODEL_CONTEXT.md` §9): the
+  TRRJ law (daylight edge-on is the published autotrack; eclipse
+  face-to-Earth is the freeze-protective pose), the radiator coating (the
+  geometry already has the 8 panels per wing; real face sheets are uniform
+  white), Canadarm2/ERA (no driveable ERA node; the arm's real pose is a
+  per-operation park), meshopt (download would grow ≈ 9 MB).
+
 ## ISS animation audit (2026-10-25)
 
 The rig was measured instead of eyeballed: the per-frame step moved out of
@@ -293,7 +321,8 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 
 ## Open items
 
-- **Phase D** (animation-safe rigid batching): POSTPONED by user decision.
+- **Phase D** (animation-safe rigid batching): LANDED 2026-10-25 —
+  `batchRigidMeshes`, 993 → 217 draw primitives (full), 438 → 176 (LOD).
   Constraints and rollback asset if ever revisited: history
   §"Remaining work (not started)".
 - **Investigate-first list and deferred majors**: see `plans/README.md`

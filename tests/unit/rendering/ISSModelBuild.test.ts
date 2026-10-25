@@ -29,6 +29,7 @@ import sharp from 'sharp'
 
 import {
   applySourceMaterials,
+  batchRigidMeshes,
   classifyTextureUsage,
   ktxCreateArgs,
   readSourceMaterials,
@@ -586,5 +587,76 @@ describe('published high asset', () => {
     expect(byName.get('Truss')?.alphaMode ?? 'OPAQUE').toBe('OPAQUE')
     // Authored metalness is halved (SOURCE_METALLIC_SCALE): no factor above it.
     expect(Math.max(...materials.map((m) => m.pbrMetallicRoughness?.metallicFactor ?? 1))).toBeLessThanOrEqual(SOURCE_METALLIC_SCALE)
+  })
+})
+
+// ─── Rigid batching (Phase D) ─────────────────────────────────────────────────
+
+describe('batchRigidMeshes', () => {
+  /**
+   * World-space triangles with their EFFECTIVE facing: three.js flips the
+   * front face of a mirrored (negative-determinant) object, so the rendered
+   * normal is the winding normal times the sign of the world determinant.
+   * Vertices are sorted, so a winding reversal alone does not count as change.
+   */
+  function worldTriangles(doc: Document): Array<{ verts: number[][]; facing: number[] }> {
+    const out: Array<{ verts: number[][]; facing: number[] }> = []
+    for (const node of doc.getRoot().listNodes()) {
+      const mesh = node.getMesh()
+      if (!mesh) continue
+      const m = node.getWorldMatrix()
+      const det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[4] * (m[1] * m[10] - m[2] * m[9]) + m[8] * (m[1] * m[6] - m[2] * m[5])
+      const apply = (p: number[]) => [0, 1, 2].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r])
+      for (const prim of mesh.listPrimitives()) {
+        const pos = prim.getAttribute('POSITION')
+        const idx = prim.getIndices()
+        if (!pos || !idx) continue
+        for (let i = 0; i < idx.getCount(); i += 3) {
+          const tri = [0, 1, 2].map((k) => apply(pos.getElement(idx.getScalar(i + k), [])))
+          const u = tri[1].map((v, c) => v - tri[0][c])
+          const v = tri[2].map((w, c) => w - tri[0][c])
+          const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+          const sorted = [...tri].sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+          out.push({ verts: sorted, facing: n.map((c) => c * Math.sign(det)) })
+        }
+      }
+    }
+    const key = (t: { verts: number[][] }) => t.verts.map((p) => p.map((c) => c.toFixed(4)).join(',')).join('|')
+    return out.sort((a, b) => key(a).localeCompare(key(b)))
+  }
+
+  function station(): { doc: Document; joint: GltfNode } {
+    const doc = new Document()
+    const scene = doc.createScene('scene')
+    const hub = doc.createNode('SSREF').setScale([2, 2, 2])
+    scene.addChild(doc.createNode('RootNode').addChild(hub))
+    const material = doc.createMaterial('Truss')
+    const part = (name: string, t: [number, number, number], s: [number, number, number] = [1, 1, 1]) => {
+      const { prim } = trianglePrim(doc, 'unused', [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+      prim.setMaterial(material)
+      return doc.createNode(name).setTranslation(t).setScale(s).setMesh(doc.createMesh(name).addPrimitive(prim))
+    }
+    // Static module with two parts (one authored mirrored), a joint subtree.
+    hub.addChild(doc.createNode('Node1').addChild(part('A', [1, 0, 0])).addChild(part('B', [0, 3, 0], [-1, 1, 1])))
+    const joint = doc.createNode('PORT_ALPHA_ROT').setTranslation([0, 0, 5])
+    joint.addChild(part('Truss_P4', [2, 0, 0])).addChild(part('Truss_P5', [4, 0, 0]))
+    hub.addChild(joint)
+    return { doc, joint }
+  }
+
+  it('merges per rigid part and module while preserving every world-space triangle and its facing', () => {
+    const { doc, joint } = station()
+    const before = worldTriangles(doc)
+    const report = batchRigidMeshes(doc)
+    expect(report).toMatchObject({ primitivesBefore: 4, primitivesAfter: 2 })
+    const after = worldTriangles(doc)
+    expect(after).toHaveLength(before.length)
+    after.forEach((t, i) => {
+      t.verts.forEach((p, k) => p.forEach((c, j) => expect(c).toBeCloseTo(before[i].verts[k][j], 6)))
+      // Same rendered facing: the mirrored part's winding was reversed with its bake.
+      t.facing.forEach((c, j) => expect(c).toBeCloseTo(before[i].facing[j], 6))
+    })
+    // The joint's geometry stays under the joint, so it still turns with it.
+    expect(joint.listChildren().some((child) => !!child.getMesh())).toBe(true)
   })
 })

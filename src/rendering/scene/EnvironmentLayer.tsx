@@ -4,6 +4,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
+import { SUN_LIGHT_DISTANCE, SUN_LIGHT_NAME } from '../iss/stationShadow'
 import { SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import { assetUrl } from '@/utils/assetUrl'
 import billboardVert from '../shaders/billboard.vert'
@@ -122,14 +123,13 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     // Reuse hoisted vector — zero GC allocation
     _sunDirVec.set(sunDir.x, sunDir.y, sunDir.z).normalize()
 
-    // Position sun light at a distance well beyond orbital scale (e.g. 300,000 units)
-    // 1 unit = 1 km, Earth radius = 6371 units, ISS radius = 6779 units
-    const solarDistance = 300000
-    sunLightRef.current.position.set(
-      sunDir.x * solarDistance,
-      sunDir.y * solarDistance,
-      sunDir.z * solarDistance
-    )
+    // A directional light shines along position → target, so only the
+    // direction matters for lighting. The light follows its target along the
+    // sun direction: the ISS aims the target at the station for its cached
+    // self-shadow (stationShadow.ts); otherwise the target stays at Earth's
+    // centre. Either way the light direction is the sun direction.
+    const light = sunLightRef.current
+    light.position.copy(light.target.position).addScaledVector(_sunDirVec, SUN_LIGHT_DISTANCE)
 
     // Position and orient the procedural sun billboard
     if (sunMeshRef.current) {
@@ -181,9 +181,9 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       {/* Primary directional light source representing the Sun */}
       <directionalLight
         ref={sunLightRef}
+        name={SUN_LIGHT_NAME}
         intensity={1.9}         // Slightly lifted to keep the smaller sun disc dominant
         color="#fff3e2"          // Warm solar white — warms further via the terminator shading
-        castShadow={false}
       />
 
       {/* ─── Procedural Cinematic Solar Presence ─── */}

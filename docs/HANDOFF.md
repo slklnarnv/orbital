@@ -37,6 +37,12 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   (`rendering/earth/GroundTrack.tsx`) is the "Ground track" setting, default
   off; depth is a constant clip-space bias (`groundTrackDepth.ts`), not
   `depthTest: false`; keep its colours <= 1.0 (bloom threshold).
+- **Station shadows** (`rendering/iss/stationShadow.ts`): the "Shadows"
+  setting, default on. The sun light (`SunLight`) stays `SUN_LIGHT_DISTANCE`
+  up-sun of its target; ISSModel aims the target at the station. The map is
+  cached (`autoUpdate = false`); if a shadow looks stale, check that
+  `ShadowRefreshScheduler` sees the change (sun in station frame, joint
+  angles) before touching bias.
 - **Geo freshness** (`GeoLookupService.ts`): place 30 days; weather refreshes
   after 15 min and is hidden past 1 h; local time is null without a UTC offset,
   never another cell's clock; persisted rows must pass `isGeoSnapshot`.
@@ -77,10 +83,11 @@ LOD failure demotes to legacy.
 - **2026-10-25 rebuild** (supersedes the sizes and WebP figures above): both
   tiers now ship KTX2 / Basis ETC1S textures and the authored IGOAL materials
   (`docs/ISS_MODEL_CONTEXT.md` §1.1). The LOD is derived from the high build's
-  master, keeps every rig node but drops 418 emptied leaves (285 nodes), and
-  measures 6.53 MiB (≈5.7 MB brotli, was 4.4) with ~20 MiB of GPU texture
-  memory (was ~97). The full asset is 28.1 MiB (≈25 MB brotli, was 16.5) with
-  ≤228 MiB of texture memory (was ~700). Image decode left the main thread
+  master, keeps every rig node, and with rigid batching measures 6.20 MiB
+  (≈5.5 MB brotli, was 4.4), 176 draw primitives (was 432) and ~20 MiB of GPU
+  texture memory (was ~97). The full asset is 27.1 MiB (≈24.2 MB brotli, was
+  16.5) with 217 draw primitives (was 980) and ≤228 MiB of texture memory
+  (was ~700). Image decode left the main thread
   (transcoding runs in workers), so the GPU preparation is shorter.
 - Verified: `npm run verify` exit 0 (246 tests), LOD passes
   `iss-model-manifest --check-only`, high asset unchanged. **Browser-verified

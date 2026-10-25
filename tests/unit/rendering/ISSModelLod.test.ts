@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { Document, type Mesh, type Primitive } from '@gltf-transform/core'
+import { Document, type Mesh, type Node as GltfNode, type Primitive } from '@gltf-transform/core'
 
 import { validateCandidate } from '../../../scripts/build-iss-model.mjs'
 import {
@@ -85,10 +85,13 @@ describe('buildLocateDocument', () => {
 
     expect(stats.emptyNodesRemoved).toBe(1)
 
+    // Geometry now lives in each part's rigid batch (a child of the part).
     const byName = new Map(doc.getRoot().listNodes().map((node) => [node.getName(), node]))
-    expect(byName.get('AMS_Details')?.getMesh()).not.toBeNull()
+    const hasGeometry = (node: GltfNode | undefined): boolean =>
+      !!node && (!!node.getMesh() || node.listChildren().some(hasGeometry))
+    expect(hasGeometry(byName.get('AMS_Details'))).toBe(true)
     expect(byName.has('Truss_S0_Details_Misc')).toBe(false)
-    expect(byName.get('Truss_S0')?.getMesh()).not.toBeNull()
+    expect(hasGeometry(byName.get('Truss_S0'))).toBe(true)
   })
 })
 

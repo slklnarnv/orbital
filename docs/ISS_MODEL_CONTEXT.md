@@ -26,7 +26,7 @@ intentional and the entire camera/LOD system is calibrated to it. **Never
 "fix" the scale.**
 
 **The model asset** (the subject of this briefing):
-`public/models/iss_igoal.glb` — 28.1 MiB (≈25 MB over the wire with brotli),
+`public/models/iss_igoal.glb` — 27.1 MiB (≈24.2 MB over the wire with brotli),
 Draco geometry + KTX2 (Basis ETC1S) textures, built from the two IGOAL
 sources below.
 
@@ -102,15 +102,26 @@ What it does (all steps are in `scripts/build-iss-model.mjs`, ~3.5 min):
    reads it. Measured on par with the WebP q80 it replaced (albedo 36.1 vs
    36.7 dB PSNR, normals 3.9° vs 3.5° mean angular error), at ≤228 MiB of GPU
    texture memory for 113 textures — the WebP set decoded to ~700 MiB of RGBA8
-   for 73. Then Draco (14-bit positions, 10-bit normals — raised from default
-   8 to avoid visible banding, 12-bit UVs), and the build writes a CANDIDATE:
+   for 73. Before that, **rigid batching** (`batchRigidMeshes`, plan 001
+   Phase D): static geometry merges into one primitive per (rigid part ×
+   module × material). A rigid part is the static station or the subtree of
+   one driven joint / camera (`MOVING_NODES`), stopping at the next driven
+   node; the batch hangs under that part's root, so every joint turns exactly
+   what it turned before. The static station is split per top-level module,
+   so frustum culling keeps module granularity. Each source is baked with its
+   own transform (`transformPrimitive` reverses the winding of the eleven
+   authored mirrored parts). 993 → 217 primitives (draw calls); emptied leaves
+   go, rig-named nodes stay (703 → 294 nodes). Then Draco (14-bit positions,
+   10-bit normals — raised from default 8 to avoid visible banding, 12-bit
+   UVs), and the build writes a CANDIDATE:
    `.tmp-iss-build/iss_igoal_candidate.glb`.
 7. Validation of the DECODED candidate: the rig contract (`REQUIRED_NODES`:
    all joint and oscillator nodes, the six protected attachment frames, the 8
    arrays, the 6 iROSAs, both radiators), every texture KTX2 with
    `KHR_texture_basisu` required, finite POSITION data, a 35 MiB hard budget
    and a plausible truss span. Only a fully valid candidate is copied to
-   `public/models/iss_igoal.glb` (current build 28.1 MiB, 703 nodes); a
+   `public/models/iss_igoal.glb` (current build 27.1 MiB / 24.2 MB brotli,
+   294 nodes, 217 draw primitives); a
    failure leaves the previous asset untouched. The bounds report (with both
    source hashes) is written to `.tmp-iss-build/bounds-report.json`.
 
@@ -136,12 +147,12 @@ would still only show at runtime.
 
 `public/models/iss_igoal_locate.glb` is derived from the high build's master
 (`.tmp-iss-build/iss_igoal_master.glb`) by `scripts/build-iss-locate-lod.mjs`
-— do not hand-edit it. Measured: **6.53 MiB (≈5.7 MB brotli), 787k
-triangles, ~1.76M vertices, 240 mesh instances / 234 stored meshes, 113 KTX2
-textures (albedo 512 px, normal / metallic-roughness 256 px, ≤20 MiB on GPU),
-285 nodes** — every rig node (12 joints, 8 oscillators, six protected
-attachment frames) plus the structure; the 418 leaves emptied by the strip
-are removed. It keeps `extras.orbitalRig`, and its decoded truss span is
+— do not hand-edit it. Measured: **6.20 MiB (≈5.5 MB brotli), 787k
+triangles, ~1.76M vertices, 176 draw primitives (rigid batching, from 438),
+113 KTX2 textures (albedo 512 px, normal / metallic-roughness 256 px, ≤20 MiB
+on GPU), 253 nodes** — every rig node (12 joints, 8 oscillators, six
+protected attachment frames) plus the structure; leaves emptied by the strip
+and the batching are removed. It keeps `extras.orbitalRig`, and its decoded truss span is
 **108.294 m** (high: 108.293), so `IGOAL_LOCATE` shares the high model's
 normalization/pivot constants.
 
@@ -149,7 +160,7 @@ Derivation: strip detail/handrail meshes except the silhouette keep-list in
 `build-iss-locate-lod.mjs` (76% of the high model's 2.665M triangles are
 `Details_*`), drop emptied leaves unless the rig names them
 (`pruneEmptyLeaves`), simplify the kept geometry at 0.3 ratio / 0.03 error,
-encode the textures, then Draco (position 12 / normal 8 / UV 10). Uniform
+batch the rigid geometry (as the high build), encode the textures, then Draco (position 12 / normal 8 / UV 10). Uniform
 simplification alone only removes ~14% on this CAD-style mesh; stripping the
 detail meshes is the effective lever. The build writes a candidate, validates
 the full rig/KTX2/geometry/budget contract, then publishes.
@@ -196,10 +207,15 @@ the LOD. At runtime the mounted asset is logged:
 Whole model (decoded vertices, exact):
 - Bounds min `(−36.7163, −22.1156, −54.1457)`, max `(36.7112, 8.5104, 54.1469)`
 - Size **73.4275 × 30.6260 × 108.2926 m**, center **(−0.0025, −6.8026, 0.0006)**
-- 703 nodes (all named; includes the six empty attachment frames), 656
-  meshes, 43 materials (including `Radiator_Panel_Coating`), 113 KTX2
-  textures (38 of them metallic-roughness), ≈2.67M triangles / ≈6.0M vertices
-  (2,665,373 / 6,001,154 from the stored accessor counts)
+- The source hierarchy has 703 named nodes (the six empty attachment frames
+  included) and 656 meshes. The runtime asset batches them (§1.1 step 6):
+  294 nodes, 217 primitives, 43 materials (including
+  `Radiator_Panel_Coating`), 113 KTX2 textures (38 of them
+  metallic-roughness), ≈2.67M triangles / ≈6.0M vertices (2,665,353 /
+  6,001,154 from the stored accessor counts). Part geometry no longer sits
+  on its named node: it lives in `<module>.batch.<material>` nodes under the
+  rigid part's root. Per-part inspection uses the master
+  (`.tmp-iss-build/iss_igoal_master.glb`), which keeps the source tree.
 - Declared POSITION accessor min/max versus decoded vertices: the independent
   JSON-chunk comparison (`checkDeclaredBounds`) reports quantization-level
   deltas only (max ≈ 4.2e-4 m on the shipped asset) — expected under Draco, not
@@ -356,7 +372,13 @@ before believing any new "discrepancy", including your own.
 - Pre-rotation `MODEL_PRE_ROTATION.high` (and `.locate`) = `[−π/2, 0, 0]` maps
   model Z (truss) → body +Y (−orbit normal) and model Y → body −Z (zenith).
   Station frame: +X = V-bar, +Y = −orbit normal, +Z = nadir; LVLH/TEA (−8°
-  yaw) applied by ISSGroup on top.
+  yaw, `lvlhAttitude`) applied by ISSGroup on top. ISSGroup follows that
+  target exactly (`AttitudeFollower`): only jumps — the first capture, a seek,
+  a TLE swap — ease in, at 1.6/s. A plain slerp toward the target trailed it
+  by rate ÷ stiffness, ~12° of pitch at 300×. The velocity behind V-bar is
+  blended on the position's schedule (`OrbitalRenderInterpolator.
+  sampleVelocity`), so the target turns every frame instead of stepping at
+  the 10 Hz telemetry rate.
 - Sun direction for animation comes from
   `sunDirectionWorld(simulationClock.now().julianDate)` in world frame.
 - Lighting: ISSModel feeds `sunVisibility` (continuous, with a ≈63 km penumbra
@@ -370,6 +392,19 @@ before believing any new "discrepancy", including your own.
   but with black space above, every surface not facing Earth lost its fill —
   daylight mean luminance 79 vs 106, and the array backs went black in
   eclipse — against the app's calibrated, legible look.
+- Self-shadowing (`stationShadow.ts`, setting "Shadows", default on): the
+  scene's one sun light (`SunLight`, EnvironmentLayer) casts it. The light
+  sits `SUN_LIGHT_DISTANCE` (2000 km) up-sun from its target, and ISSModel
+  aims the target at the visible station each frame, so the shadow camera is
+  a ±70 km box around the station (2048² map ≈ 7 cm of hardware per texel,
+  PCF, bias −0.0002 / normalBias 0.05). Only the visible model casts and
+  receives. The map is cached (`shadow.autoUpdate = false`): each frame only
+  re-fits the matrices to the moving station, and `ShadowRefreshScheduler`
+  redraws it when the sun in the station frame or any joint angle moves
+  0.15° (at most every 50 ms, at least every 2 s). At 1× that is one redraw
+  every ~2 s; a redraw is one depth pass of the 217-primitive model.
+  Earth's shadow on the station is NOT this map — it stays the analytic
+  `sunVisibility` term above.
 
 ---
 
@@ -517,7 +552,9 @@ silent in code and obvious only in render.
    `http://localhost:<port>/scripts/iss-model-inspector.html` — it logs
    three.js `Box3` sizes for key nodes (must match §2.2/§2.3) and has view
    buttons + `window.__isolate('P1_Radiator')` / `__restore()` for
-   single-subtree inspection.
+   single-subtree inspection (on the batched runtime asset a subtree is a
+   rigid part — e.g. `PORT_TRRJ_GAMMA_ROT` holds the whole port radiator;
+   load the master for per-part isolation).
 4. **In-app**: open `/`, click the `#btn-locate-iss` button (Playwright
    locator clicks time out on this app — use coordinate clicks, see
    HANDOFF "Debugging playbook"). The network panel must show the Locate tier
@@ -570,20 +607,29 @@ silent in code and obvious only in render.
 
 ## 9. Open items (ranked)
 
-1. **Faithful parked-TRRJ operations** (optional): the implemented TRRJ law
-   (edge-to-Sun in daylight, face-to-Earth in eclipse, `trrjTargetAngle`) is an
-   illustrative autotrack; real TRRJs are usually parked. If fidelity matters,
-   change only the angle law in `ISSJointKinematics.ts` — the joint plumbing
-   (axis, frames, limits, slew) already exists.
-2. **Radiator texture fidelity** (optional): the current coating is a flat
-   white material with no radiator texture. A faithful upgrade would re-UV the
-   panel faces to white radiator texels or bake a dedicated radiator texture at
-   build time — build-time UV surgery in `build-iss-model.mjs`, NOT runtime.
-3. **ERA / Canadarm2 poses** (optional): geometry exists; ERA is merged into
-   MLM meshes (no node), Canadarm2 has a named joint chain under
-   `MT_Location` if a pose sweep is ever wanted. (The BGAs are already
-   driven, §5.)
-4. **Geometry memory** (measured option, not adopted): Draco decodes to
+1. **TRRJ law** (re-reviewed 2026-10-25, kept): `trrjTargetAngle` runs
+   edge-to-Sun in daylight and face-to-Earth in eclipse. The daylight half
+   is the published autotrack mode (the TRRJ "keeps the radiators edge-on to
+   the Sun" — Boeing P1 truss release, 2002; Lockheed Martin, 2007). The
+   eclipse half is the cold-side choice: the control trades heat rejection
+   against ammonia freeze (NASA ICES radiator paper; SAE 981732), and facing
+   warm Earth is the protective pose. In operations the joints are often
+   parked at fixed angles instead, which needs flight data the app does not
+   have; if it ever does, change only the angle law — the plumbing (axis,
+   frames, ±105° limits, slew) exists.
+2. **Radiator texture** (re-reviewed 2026-10-25, no change): the geometry
+   already models each wing's 8 panels with ~5 cm hinge gaps at ~2.65 m
+   pitch (measured on the master), and the real Z-93 face sheets are
+   uniform white, so the flat `Radiator_Panel_Coating` is faithful. The
+   sources carry no radiator art; the only missing detail is the flow-tube
+   lines, under a pixel at every camera distance but Inspect.
+3. **ERA / Canadarm2 poses** (re-reviewed 2026-10-25, no change): ERA is
+   merged into the MLM meshes (no node to drive); Canadarm2 has a named
+   joint chain under `MT_Location`, but its real pose varies with each
+   operation and is usually a long-held park, so an invented sweep would
+   be less accurate than the authored park pose. (The BGAs are driven, §5.)
+4. **Geometry memory** (re-reviewed 2026-10-25, still not adopted; download
+   would regress): Draco decodes to
    float32 — 214 MB of vertex/index data for the full model. `EXT_meshopt_
    compression` + `KHR_mesh_quantization` (positions 14-bit, normals 8–10-bit,
    UVs 12-bit) measured 113 MB on the GPU and a 1.1–1.2 s parse vs Draco's
@@ -592,9 +638,14 @@ silent in code and obvious only in render.
    relies on transport compression. Quantization rewrites mesh-node
    transforms: rig nodes that carry a mesh must first move it onto an
    identity child (rotating a joint whose origin moved breaks its pivot).
-5. **Draw calls** (Phase D, postponed by owner decision): 980 primitives.
-   `Truss` (197) and `ELC_Base` (361) dominate; animation-safe rigid-island
-   batching (merge only within a joint's static subtree) is the lever.
+5. **Draw calls**: LANDED 2026-10-25 (plan 001 Phase D, §1.1 step 6):
+   993 → 217 primitives (full), 438 → 176 (LOD). Identical-view renders
+   before/after differ only by sub-pixel edge shifts (mean 0.25–0.54 / 255):
+   merged primitives quantize on a coarser Draco grid (≤ ~2.4 mm on the 40 m
+   truss segments), far below a pixel at the closest Inspect distance.
 6. **Blanket box detail** (cosmetic): the two bare wings (2A, 3B) show the
    blanket-box end hardware more prominently than the iROSA-covered wings;
    correct per asset, listed only so it isn't mistaken for a bug.
+7. **Self-shadowing**: LANDED 2026-10-25 (§4): the arrays shade the truss
+   and the modules shade each other; a cached map refreshed on sun or joint
+   motion, toggle in settings.

@@ -7,12 +7,13 @@ import type { OrbitalState } from '@/types/orbital'
 function orbitalState(
   timestamp: number,
   positionECI: OrbitalState['positionECI'],
+  velocityECI: OrbitalState['velocityECI'] = { x: 0, y: 0, z: 0 },
 ): OrbitalState {
   return {
     entityId: 'iss',
     timestamp,
     positionECI,
-    velocityECI: { x: 0, y: 0, z: 0 },
+    velocityECI,
     latitude: 0,
     longitude: 0,
     altitude: 400,
@@ -230,5 +231,30 @@ describe('OrbitalRenderInterpolator', () => {
     expect(result.z).toBeCloseTo(-6794 * Math.sin(theta), -1)
     interpolator.sample(after, 0.15, result)
     expect(result.z).toBeCloseTo(-6794 * Math.sin(theta), -1)
+  })
+
+  it('blends velocity on the position schedule, in world axes (x, z, −y)', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const position = new THREE.Vector3()
+    const velocity = new THREE.Vector3()
+    interpolator.sample(orbitalState(0, { x: 6790, y: 0, z: 0 }, { x: 0, y: 7.66, z: 0 }), 1, position)
+    expect(interpolator.sampleVelocity(1, velocity).toArray()).toEqual([0, 0, -7.66])
+    interpolator.sample(orbitalState(100, { x: 6790, y: 0.766, z: 0 }, { x: -0.0087, y: 7.66, z: 0.1 }), 1.1, position)
+    // Half-way through the 0.1 s transition: half-way between the velocities.
+    interpolator.sample(orbitalState(100, { x: 6790, y: 0.766, z: 0 }, { x: -0.0087, y: 7.66, z: 0.1 }), 1.15, position)
+    interpolator.sampleVelocity(1.15, velocity)
+    expect(velocity.x).toBeCloseTo(-0.00435, 9)
+    expect(velocity.y).toBeCloseTo(0.05, 9)
+    expect(velocity.z).toBeCloseTo(-7.66, 9)
+    expect(interpolator.sampleVelocity(1.3, velocity).y).toBeCloseTo(0.1, 9)
+  })
+
+  it('reseeds velocity across a seek', () => {
+    const interpolator = new OrbitalRenderInterpolator()
+    const position = new THREE.Vector3()
+    const velocity = new THREE.Vector3()
+    interpolator.sample(orbitalState(0, { x: 6790, y: 0, z: 0 }, { x: 0, y: 7.66, z: 0 }), 0, position)
+    interpolator.sample(orbitalState(100, { x: -6790, y: 0, z: 0 }, { x: 0, y: -7.66, z: 0 }), 0.1, position)
+    expect(interpolator.sampleVelocity(0.1, velocity).toArray()).toEqual([0, 0, 7.66])
   })
 })
