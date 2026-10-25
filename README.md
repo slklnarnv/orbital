@@ -57,6 +57,9 @@ point below, and the station's attitude.
   flights and a reset to the overview
 - Ground context: the country or ocean below, local time and weather, and a
   ground-track globe
+- Visible passes: when the ISS will next cross your night sky, from an offline
+  city search, coordinates or your device's location, computed on the device
+  in a Web Worker. Your location is never sent anywhere.
 - Optional HDR bloom, lens flare, 3D ground track and visibility footprint
 - Works offline: packaged and cached orbital data, and an offline place index
 
@@ -110,6 +113,7 @@ station jump.
 | `Space` · `H` | Pause or resume · hide the HUD |
 | 1× 10× 60× 300× · Live · Set time | Time rate, return to wall clock, seek to a UTC instant |
 | Revolution tape | Drag or click to scrub through the current orbit |
+| **Passes** | Set your location and see the next visible passes; **Watch** plays one |
 | Gear icon | Model quality, orbit style, bloom, lens flare, ground track, shadows |
 
 ## Getting started

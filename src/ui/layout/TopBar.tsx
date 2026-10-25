@@ -4,11 +4,13 @@ import { useShallow } from 'zustand/react/shallow'
 import { formatJulianDate, formatGmst } from '@/utils/formatters'
 import { telemetryModeVisual } from '../common/telemetryModeVisual'
 import { SettingsGear } from '../common/SettingsGear'
+import { PassesPanel } from '../common/PassesPanel'
 
 /**
  * TopBar — two floating corner clusters, no bar between them.
  * Left: identity and the data-link state. Right: the orbital-elements line
- * (inclination, Julian date, GMST) in fine mono.
+ * (inclination, Julian date, GMST) in fine mono, then the visible-passes
+ * and render-settings controls.
  */
 export function TopBar(): JSX.Element {
   // 1 Hz subscription — the clocks in this component never read faster
@@ -65,7 +67,9 @@ export function TopBar(): JSX.Element {
           {`GMST ${formatGmst(simTime.gmst)}`}
         </span>
 
-        <span aria-hidden="true" style={{ width: 1, height: 12, background: 'var(--hud-line)' }} />
+        <span aria-hidden="true" className="hud-corner__divider" style={{ width: 1, height: 12, background: 'var(--hud-line)' }} />
+
+        <PassesPanel />
 
         <SettingsGear />
       </div>

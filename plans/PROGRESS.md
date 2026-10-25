@@ -6,6 +6,37 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## B.3 visible passes (2026-10-26)
+
+- **Prediction.** `src/core/orbital/PassPredictor.ts`: SGP4 every 30 s over
+  48 h of simulation time; visible = ISS elevation > 10° (`ecfToLookAngles`),
+  ISS sunlit (`isSunlit`, penumbra midpoint) and Sun < −6° at the observer
+  (the TEME Sun direction rotated by the same GMST). Edges bisected to 1 s,
+  peak by golden-section search, compass bearings at start/peak/end, flags
+  for in-progress, starting from shadow and ending in shadow. ~11 ms per
+  observer; runs in `passes.worker.ts` with a main-thread fallback
+  (`PassService.ts`), recomputed on a new TLE or observer, a backward seek,
+  or after 6 h of window slide.
+- **Check.** Skyfield 1.55 (de421), same TLE and conditions at 1 s: the
+  same 8 passes over London, New York, Sydney and Tokyo, edges within 4 s,
+  peaks within 1° — frozen as known answers in `PassPredictor.test.ts` with
+  the TLE embedded.
+- **Observer.** Offline city search over Natural Earth 10m populated places
+  (`scripts/build-city-index.mjs` → `src/data/city-index.json`, same pinned
+  commit as the place index; lazy hashed asset), typed coordinates
+  ("51.5, -0.12", "33.87S 151.21E"), or browser geolocation
+  (`Permissions-Policy` `geolocation=(self)`). localStorage only, sanitized
+  on read.
+- **UI.** `src/ui/common/PassesPanel.tsx`: "Passes" beside the gear;
+  combobox with keyboard support; up to 6 passes with local date and time,
+  lead time, duration, peak, path; "Watch" seeks 30 s ahead and plays at 1×.
+  Phone fixes on the way: popover fine text was hidden by a ≤900 px corner
+  rule; the corner row now sits under the camera reticle.
+- **Verified** in headless Edge against the production-header preview:
+  search, Enter, Watch (clock moved to 30 s before the pass), coordinates,
+  geolocation with a granted permission, 390 px phone layout; no CSP
+  violations.
+
 ## Docs pass + live re-check (2026-10-25)
 
 - README rewritten for a public reader: a primer on what the view shows, a
