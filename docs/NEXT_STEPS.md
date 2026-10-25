@@ -15,9 +15,9 @@
 - **Improve-skill audit, waves 1-2 landed 2026-10-24/25** (plans 002-015; the
   index is `plans/README.md`, the per-plan results are in `plans/PROGRESS.md`):
   - *Data and toolchain.* The packaged fallback TLE has epoch 2026-10-24, and
-    `.github/workflows/refresh-tle.yml` opens a fallback-TLE PR Mon/Thu (it
-    needs the repo setting "Allow GitHub Actions to create and approve pull
-    requests"). The dev toolchain is patched within its majors; CI actions are
+    `.github/workflows/refresh-tle.yml` refreshes it Mon/Thu and, when it
+    changed and `npm run verify` passes, commits it straight to `main` (no PR;
+    Vercel deploys it). The dev toolchain is patched within its majors; CI actions are
     pinned to SHAs with `persist-credentials: false`.
   - *Telemetry.* Offline starts recover on reconnect; confidence is scored on
     the magnitude of the TLE age; the clock clamp is 1000 ms per tick (it was
@@ -171,8 +171,9 @@ can be extended. "Touches" lists the files expected to change.
    (at most once per minute), a `?` shortcut-help overlay, the remaining
    `L` / `R` shortcuts (item 2; `H` shipped as the HUD toggle in PR #14),
    a high-contrast HUD class.
-5. **Release routine.** Scheduled CI job running `npm run refresh:tle` that
-   opens a PR when the fallback changes; a short `CHANGELOG.md`.
+5. **Release routine.** Scheduled CI job running `npm run refresh:tle`:
+   LANDED (`refresh-tle.yml`, Mon/Thu, verify-gated, commits directly to
+   `main`). Still open: a short `CHANGELOG.md`.
 6. **Faster Locate (fresh load).** Locate is a primary feature. A cold session
    used to wait for the full high pipeline, and on a slow connection the 8 s
    departure gate expired, so the camera departed on Model A and swapped
