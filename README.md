@@ -162,6 +162,7 @@ measured.
 - [`docs/HANDOFF.md`](docs/HANDOFF.md): camera, geo and HUD internals, and a debugging playbook
 - [`docs/ISS_MODEL_CONTEXT.md`](docs/ISS_MODEL_CONTEXT.md): the model pipeline, rig contract and runtime loading
 - [`docs/MODEL_AUDIT.md`](docs/MODEL_AUDIT.md): forensics of the ISS assets
+- [`CHANGELOG.md`](CHANGELOG.md): notable changes by release date
 - [`plans/PROGRESS.md`](plans/PROGRESS.md): the change ledger
 
 ## Credits and license
