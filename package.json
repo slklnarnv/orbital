@@ -12,6 +12,7 @@
     "check:assets": "node scripts/check-asset-budget.mjs",
     "check:shaders": "node scripts/check-shader-ramps.mjs",
     "build:iss-lod": "node scripts/build-iss-locate-lod.mjs",
+    "build:places": "node scripts/build-place-index.mjs",
     "patch:basis": "node scripts/patch-basis-transcoder.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",

@@ -12,7 +12,7 @@ in [`public/textures/README.md`](public/textures/README.md).
 |---|---|---|---|
 | ISS two-line elements (live) | fetched at runtime via `/api/tle` | [CelesTrak](https://celestrak.org/) and [wheretheiss.at](https://wheretheiss.at/) | Public domain (US Government work); CelesTrak asks for polite, identified use — the proxy sends a project User-Agent |
 | ISS two-line elements (packaged) | `src/data/fallback-tle.json` | CelesTrak, refreshed by `npm run refresh:tle` | Public domain |
-| Place names | fetched at runtime | [BigDataCloud reverse-geocode-client](https://www.bigdatacloud.com/) | Free client-side API, keyless |
+| Place names (countries, oceans, seas) | `src/data/place-index.json`, built by `scripts/build-place-index.mjs` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:50m admin-0 countries and marine polygons | Public domain |
 | Weather and timezone | fetched at runtime | [Open-Meteo](https://open-meteo.com/) | CC BY 4.0 (data), keyless |
 
 ## 3D models

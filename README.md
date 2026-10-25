@@ -60,7 +60,7 @@ The packaged TLE seeds propagation synchronously. Cached entries expire after se
 
 ## Ground context
 
-The HUD pairs orbital telemetry with a station-centered ground-track globe and a one-revolution phase tape. BigDataCloud supplies land or marine-region names; Open-Meteo supplies timezone data and current weather for the local ground clock. Results are grouped into 2° cells, cached in memory and IndexedDB, and refreshed under independent rate limits with bounded backoff.
+The HUD pairs orbital telemetry with a station-centered ground-track globe and a one-revolution phase tape. Place names (the country, or the ocean or sea) come from a bundled Natural Earth index looked up offline; Open-Meteo supplies timezone data and current weather for the local ground clock. Results are grouped into 2° cells, cached in memory and IndexedDB, and weather is refreshed under its own rate limit with bounded backoff.
 
 These enrichment requests run directly from the browser, so the current ground coordinates and client network address are visible to those providers. Under accelerated time the service holds new lookups — a ground point racing through cache cells would otherwise churn requests — while the coordinates stay live and enrichment resumes automatically on Live.
 

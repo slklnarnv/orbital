@@ -22,18 +22,19 @@
   browsers that had cached the stock glue (`max-age=3600` + SWR) kept running
   it after the deploy. Details:
   `docs/ISS_MODEL_CONTEXT.md` §1.
-- **Reverse geocoding unblocked (2026-10-25)**: the live console showed every
-  "Passing over" lookup blocked by `connect-src`. The code still calls
-  BigDataCloud's documented host, `api.bigdatacloud.net`, but that host now
-  answers 307 → `api-bdc.io`, and CSP checks every redirect hop.
-  `connect-src` now allows both hosts; `ConnectSrcCsp.test.ts` checks that
-  every external host in `src/` (plus known redirect targets) is allowed and
-  that the CSP lists no external host the client does not reach. Open:
-  BigDataCloud's fair-use policy for the free client endpoint allows only the
-  calling device's own location, which the ISS ground point is not — a
-  policy-compliant geocoder (or proxy) is a roadmap decision.
+- **Place names offline (2026-10-25)**: the live console showed every
+  "Passing over" lookup blocked by `connect-src` (BigDataCloud's host now
+  redirects to `api-bdc.io`), and BigDataCloud's fair-use policy allows its
+  free client endpoint only for the calling device's own location — never
+  the ISS ground point. Place names now come from a Natural Earth 1:50m
+  index looked up locally (`PlaceIndex.ts`, `src/data/place-index.json`,
+  ~490 KiB / ~170 KiB gzip, fetched once as a hashed asset); BigDataCloud
+  and both its hosts are gone from code and CSP. `ConnectSrcCsp.test.ts`
+  keeps `connect-src` equal to the hosts `src/` fetches; `PlaceIndex.test.ts`
+  requires every point of the ISS band to resolve. The geo cache also no
+  longer fails a good lookup when IndexedDB is missing entirely.
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 442 unit tests in 50 files, production build. CI
+  lint (0 warnings), 453 unit tests in 51 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).

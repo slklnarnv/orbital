@@ -1,11 +1,12 @@
 // ─── ConnectSrcCsp.test.ts — every fetched host is allowed by connect-src ────
 //
-// Regression for the live "Passing over" fallback: BigDataCloud's documented
-// host (api.bigdatacloud.net) began answering 307 → api-bdc.io, CSP checks
-// every redirect hop, and connect-src listed only the first host, so every
-// reverse geocode was blocked. This test reads the production CSP from
-// vercel.json and checks it against the absolute URLs in src/ plus the
-// redirect targets those hosts are known to send.
+// Regression for the live "Passing over" fallback (2026-10-25): BigDataCloud's
+// documented host began answering 307 → api-bdc.io, CSP checks every redirect
+// hop, and connect-src listed only the first host, so every reverse geocode
+// was blocked. (Place names are now offline; BigDataCloud is gone.) This test
+// reads the production CSP from vercel.json and checks it against the
+// absolute URLs in src/ plus the redirect targets those hosts are known to
+// send.
 
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -17,13 +18,11 @@ const ROOT = path.resolve(__dirname, '../../..')
 const NOT_FETCHED = new Set(['http://www.w3.org/2000/svg'])
 
 /**
- * Hosts a fetched host redirects to (checked with curl, 2026-10-25). Add an
- * entry when a provider moves behind a redirect; the browser follows it and
- * CSP must allow the target too.
+ * Hosts a fetched host redirects to. None today (checked with curl,
+ * 2026-10-25). Add an entry when a provider moves behind a redirect; the
+ * browser follows it and CSP must allow the target too.
  */
-const REDIRECT_TARGETS: Record<string, string[]> = {
-  'api.bigdatacloud.net': ['api-bdc.io'],
-}
+const REDIRECT_TARGETS: Record<string, string[]> = {}
 
 function productionConnectSrc(): string[] {
   const config = JSON.parse(readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')) as {
@@ -69,7 +68,7 @@ function reachedHosts(): string[] {
 
 describe('production connect-src', () => {
   it('finds the external endpoints in src/', () => {
-    expect(fetchedHosts()).toEqual(['api.bigdatacloud.net', 'api.open-meteo.com', 'api.wheretheiss.at'])
+    expect(fetchedHosts()).toEqual(['api.open-meteo.com', 'api.wheretheiss.at'])
   })
 
   it('allows every host the client fetches, including redirect targets', () => {
