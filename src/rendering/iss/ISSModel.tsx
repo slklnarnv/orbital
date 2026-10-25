@@ -65,7 +65,8 @@ import { useSettingsStore, type IssModelQuality } from '@/stores/settingsStore'
 import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
-import { createPreparationTarget, withPreparationTarget } from './detailPreparation'
+import { countMissingTextures, createPreparationTarget, withPreparationTarget } from './detailPreparation'
+import { KTX2_TEXTURE_STALL_MS, guardLoadStall } from './loadStallGuard'
 import { sharedJointStates } from './ISSRigAnimator'
 import {
   SUN_LIGHT_NAME,
@@ -100,13 +101,31 @@ useGLTF.setDecoderPath('/draco/')
 // from three/examples/jsm/libs/basis at the renderer's version), like Draco.
 // detectSupport picks the GPU format (BC / ETC / ASTC) per renderer, so the
 // loader is rebuilt if the renderer ever changes.
+//
+// The .js glue is not a plain copy: it is patched to never evaluate strings
+// (npm run patch:basis): the production CSP forbids it, and three's stock
+// copy hung every KTX2 load on the live site. Each texture load
+// is also stall-guarded, so a transcoder that never answers fails into the
+// reliability ladder instead of suspending the detail model forever.
+class StallGuardedKTX2Loader extends KTX2Loader {
+  override load(
+    url: string,
+    onLoad: (texture: THREE.CompressedTexture) => void,
+    onProgress?: (event: ProgressEvent) => void,
+    onError?: (error: unknown) => void,
+  ): void {
+    const guarded = guardLoadStall(onLoad, onError, KTX2_TEXTURE_STALL_MS, 'KTX2 texture')
+    super.load(url, guarded.onLoad, onProgress, guarded.onError)
+  }
+}
+
 let ktx2Loader: KTX2Loader | null = null
 let ktx2Renderer: THREE.WebGLRenderer | null = null
 
 function ktx2LoaderFor(gl: THREE.WebGLRenderer): KTX2Loader {
   if (!ktx2Loader || ktx2Renderer !== gl) {
     ktx2Loader?.dispose()
-    ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(gl)
+    ktx2Loader = new StallGuardedKTX2Loader().setTranscoderPath('/basis/').detectSupport(gl)
     ktx2Renderer = gl
   }
   return ktx2Loader
@@ -424,6 +443,13 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         if (!cancelled) onReady(attempt)
         return
       }
+      // Texture failures do not reject the GLTF (they resolve to null), so
+      // check them here; the dependency promises are already cached.
+      const missingTextures = countMissingTextures(await detailedGltf.parser.getDependencies('texture'))
+      if (cancelled) return
+      if (missingTextures > 0) {
+        throw new Error(`${missingTextures} texture(s) of ${spec.url} failed to load`)
+      }
       useLoadingStore.getState().setIssDetailPreparing(attempt)
       // With Bloom on, the visible frame is drawn into a HalfFloat target, not
       // the default framebuffer; prepare against the same kind of target.
@@ -509,7 +535,7 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
       onError(attempt)
     })
     return () => { cancelled = true }
-  }, [detailedScene, gl, camera, scene, onReady, onError, attempt, quality, spec.url])
+  }, [detailedGltf.parser, detailedScene, gl, camera, scene, onReady, onError, attempt, quality, spec.url])
 
   // A restored context recreates textures/buffers; allow prepare() to run again.
   useEffect(() => {

@@ -171,8 +171,21 @@ The full `iss_igoal.glb` is requested only inside the 200/220 km Inspect band
 high-tier failure keeps the LOD; a LOD failure demotes the requested path to
 legacy. Rebuild after any high-asset rebuild with `npm run build:iss-lod`.
 Both tiers load through drei's `useGLTF` with a `KTX2Loader` (transcoder
-self-hosted in `public/basis/`, copied from `three/examples/jsm/libs/basis`
-at the renderer's version — refresh it on a three upgrade).
+self-hosted in `public/basis/`). The `.js` glue is NOT a plain copy of
+`three/examples/jsm/libs/basis`: three's embind glue builds its invokers with
+`new Function`, which the production CSP (no `'unsafe-eval'`) blocks inside
+the blob: transcoder workers — the worker dies at init without answering and
+every KTX2 load hangs (the 2026-10-25 live outage). `npm run patch:basis`
+(`scripts/patch-basis-transcoder.mjs`) copies three's files and rewrites the
+two code-generation sites to closures; re-run it on a three upgrade
+(`BasisTranscoderCsp.test.ts` fails if `public/basis/` drifts from three or
+the patch no longer applies). Each KTX2 texture load is also bounded
+(`loadStallGuard.ts`, 30 s): a transcoder that never answers becomes a load
+error. GLTFParser resolves failed textures to null and still finishes the
+model, so detail preparation fails any model with missing textures
+(`countMissingTextures`) and the ladder demotes instead of showing a grey
+station or stranding the spinner. `vite preview`
+serves the `vercel.json` headers, so CSP failures reproduce locally.
 
 **Selection**: `src/stores/settingsStore.ts` (`issModelQuality: 'high' |
 'legacy'`, default `'high'`, persisted). `'high'` → `iss_igoal_locate.glb`

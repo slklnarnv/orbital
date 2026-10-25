@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import {
+  countMissingTextures,
   createPreparationTarget,
   withPreparationTarget,
   type PreparationRenderer,
@@ -66,5 +67,14 @@ describe('withPreparationTarget', () => {
 describe('createPreparationTarget', () => {
   it('matches the composer colour format (HalfFloat)', () => {
     expect(createPreparationTarget().texture.type).toBe(THREE.HalfFloatType)
+  })
+})
+
+describe('countMissingTextures', () => {
+  it('counts textures the GLTF parser resolved to null', () => {
+    const texture = new THREE.Texture()
+    expect(countMissingTextures([texture, texture])).toBe(0)
+    expect(countMissingTextures([texture, null, undefined])).toBe(2)
+    expect(countMissingTextures([])).toBe(0)
   })
 })
