@@ -28,9 +28,10 @@ import * as THREE from 'three'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { ISSModel } from './ISSModel'
 import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
-import { lvlhAttitude } from './stationAttitude'
+import { AttitudeFollower, lvlhAttitude } from './stationAttitude'
 
-// Exponential slerp stiffness (1/s) — higher = snappier attitude capture.
+// Decay rate (1/s) of the attitude offset left by a jump — higher = snappier
+// capture. Steady orbital motion is followed exactly (no lag at any rate).
 const ATTITUDE_SMOOTHING = 1.6
 
 const _velocity = new THREE.Vector3()
@@ -75,8 +76,11 @@ interface ISSGroupProps {
 export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
   const interpolatorRef = useRef<OrbitalRenderInterpolator | null>(null)
   const interpolator = interpolatorRef.current ??= new OrbitalRenderInterpolator()
-  // Current attitude (smoothed) — starts unrotated and converges to LVLH.
+  // Current attitude — starts unrotated and converges to LVLH; afterwards it
+  // follows the target exactly, smoothing only seeks and other jumps.
   const attitudeRef = useRef(new THREE.Quaternion())
+  const followerRef = useRef<AttitudeFollower | null>(null)
+  const follower = followerRef.current ??= new AttitudeFollower(attitudeRef.current, ATTITUDE_SMOOTHING)
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return
@@ -96,16 +100,15 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
     )
 
     // ─── Attitude: LVLH + TEA yaw bias (stationAttitude.ts) ───
-    // V-bar from velocity (same TEME→world swap as the interpolator applies
-    // to position). A degenerate frame keeps the previous attitude.
-    _velocity.set(state.velocityECI.x, state.velocityECI.z, -state.velocityECI.y)
+    // V-bar from the velocity blended on the position's schedule, so the
+    // target turns every frame rather than stepping at 10 Hz. A degenerate
+    // frame keeps the previous attitude.
+    interpolator.sampleVelocity(clock.elapsedTime, _velocity)
     if (!lvlhAttitude(groupRef.current.position, _velocity, _targetQuat)) return
 
-    // Rate-limited capture: exponential slerp never snaps, even when the
-    // camera's Locate flight or a mode change hands us a new geometry.
-    const clampedDelta = Math.min(delta, 0.1)
-    attitudeRef.current.slerp(_targetQuat, 1 - Math.exp(-ATTITUDE_SMOOTHING * clampedDelta))
-    groupRef.current.quaternion.copy(attitudeRef.current)
+    // Jumps (first capture, a seek, a TLE swap) ease in; orbital motion is
+    // followed exactly — a plain slerp lagged ~12° at 300×.
+    groupRef.current.quaternion.copy(follower.step(_targetQuat, delta))
   })
 
   return (

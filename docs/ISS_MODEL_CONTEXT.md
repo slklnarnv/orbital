@@ -372,7 +372,13 @@ before believing any new "discrepancy", including your own.
 - Pre-rotation `MODEL_PRE_ROTATION.high` (and `.locate`) = `[−π/2, 0, 0]` maps
   model Z (truss) → body +Y (−orbit normal) and model Y → body −Z (zenith).
   Station frame: +X = V-bar, +Y = −orbit normal, +Z = nadir; LVLH/TEA (−8°
-  yaw) applied by ISSGroup on top.
+  yaw, `lvlhAttitude`) applied by ISSGroup on top. ISSGroup follows that
+  target exactly (`AttitudeFollower`): only jumps — the first capture, a seek,
+  a TLE swap — ease in, at 1.6/s. A plain slerp toward the target trailed it
+  by rate ÷ stiffness, ~12° of pitch at 300×. The velocity behind V-bar is
+  blended on the position's schedule (`OrbitalRenderInterpolator.
+  sampleVelocity`), so the target turns every frame instead of stepping at
+  the 10 Hz telemetry rate.
 - Sun direction for animation comes from
   `sunDirectionWorld(simulationClock.now().julianDate)` in world frame.
 - Lighting: ISSModel feeds `sunVisibility` (continuous, with a ≈63 km penumbra

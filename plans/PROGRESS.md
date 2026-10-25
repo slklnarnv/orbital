@@ -15,6 +15,13 @@
   turn exactly what they did (the rig simulation passes on the batched
   assets); mirrored parts keep their facing (unit test); identical-view
   renders differ only by sub-pixel edge shifts.
+- **Attitude lag at 300× fixed.** The station's attitude slerped toward its
+  LVLH target and trailed it by rate ÷ stiffness (~12° of pitch at 300×).
+  `AttitudeFollower` now follows the target exactly and eases in only jumps
+  (first capture, seek, TLE swap); the interpolator blends velocity like
+  position so the target turns every frame instead of stepping at 10 Hz.
+- **Hidden detail model's matrix updates**: measured 0.03 ms/frame on the
+  batched assets (512 objects) — closed, no change.
 
 ## ISS animation audit (2026-10-25)
 
