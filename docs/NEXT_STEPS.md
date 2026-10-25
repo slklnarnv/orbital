@@ -7,6 +7,19 @@
 
 ## Current state (2026-10-25)
 
+- **Follow flicker and Bloom frame rate fixed (2026-10-25)**: measured on
+  the live site on the owner's integrated AMD GPU (headless Edge, D3D11,
+  1280×713 at DPR 1.5). Flicker: ~9% of frames turned the solar arrays black
+  for one frame — `ISSModel` (a child of `ISSGroup`) aimed the cached
+  self-shadow at the previous frame's pose, and the 0–160 m per-frame step
+  is over two 68 m shadow texels. `ISSGroup` now runs at `useFrame`
+  priority −2 (`src/rendering/framePriority.ts`): 0 dark frames in 895,
+  and shadow redraws fell from ~4.6/s to the designed one per 2 s. Frame
+  rate: Bloom cost 18.5 GPU ms/frame (56.5 fps, 6% of frames at 33 ms)
+  because the bloom blend wrote back into the 4× MSAA HalfFloat target and
+  three resolved it twice with depth. `MultisampleRenderPass` keeps MSAA to
+  the scene pass (color-only resolve); 60.0 fps, p99 17.2 ms, in all four
+  Bloom/Shadows combinations. Bloom off is untouched.
 - **Live IGOAL outage fixed (2026-10-25)**: after PRs #20/#21 the live site
   never showed the close-range model — Locate waited 8 s and flew to Model A,
   and "High fidelity" spun forever. Cause, from the live console: three's
@@ -34,7 +47,7 @@
   requires every point of the ISS band to resolve. The geo cache also no
   longer fails a good lookup when IndexedDB is missing entirely.
 - **Gate green**: `npm run verify` — asset budget, shader ramps, typecheck,
-  lint (0 warnings), 453 unit tests in 51 files, production build. CI
+  lint (0 warnings), 460 unit tests in 52 files, production build. CI
   (`.github/workflows/verify.yml`) runs `verify`, both `npm audit` passes and
   an advisory `e2e` job (`npm run test:e2e`, 6 Playwright smoke specs against
   `vite preview`; not a required check — `verify` is the merge gate). Node 22 (`.nvmrc`).

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
+import { FRAME_PRIORITY } from '@/rendering/framePriority'
 import {
   SHADOW_HALF_EXTENT,
+  SHADOW_MAP_SIZE,
   SUN_LIGHT_DISTANCE,
   ShadowRefreshScheduler,
   aimSunLightAt,
@@ -69,5 +71,56 @@ describe('ShadowRefreshScheduler', () => {
     expect(scheduler.shouldRefresh(2000, sun(0), [])).toBe(true)
     scheduler.invalidate()
     expect(scheduler.shouldRefresh(2010, sun(0), [])).toBe(true)
+  })
+})
+
+describe('cached shadow map alignment (Follow-mode flicker)', () => {
+  // The map is drawn on one frame and sampled, unchanged, on later frames.
+  // A station-fixed point must land on the same texel on both, whatever the
+  // station moved in between: the interpolated step varies 0–160 m per frame.
+  const sun = new THREE.Vector3(0.3, -0.4, 0.866).normalize()
+  const texelKm = (2 * SHADOW_HALF_EXTENT) / SHADOW_MAP_SIZE
+  const along = new THREE.Vector3(0.6, 0.8, 0).cross(sun).normalize() // in the map plane
+  const pointOnArray = new THREE.Vector3(48, 3, -6) // station-fixed offset (km)
+
+  /** Shadow-map texel a world point maps to with the light aimed at `aim`. */
+  function texelOf(world: THREE.Vector3, aim: THREE.Vector3): THREE.Vector2 {
+    const light = new THREE.DirectionalLight()
+    configureStationShadow(light)
+    aimSunLightAt(light, aim, sun)
+    const uv = world.clone().applyMatrix4(light.shadow.matrix)
+    return new THREE.Vector2(uv.x, uv.y).multiplyScalar(SHADOW_MAP_SIZE)
+  }
+
+  // Frame k: the map is drawn after a 0 m step; frame n samples it after 160 m.
+  const before = new THREE.Vector3(4200, 3100, -4400)
+  const drawn = before.clone()
+  const previous = before.clone().addScaledVector(along, 300)
+  const sampled = previous.clone().addScaledVector(along, 0.16)
+
+  it('stays on the same texel when the light is aimed at the current frame pose', () => {
+    const atDraw = texelOf(drawn.clone().add(pointOnArray), drawn)
+    const atSample = texelOf(sampled.clone().add(pointOnArray), sampled)
+    expect(atSample.distanceTo(atDraw)).toBeLessThan(0.01)
+  })
+
+  it('drifts by over two texels when aimed at the previous frame pose', () => {
+    // The bug: aimed one frame behind, the map's offset is the step taken on
+    // the frame it was DRAWN, but it is sampled with a different step.
+    const atDraw = texelOf(drawn.clone().add(pointOnArray), drawn) // drawn after a 0 m step
+    const atSample = texelOf(sampled.clone().add(pointOnArray), previous) // sampled one step behind
+    expect(texelKm).toBeLessThan(0.16 / 2)
+    expect(atSample.distanceTo(atDraw)).toBeGreaterThan(2)
+  })
+
+  it('the station pose advances before every consumer', () => {
+    // Equal priorities run in subscription order, children first; the pose
+    // must not depend on where a consumer sits in the tree.
+    const { stationPose, cameraControls, scene, composer } = FRAME_PRIORITY
+    expect(stationPose).toBeLessThan(cameraControls)
+    expect(cameraControls).toBeLessThan(scene)
+    expect(scene).toBeLessThan(composer)
+    // Any priority > 0 takes over R3F's render loop; only the composer may.
+    expect([stationPose, cameraControls, scene].every((priority) => priority <= 0)).toBe(true)
   })
 })

@@ -231,8 +231,12 @@ landed through its own PR.
 
 ### Camera system facts (harder to get wrong)
 
-- drei's CameraControls `update()` runs at `useFrame` priority **−1** — before
-  `ISSGroup`/`CameraController` advance the spacecraft each frame. Anything
+- `ISSGroup` advances the station pose at `useFrame` priority **−2**
+  (`src/rendering/framePriority.ts`), before everything else: R3F runs equal
+  priorities in subscription order, children first, so a child of `ISSGroup`
+  at priority 0 (ISSModel's shadow aim, the rig) read the previous frame's
+  pose. drei's CameraControls `update()` runs at **−1** — after the station
+  moves but before `CameraController` retargets at priority 0. Anything
   that needs the rendered camera to match *this frame's* ISS must call
   `controls.update(0)` after moving the target (see the tracking branch of
   `CameraController` — this was the close-range jitter fix, verified 0 px over

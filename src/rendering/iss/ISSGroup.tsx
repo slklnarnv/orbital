@@ -26,6 +26,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
+import { FRAME_PRIORITY } from '../framePriority'
 import { ISSModel } from './ISSModel'
 import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
 import { AttitudeFollower, lvlhAttitude } from './stationAttitude'
@@ -82,6 +83,9 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
   const followerRef = useRef<AttitudeFollower | null>(null)
   const follower = followerRef.current ??= new AttitudeFollower(attitudeRef.current, ATTITUDE_SMOOTHING)
 
+  // Runs before every consumer of the pose (framePriority.ts): ISSModel is a
+  // child, so at equal priority it would subscribe first and read the
+  // previous frame's pose (the Follow-mode shadow flicker).
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return
 
@@ -109,7 +113,7 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
     // Jumps (first capture, a seek, a TLE swap) ease in; orbital motion is
     // followed exactly — a plain slerp lagged ~12° at 300×.
     groupRef.current.quaternion.copy(follower.step(_targetQuat, delta))
-  })
+  }, FRAME_PRIORITY.stationPose)
 
   return (
     <group ref={groupRef}>

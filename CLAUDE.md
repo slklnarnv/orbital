@@ -53,7 +53,10 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - TEME to world mapping is (x, z, -y); the Earth group rotates by GMST
   (that is the ECEF frame).
 - Bloom OFF must render bit-for-bit like the direct pipeline (no composer).
-- Camera frame order: drei `CameraControls` updates at `useFrame` priority -1;
+- Frame order (`src/rendering/framePriority.ts`): `ISSGroup` advances the
+  station pose at `useFrame` priority -2, before every consumer (a child at
+  equal priority subscribes first and reads last frame's pose - the
+  2026-10-25 shadow flicker); drei `CameraControls` updates at -1;
   anything that moves the target calls `controls.update(0)`; every flight
   takeover runs `syncRenderedPoseToControls` (read the pose BEFORE adopting
   the rendered up - the order is load-bearing).

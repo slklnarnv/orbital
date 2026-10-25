@@ -40,6 +40,33 @@
   unnamed point. Geo service tests inject the resolver, and one runs the
   default resolver against the real index (only Open-Meteo is fetched).
 
+## Follow flicker + Bloom frame rate (2026-10-25)
+
+Measured on the live site with the owner's GPU (AMD Radeon integrated,
+headless Edge on D3D11, 1280×713 CSS at DPR 1.5, Follow · Locked, daylight).
+
+- **Flicker.** 74 of 794 frames dropped the station's mean luminance ~10%
+  for one frame: the solar arrays went black. Not tied to shadow redraws.
+  Cause: R3F runs equal priorities in subscription order, children first;
+  `ISSModel` (child of `ISSGroup`) aimed the sun's shadow camera at the
+  previous frame's station position. The cached map then sat offset by one
+  frame's step, which varies 0–160 m (texel 68 m), so on uneven frames the
+  thin arrays self-shadowed. Fix: `ISSGroup`'s `useFrame` at priority −2
+  (`framePriority.ts`). After: 0 dark frames in 895 (same detector, uneven
+  frame times from per-frame readback). Shadow redraws also fell from ~37 to
+  4 per 8 s — the lagged attitude had jittered the joint angles past the
+  0.15° redraw threshold. Test: `StationShadow.test.ts` (aligned at the
+  current pose, >2 texels off one frame behind; priority order).
+- **Frame rate.** Bloom on: 56.5 fps, 28 frames > 20 ms in 8 s; Bloom off:
+  60. Timer queries: 18.5 GPU ms/frame — scene into the 4× MSAA HalfFloat
+  target, a color+depth resolve, the bloom blend drawn back into that MSAA
+  target, and a second resolve. `MultisampleRenderPass` renders only the
+  scene multisampled (color-only resolve, `resolveDepthBuffer = false`) and
+  copies once into single-sample composer targets. After: one resolve,
+  16.6 GPU ms, 60.0 fps with 0 frames > 20 ms in all four Bloom/Shadows
+  combinations. Test: `MultisampleRenderPass.test.ts` (contract only; no GL
+  in unit tests).
+
 ## Live IGOAL outage: KTX2 transcoder vs CSP (2026-10-25)
 
 - **Symptom (live only).** Locate waited the 8 s gate and flew to Model A;
