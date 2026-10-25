@@ -27,7 +27,16 @@ import { EXTTextureWebP } from '@gltf-transform/extensions'
 import { prune, textureCompress } from '@gltf-transform/functions'
 import sharp from 'sharp'
 
-import { validateCandidate, splitRadiatorPanels, stripVertexColors } from '../../../scripts/build-iss-model.mjs'
+import {
+  applySourceMaterials,
+  classifyTextureUsage,
+  ktxCreateArgs,
+  readSourceMaterials,
+  SOURCE_METALLIC_SCALE,
+  splitRadiatorPanels,
+  stripVertexColors,
+  validateCandidate,
+} from '../../../scripts/build-iss-model.mjs'
 import { checkDeclaredBounds } from '../../../scripts/iss-model-manifest.mjs'
 import {
   PROTECTED_FRAMES,
@@ -464,5 +473,118 @@ describe('validateCandidate', () => {
     const publishedBefore = await sha256(PUBLISHED_ASSET)
     await expect(validateCandidate(candidatePath)).rejects.toThrow(/rig contract violations/)
     expect(await sha256(PUBLISHED_ASSET)).toBe(publishedBefore)
+  })
+})
+
+// ─── Source-material graft ────────────────────────────────────────────────────
+
+async function solidPng(color: string): Promise<Buffer> {
+  return sharp({ create: { width: 4, height: 4, channels: 3, background: color } }).png().toBuffer()
+}
+
+describe('readSourceMaterials + applySourceMaterials', () => {
+  it('grafts factors and maps by name, keeps FBX images, and restores only the listed cutouts', async () => {
+    // Source GLB: what Blender renders.
+    const source = new Document()
+    const tex = (name: string, png: Buffer) => source.createTexture(name).setImage(png).setMimeType('image/png')
+    const [red, green, blue] = await Promise.all([solidPng('red'), solidPng('green'), solidPng('blue')])
+    const mesh = source.createMesh()
+    for (const [name, setup] of [
+      ['ELC_Base', (m: Material) => m.setAlphaMode('BLEND').setBaseColorTexture(tex('ELC_src', red)).setMetallicRoughnessTexture(tex('ELC_MR', green))],
+      ['Truss', (m: Material) => m.setAlphaMode('BLEND').setMetallicRoughnessTexture(tex('Truss_MR', green))],
+      ['MLI.Generic', (m: Material) => m.setMetallicFactor(0).setRoughnessFactor(0.5).setBaseColorTexture(tex('MLI_Diffuse', blue)).setNormalTexture(tex('MLI_Normal', blue)).setNormalScale(3)],
+    ] as const) {
+      const { prim, material } = trianglePrim(source, name, [0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 1, 2])
+      setup(material)
+      mesh.addPrimitive(prim)
+    }
+    sceneWithMesh(source, mesh, 'IGOAL_SSREF')
+    const sourcePath = path.join(workDir, 'source.glb')
+    await new NodeIO().write(sourcePath, source)
+    const materials = readSourceMaterials(await readFile(sourcePath))
+    expect([...materials.keys()]).toEqual(['ELC_Base', 'Truss', 'MLI.Generic'])
+    expect(materials.get('MLI.Generic')?.normalScale).toBe(3)
+
+    // Target: FBX2glTF output — Phong defaults, its own lossless base images.
+    const target = new Document()
+    const fbxBase = target.createTexture('ELC_fbx').setImage(red).setMimeType('image/png')
+    const byName = new Map<string, Material>()
+    for (const name of ['ELC_Base', 'Truss', 'MLI.Generic', 'Extra']) {
+      byName.set(name, target.createMaterial(name).setMetallicFactor(0.4).setRoughnessFactor(0.272))
+    }
+    byName.get('ELC_Base')?.setBaseColorTexture(fbxBase)
+    byName.get('MLI.Generic')?.setBaseColorFactor([0.8, 0.8, 0.8, 1]).setNormalTexture(target.createTexture('MLI_fbx_n').setImage(blue).setMimeType('image/png'))
+
+    const report = applySourceMaterials(target, materials)
+    expect(report).toMatchObject({ matched: 3, unmatched: ['Extra'], metallicRoughness: 2, baseColor: 1, normal: 0, cutouts: ['ELC_Base'] })
+
+    const elc = byName.get('ELC_Base')
+    expect(elc?.getBaseColorTexture()).toBe(fbxBase) // the FBX's lossless image wins
+    expect(elc?.getMetallicRoughnessTexture()?.getName()).toBe('ELC_MR')
+    // Single-sided: double-sided thin blankets z-fight front against back.
+    expect([elc?.getAlphaMode(), elc?.getAlphaCutoff(), elc?.getDoubleSided()]).toEqual(['MASK', 0.5, false])
+    expect([elc?.getMetallicFactor(), elc?.getRoughnessFactor()]).toEqual([SOURCE_METALLIC_SCALE, 1])
+    // BLEND in the source, but not a listed cutout: stays as the repairs left it.
+    expect(byName.get('Truss')?.getAlphaMode()).toBe('OPAQUE')
+    const mli = byName.get('MLI.Generic')
+    expect(mli?.getBaseColorTexture()?.getName()).toBe('MLI_Diffuse') // absent from the FBX
+    expect(mli?.getNormalTexture()?.getName()).toBe('MLI_fbx_n')
+    expect(mli?.getNormalScale()).toBe(3)
+    expect(mli?.getBaseColorFactor()).toEqual([1, 1, 1, 1])
+    expect([mli?.getMetallicFactor(), mli?.getRoughnessFactor()]).toEqual([0, 0.5])
+  })
+})
+
+describe('KTX2 encode plan', () => {
+  it('encodes colour slots sRGB, data slots linear, and keeps alpha only where a material reads it', async () => {
+    const doc = new Document()
+    const png = await solidPng('white')
+    const t = (name: string) => doc.createTexture(name).setImage(png).setMimeType('image/png')
+    const [opaqueBase, maskBase, normal, mr] = [t('opaque'), t('mask'), t('normal'), t('mr')]
+    doc.createMaterial('A').setBaseColorTexture(opaqueBase).setNormalTexture(normal).setMetallicRoughnessTexture(mr)
+    doc.createMaterial('B').setAlphaMode('MASK').setBaseColorTexture(maskBase)
+
+    const usage = classifyTextureUsage(doc)
+    expect(usage.get(opaqueBase)).toEqual({ color: true, data: false, alpha: false })
+    expect(usage.get(maskBase)).toEqual({ color: true, data: false, alpha: true })
+    expect(usage.get(normal)).toEqual({ color: false, data: true, alpha: false })
+
+    const args = (entry: { color: boolean; data: boolean; alpha: boolean }) => ktxCreateArgs(entry, 'in.png', 'out.ktx2').join(' ')
+    expect(args({ color: true, data: false, alpha: false })).toContain('--format R8G8B8_SRGB --assign-oetf srgb --encode basis-lz')
+    expect(args({ color: true, data: false, alpha: true })).toContain('--format R8G8B8A8_SRGB')
+    expect(args({ color: false, data: true, alpha: false })).toContain('--format R8G8B8_UNORM --assign-oetf linear')
+    expect(args({ color: false, data: true, alpha: false })).toMatch(/--generate-mipmap in\.png out\.ktx2$/)
+  })
+
+  it('rejects a texture shared between a colour and a data slot', async () => {
+    const doc = new Document()
+    const shared = doc.createTexture('shared').setImage(await solidPng('white')).setMimeType('image/png')
+    doc.createMaterial('A').setBaseColorTexture(shared).setMetallicRoughnessTexture(shared)
+    expect(() => classifyTextureUsage(doc)).toThrow(/both colour and data/)
+  })
+})
+
+describe('published high asset', () => {
+  it('ships KTX2 textures and the authored materials, not the converter defaults', async () => {
+    const json = parseGlbJsonDeclarations(await readFile(PUBLISHED_ASSET)) as GlbJson
+    expect(json.extensionsRequired).toContain('KHR_texture_basisu')
+    expect(json.images.every((image: GlbJson) => image.mimeType === 'image/ktx2')).toBe(true)
+    const materials: GlbJson[] = json.materials
+    const byName = new Map(materials.map((m) => [m.name, m]))
+    // FBX2glTF's Phong conversion stamps metallic 0.4 / roughness 0.272 on
+    // every material; none may survive the graft.
+    const converterDefault = materials.filter((m) =>
+      m.pbrMetallicRoughness?.metallicFactor === 0.4 &&
+      Math.abs((m.pbrMetallicRoughness?.roughnessFactor ?? 1) - 0.2722) < 1e-3)
+    expect(converterDefault.map((m) => m.name)).toEqual([])
+    expect(materials.filter((m) => m.pbrMetallicRoughness?.metallicRoughnessTexture).length).toBeGreaterThanOrEqual(35)
+    expect(byName.get('MLI.Generic')?.pbrMetallicRoughness?.baseColorTexture).toBeDefined()
+    for (const cutout of ['ELC_Base', 'IROSA']) {
+      expect(byName.get(cutout)).toMatchObject({ alphaMode: 'MASK', alphaCutoff: 0.5 })
+      expect(byName.get(cutout)?.doubleSided ?? false).toBe(false)
+    }
+    expect(byName.get('Truss')?.alphaMode ?? 'OPAQUE').toBe('OPAQUE')
+    // Authored metalness is halved (SOURCE_METALLIC_SCALE): no factor above it.
+    expect(Math.max(...materials.map((m) => m.pbrMetallicRoughness?.metallicFactor ?? 1))).toBeLessThanOrEqual(SOURCE_METALLIC_SCALE)
   })
 })

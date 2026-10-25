@@ -74,6 +74,14 @@ LOD failure demotes to legacy.
 - Caching: `__BUILD_ID__` is now the versioned `.glb`/`.webp` content hash, so
   docs/code deploys keep the model cache. A 5 s boot-idle, connection-gated
   bare fetch warms the LOD; the full asset is not prefetched.
+- **2026-10-25 rebuild** (supersedes the sizes and WebP figures above): both
+  tiers now ship KTX2 / Basis ETC1S textures and the authored IGOAL materials
+  (`docs/ISS_MODEL_CONTEXT.md` §1.1). The LOD is derived from the high build's
+  master, keeps every rig node but drops 418 emptied leaves (285 nodes), and
+  measures 6.53 MiB (≈5.7 MB brotli, was 4.4) with ~20 MiB of GPU texture
+  memory (was ~97). The full asset is 28.1 MiB (≈25 MB brotli, was 16.5) with
+  ≤228 MiB of texture memory (was ~700). Image decode left the main thread
+  (transcoding runs in workers), so the GPU preparation is shorter.
 - Verified: `npm run verify` exit 0 (246 tests), LOD passes
   `iss-model-manifest --check-only`, high asset unchanged. **Browser-verified
   2026-10-23** (headless Chrome 156, live): Locate reached `Follow · Locked`

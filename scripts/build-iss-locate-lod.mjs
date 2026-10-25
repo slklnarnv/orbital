@@ -1,8 +1,9 @@
 // ─── build-iss-locate-lod.mjs — Locate-tier IGOAL LOD ────────────────────────
 //
-// Derives the fast Locate/Follow model from the validated high IGOAL asset.
-// The high model is deliberately deferred and 20.5 MB (69% Draco geometry,
-// 27% WebP textures, 2.665M triangles). A cold Locate on a slow connection
+// Derives the fast Locate/Follow model from the high build's master
+// (.tmp-iss-build/iss_igoal_master.glb: full geometry, lossless textures, rig
+// extras — written by build-iss-model.mjs). The high model is deliberately
+// deferred and large (~2.67M triangles). A cold Locate on a slow connection
 // cannot finish it inside the 8 s departure gate, so the camera departs on the
 // schematic Model A and swaps to IGOAL mid-flight — the visible pop this LOD
 // removes.
@@ -17,35 +18,36 @@
 //   - A short keep-list preserves the payloads that define the silhouette
 //     (AMS, Bartolomeo, ELCs, the ERA-containing MLM detail mesh, radiators,
 //     iROSA mod kits), so Follow still reads as the real station.
-//   - The kept geometry is simplified 50% and textures are resized to 512.
-//     Measured result: ~4 MB, ~600k triangles, 405 draw primitives, visual
-//     parity at Follow range. The full high model remains for Inspect (<200 km).
+//   - The kept geometry is simplified and textures become KTX2 / ETC1S at
+//     512 px (albedo) / 256 px (normal, metallic-roughness). Empty leaf nodes left by the strip are removed unless the
+//     rig names them. The full high model remains for Inspect (<200 km).
 //
 // The LOD keeps the complete 703-node rig: 12 joints, 8 oscillators, the six
 // protected attachment frames and `extras.orbitalRig` — so ISSAnimations and
 // the normalization constants are shared with the high model untouched.
 //
 // Publication is candidate-first: write to .tmp-iss-build, decode and validate
-// (rig, WebP extension, finite geometry, truss span, budget), then copy to
+// (rig, KTX2 textures, finite geometry, truss span, budget), then copy to
 // public/models/iss_igoal_locate.glb. A failure leaves the published asset
 // untouched.
 //
-// Usage: node scripts/build-iss-locate-lod.mjs
+// Usage: node scripts/build-iss-locate-lod.mjs   (after build-iss-model.mjs;
+//        KTX_BIN names the `ktx` executable when it is not on PATH)
 // Importing is side-effect free; the CLI runs via the main guard.
 
 import { copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { draco, prune, simplifyPrimitive, textureCompress } from '@gltf-transform/functions'
+import { draco, prune, simplifyPrimitive } from '@gltf-transform/functions'
 import { MeshoptSimplifier } from 'meshoptimizer'
-import sharp from 'sharp'
-import { createIO, validateCandidate } from './build-iss-model.mjs'
+import { createIO, encodeTexturesKtx2, validateCandidate } from './build-iss-model.mjs'
+import { REQUIRED_NODES } from './iss-rig-manifest.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const HIGH_PATH = path.join(root, 'public/models/iss_igoal.glb')
-const OUT_PATH = path.join(root, 'public/models/iss_igoal_locate.glb')
 const WORK_DIR = path.join(root, '.tmp-iss-build')
+const MASTER_PATH = path.join(WORK_DIR, 'iss_igoal_master.glb')
+const OUT_PATH = path.join(root, 'public/models/iss_igoal_locate.glb')
 const CANDIDATE_PATH = path.join(WORK_DIR, 'iss_igoal_locate_candidate.glb')
 
 /** Nodes whose geometry survives the Locate LOD. Everything else matching
@@ -54,7 +56,10 @@ const CANDIDATE_PATH = path.join(WORK_DIR, 'iss_igoal_locate_candidate.glb')
 export const KEEP_DETAIL_PATTERN = /AMS_Details|Columbus_BARTOLOMEO_Details|Airlock_Details|MLM_Details_Misc|Node3_Details|P6_Batteries_Details|Columbus_Details|Payload_MBSU_Covered_Details|ELC\d*_Details|Bishop_Details_Misc/i
 export const STRIP_PATTERN = /details|handrail|greeble/i
 
-const MAX_TEXTURE_EDGE = 512
+// Follow frames the whole station in a few hundred pixels: albedo keeps 512,
+// normal and metallic-roughness detail is sub-pixel there, so 256 suffices.
+const MAX_COLOR_TEXTURE_EDGE = 512
+const MAX_DATA_TEXTURE_EDGE = 256
 const SIMPLIFY_RATIO = 0.3
 const SIMPLIFY_ERROR = 0.03
 
@@ -78,6 +83,25 @@ export function stripDetailMeshes(document, { keep = KEEP_DETAIL_PATTERN, strip 
     }
   }
   return { strippedNodes, keptDetailNodes }
+}
+
+/**
+ * Remove nodes left with neither a mesh nor children (meshes stripped above),
+ * repeatedly, so whole emptied branches go. Rig-named nodes always stay —
+ * including the protected empty attachment frames.
+ */
+export function pruneEmptyLeaves(document, keep = new Set(REQUIRED_NODES)) {
+  let removed = 0
+  for (let changed = true; changed;) {
+    changed = false
+    for (const node of document.getRoot().listNodes()) {
+      if (node.getMesh() || node.listChildren().length > 0 || keep.has(node.getName())) continue
+      node.dispose()
+      removed += 1
+      changed = true
+    }
+  }
+  return { emptyNodesRemoved: removed }
 }
 
 /**
@@ -112,21 +136,18 @@ export async function simplifyKeptPrimitives(document, { ratio = SIMPLIFY_RATIO,
 }
 
 /**
- * Transform the high document into the Locate document in place: strip, prune
- * the orphaned meshes/accessors/materials, simplify, resize textures to WebP,
- * then Draco. The published high asset is never touched.
+ * Transform the master document into the Locate document in place: strip,
+ * drop emptied leaves, prune the orphaned meshes/accessors/materials,
+ * simplify, encode 512 px KTX2 textures, then Draco.
  */
 export async function buildLocateDocument(document) {
   const stripped = stripDetailMeshes(document)
+  const emptied = pruneEmptyLeaves(document)
   await document.transform(prune({ keepLeaves: true }))
   const simplified = await simplifyKeptPrimitives(document)
-  await document.transform(
-    textureCompress({
-      encoder: sharp,
-      targetFormat: 'webp',
-      resize: [MAX_TEXTURE_EDGE, MAX_TEXTURE_EDGE],
-    }),
-  )
+  await encodeTexturesKtx2(document, {
+    maxEdge: (usage) => (usage.color ? MAX_COLOR_TEXTURE_EDGE : MAX_DATA_TEXTURE_EDGE),
+  })
   await document.transform(
     draco({
       method: 'edgebreaker',
@@ -136,7 +157,7 @@ export async function buildLocateDocument(document) {
     }),
   )
   await document.transform(prune({ keepLeaves: true }))
-  return { ...stripped, ...simplified }
+  return { ...stripped, ...emptied, ...simplified }
 }
 
 function fail(message) {
@@ -146,14 +167,14 @@ function fail(message) {
 
 /** Build the candidate, validate it, and publish only on success. */
 export async function buildLocateLod({
-  highPath = HIGH_PATH,
+  highPath = MASTER_PATH,
   outPath = OUT_PATH,
   candidatePath = CANDIDATE_PATH,
 } = {}) {
   const io = await createIO()
   const sourceHash = createHash('sha256').update(await readFile(highPath)).digest('hex')
 
-  console.log('[build-iss-locate-lod] Reading high asset...')
+  console.log('[build-iss-locate-lod] Reading the high build master...')
   const document = await io.read(highPath)
   const stats = await buildLocateDocument(document)
 
@@ -161,7 +182,7 @@ export async function buildLocateLod({
   await mkdir(WORK_DIR, { recursive: true })
   await io.write(candidatePath, document)
 
-  // Full contract gate on the decoded candidate: rig, WebP extension, finite
+  // Full contract gate on the decoded candidate: rig, KTX2 textures, finite
   // positions, truss span, budget. Throws before publication on any failure.
   const summary = await validateCandidate(candidatePath)
   await copyFile(candidatePath, outPath)
@@ -189,7 +210,7 @@ async function main() {
   console.log(`nodes:            ${report.nodes} (mesh instances: ${report.meshInstances}, stored meshes: ${report.storedMeshes})`)
   console.log(`triangles:        ${(report.triangles / 1000).toFixed(0)}k (strip: ${report.strippedNodes} nodes, simplify: ${report.simplified} prims)`)
   console.log(`vertices:         ${(report.vertices / 1000).toFixed(0)}k`)
-  console.log(`textures:         ${report.textures}`)
+  console.log(`textures:         ${report.textures} KTX2`)
   console.log(`extensions:       ${report.extensionsUsed.join(', ')}`)
   console.log(`bounds (m):       ${report.bounds.size.join(' × ')}`)
   console.log(`source sha256:    ${report.sourceSha256}`)

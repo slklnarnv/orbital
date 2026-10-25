@@ -55,6 +55,7 @@ import React, {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { sunVisibility } from '@/core/orbital/SunVisibility'
@@ -84,6 +85,31 @@ const GLINT_COLOR_SHADOW = new THREE.Color('#6FAEE0')
 // we ship the decoder WASM and JS files in public/draco/ and point useGLTF at them.
 // This guarantees Draco-compressed models decode regardless of CDN availability.
 useGLTF.setDecoderPath('/draco/')
+
+// ─── KTX2 / Basis textures ───────────────────────────────────────────────────
+// The IGOAL assets ship GPU-compressed KTX2 (ETC1S) textures: ~4–8× less
+// texture memory than decoded WebP, transcoded in workers instead of decoded
+// on the main thread. The transcoder is self-hosted in public/basis/ (copied
+// from three/examples/jsm/libs/basis at the renderer's version), like Draco.
+// detectSupport picks the GPU format (BC / ETC / ASTC) per renderer, so the
+// loader is rebuilt if the renderer ever changes.
+let ktx2Loader: KTX2Loader | null = null
+let ktx2Renderer: THREE.WebGLRenderer | null = null
+
+function ktx2LoaderFor(gl: THREE.WebGLRenderer): KTX2Loader {
+  if (!ktx2Loader || ktx2Renderer !== gl) {
+    ktx2Loader?.dispose()
+    ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(gl)
+    ktx2Renderer = gl
+  }
+  return ktx2Loader
+}
+
+// drei's GLTFLoader is three-stdlib's, whose typings declare their own
+// KTX2Loader class; three's loader is runtime-compatible (the GLTF parser only
+// calls load()), so the two types are bridged here once.
+type DreiGLTFLoader = Parameters<NonNullable<Parameters<typeof useGLTF>[3]>>[0]
+type DreiKTX2Loader = Parameters<DreiGLTFLoader['setKTX2Loader']>[0]
 
 // ─── Detailed model registry (per-selection normalization) ──────────────────
 
@@ -343,7 +369,11 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
   const { gl, camera, scene } = useThree()
   const groupRef = useRef<THREE.Group>(null)
   const pivotGroupRef = useRef<THREE.Group>(null)
-  const detailedGltf = useGLTF(spec.url)
+  const extendLoader = useCallback(
+    (loader: DreiGLTFLoader) => { loader.setKTX2Loader(ktx2LoaderFor(gl) as unknown as DreiKTX2Loader) },
+    [gl],
+  )
+  const detailedGltf = useGLTF(spec.url, true, true, extendLoader)
   const detailedScene = useMemo(() => detailedGltf.scene.clone(), [detailedGltf.scene])
   // Validated rig contract from the asset's scene extras (emitted by
   // build-iss-model.mjs as extras.orbitalRig). Absent = pre-rebuild asset
@@ -480,7 +510,7 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
           scale apply. */}
       <group ref={pivotGroupRef} position={spec.pivotOffset}>
         <primitive object={detailedScene} />
-        <ISSAnimations rootRef={pivotGroupRef} quality={quality} rigMetadata={rigMetadata} onError={() => onError(attempt)} />
+        <ISSAnimations rootRef={pivotGroupRef} quality={quality} active={visible} rigMetadata={rigMetadata} onError={() => onError(attempt)} />
       </group>
     </group>
   )

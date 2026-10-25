@@ -28,19 +28,13 @@ import * as THREE from 'three'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { ISSModel } from './ISSModel'
 import { OrbitalRenderInterpolator } from './OrbitalRenderInterpolator'
+import { lvlhAttitude } from './stationAttitude'
 
-// TEA yaw bias (rad) — the real station trims ~−8° west of V-bar.
-const TEA_YAW_BIAS_RAD = (-8 * Math.PI) / 180
 // Exponential slerp stiffness (1/s) — higher = snappier attitude capture.
 const ATTITUDE_SMOOTHING = 1.6
 
-const _vbar = new THREE.Vector3()
-const _nadir = new THREE.Vector3()
-const _normal = new THREE.Vector3()
-const _basis = new THREE.Matrix4()
+const _velocity = new THREE.Vector3()
 const _targetQuat = new THREE.Quaternion()
-const _yawQuat = new THREE.Quaternion()
-const _Z = new THREE.Vector3(0, 0, 1)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -101,37 +95,11 @@ export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {
       groupRef.current.position,
     )
 
-    // ─── Attitude: LVLH + TEA yaw bias ───
-    // V-bar from velocity, nadir from −position (same TEME→world swap as the
-    // interpolator applies to position). Guarded until the propagator has a
-    // real velocity so we never orient on a zero vector.
-    _vbar.set(state.velocityECI.x, state.velocityECI.z, -state.velocityECI.y)
-    if (_vbar.lengthSq() < 1e-9) return
-    _vbar.normalize()
-
-    _nadir.copy(groupRef.current.position).multiplyScalar(-1)
-    if (_nadir.lengthSq() < 1e-9) return
-    _nadir.normalize()
-
-    // Degenerate-frame guard (plan 001 F): radial motion or mixed-time data
-    // can make nadir and V-bar collapse toward parallel, and normalizing a
-    // near-zero cross product would randomize the attitude. Keep the
-    // previous attitude for the frame instead.
-    _normal.crossVectors(_nadir, _vbar)
-    if (_normal.lengthSq() < 1e-8) return
-    _normal.normalize()
-    // Re-orthogonalize nadir against the (vbar, normal) pair so the basis
-    // stays orthonormal as velocity and position slowly diverge from 90°.
-    _nadir.crossVectors(_vbar, _normal)
-    if (_nadir.lengthSq() < 1e-8) return
-    _nadir.normalize()
-
-    _basis.makeBasis(_vbar, _normal, _nadir)
-    _targetQuat.setFromRotationMatrix(_basis)
-
-    // TEA: the small equilibrium yaw trim about the body nadir axis.
-    _yawQuat.setFromAxisAngle(_Z, TEA_YAW_BIAS_RAD)
-    _targetQuat.multiply(_yawQuat)
+    // ─── Attitude: LVLH + TEA yaw bias (stationAttitude.ts) ───
+    // V-bar from velocity (same TEME→world swap as the interpolator applies
+    // to position). A degenerate frame keeps the previous attitude.
+    _velocity.set(state.velocityECI.x, state.velocityECI.z, -state.velocityECI.y)
+    if (!lvlhAttitude(groupRef.current.position, _velocity, _targetQuat)) return
 
     // Rate-limited capture: exponential slerp never snaps, even when the
     // camera's Locate flight or a mode change hands us a new geometry.

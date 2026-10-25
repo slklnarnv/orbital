@@ -6,6 +6,59 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## ISS animation audit (2026-10-25)
+
+The rig was measured instead of eyeballed: the per-frame step moved out of
+React into `ISSRigAnimator.ts`, the attitude into `stationAttitude.ts`, and
+`ISSRigSimulation.test.ts` flies the published assets through real orbits.
+
+- **Correct, now under test**: all eight wings keep their cell face (+Y,
+  verified from the texture) on the sun through daylight at three seasons;
+  the radiators run edge-on in daylight and face Earth in eclipse within the
+  ±105° travel; model +X is forward (Node 2 ahead of Zvezda), +Z starboard
+  (Columbus), Cupola nadir; every SARJ/TRRJ/BGA origin lies on its shaft.
+- **Fixed**: the ELP/SHP camera pan nodes have authored origins 2.7 m / 4.5 m
+  from their 0.5 m cameras, so the idle pan swung each camera ~0.3 m off its
+  mount; sweeps now pivot on the part when the origin lies outside it, and
+  turn about the part's own local axis (the old code wrote one Euler
+  component).
+
+## IGOAL source-material + KTX2 rebuild (2026-10-25)
+
+With both NASA IGOAL sources available (the owner's `ISSTEST.zip`), the model
+was analysed against them and rebuilt (`docs/ISS_MODEL_CONTEXT.md` §1):
+
+- **Materials.** FBX2glTF had dropped all 38 metallic-roughness maps and put
+  its Phong conversion (metallic 0.4 / roughness 0.272) on every material.
+  The build now grafts the source GLB's authored materials by name (factors,
+  metallic-roughness maps, the MLI and GEDI albedo the FBX lacks, normal
+  strengths) and renders the genuine cutouts (ELC grating, iROSA hex panels)
+  as MASK. The FBX is byte-identical to the audited source (`c3c43b9c…`).
+- **Textures.** KTX2 / Basis ETC1S (`ktx create`, quality 255; on par with
+  the WebP q80 they replace). Texture memory: full ~700 → ≤228 MiB, LOD ~97 →
+  ~20 MiB; transcoding runs in workers. Transfer (brotli): full 16.5 → 25 MB,
+  LOD 4.4 → 5.7 MB (the new metallic-roughness maps plus ETC1S overhead).
+  Runtime: `KTX2Loader` on drei's `useGLTF`, transcoder in `public/basis/`.
+- **LOD.** Derived from the high build's lossless master; normal and
+  metallic-roughness maps at 256 px; 418 emptied leaf nodes removed (703 →
+  285 nodes; every rig node kept).
+- **Brightness.** Authored metalness is halved at build time
+  (`SOURCE_METALLIC_SCALE`): at full value the array backs and truss went
+  near-black in eclipse. Measured parity with the previous asset (mean lit
+  luminance, app lighting: day 104 vs 106, eclipse 94 vs 101). Cutouts are
+  single-sided (double-sided iROSA blankets z-fought into tan speckle).
+- **Tried, not adopted:** an Earth-below / space-above PBR environment aimed
+  at nadir — physically motivated, but daylight luminance fell to 79 and the
+  array backs went black at night; `RoomEnvironment` stays.
+- **Animation.** Only the visible detail model animates; joint state is
+  handed to the next tier, so a swap mid-slew no longer snaps
+  (`freshHandoff`). The SARJs stay uncapped by design (docs corrected).
+- **Measured, not adopted:** meshopt + quantization (geometry memory 214 →
+  113 MB, faster parse, but ≈ +9 MB transfer and a 50+ MB raw GLB in git).
+- Tests: graft (incl. metallic scale, single-sided cutouts), KTX2 encode
+  plan, published-asset material contract, `pruneEmptyLeaves`,
+  `freshHandoff`.
+
 ## Improve-skill audit + waves 1–2 (2026-10-24/25)
 
 A deep audit (six auditors, every finding re-read) produced plans 002–016;

@@ -29,6 +29,7 @@ import {
   KHRMaterialsIOR,
   KHRMaterialsSpecular,
   KHRMaterialsUnlit,
+  KHRTextureBasisu,
   KHRTextureTransform,
 } from '@gltf-transform/extensions'
 import draco3d from 'draco3dgltf'
@@ -48,8 +49,9 @@ export async function createManifestIO() {
   return new NodeIO()
     .registerExtensions([
       KHRDracoMeshCompression,
-      EXTTextureWebP, // the asset's images are WebP; without this registration
-      // the writer/reader drop the extension and dimension reads return null
+      EXTTextureWebP, // WebP (legacy assets) and KTX2 (the IGOAL assets):
+      KHRTextureBasisu, // unregistered, the reader drops the extension and
+      // dimension reads return null
       KHRMaterialsIOR,
       KHRMaterialsSpecular,
       KHRMaterialsUnlit,
@@ -248,7 +250,7 @@ async function runCli() {
 
   // ─── Textures inventory (+ optional export) ────────────────────────────────
 
-  const mimeExt = { 'image/webp': '.webp', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/bmp': '.bmp' }
+  const mimeExt = { 'image/webp': '.webp', 'image/ktx2': '.ktx2', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/bmp': '.bmp' }
   const textureUsage = new Map() // texture -> [{material, slot}]
   for (const material of root.listMaterials()) {
     const slots = {
@@ -450,6 +452,8 @@ async function runCli() {
   const extensionsUsed = root.listExtensionsUsed().map((e) => e.extensionName)
   const hasWebp = root.listTextures().some((t) => t.getMimeType() === 'image/webp')
   const webpDeclared = extensionsUsed.includes('EXT_texture_webp')
+  const hasKtx2 = root.listTextures().some((t) => t.getMimeType() === 'image/ktx2')
+  const basisuDeclared = extensionsUsed.includes('KHR_texture_basisu')
   const fileStat = await stat(input)
   const withinBudget = fileStat.size <= MAX_ASSET_BYTES
 
@@ -458,6 +462,9 @@ async function runCli() {
     ...(nonfiniteTotal > 0 ? [`${nonfiniteTotal} non-finite POSITION components`] : []),
     ...(hasWebp && !webpDeclared
       ? ['asset has image/webp textures but does not declare EXT_texture_webp (nonconforming; Three tolerates it, the file is still wrong)']
+      : []),
+    ...(hasKtx2 && !basisuDeclared
+      ? ['asset has image/ktx2 textures but does not declare KHR_texture_basisu (nonconforming)']
       : []),
     ...(!withinBudget
       ? [`asset is ${(fileStat.size / (1024 * 1024)).toFixed(1)} MiB, over the ${MAX_ASSET_BYTES / (1024 * 1024)} MiB budget`]
@@ -490,6 +497,7 @@ async function runCli() {
       rigWarnings: rig.warnings,
       nonfinitePositionComponents: nonfiniteTotal,
       webpExtensionDeclared: hasWebp ? webpDeclared : 'no webp images',
+      basisuExtensionDeclared: hasKtx2 ? basisuDeclared : 'no ktx2 images',
       bytes: fileStat.size,
       withinBudget,
     },

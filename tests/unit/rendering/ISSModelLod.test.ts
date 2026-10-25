@@ -1,9 +1,10 @@
 // ─── ISSModelLod.test.ts — Locate-tier LOD derivation contracts ─────────────
 //
-// The Locate LOD is derived from the validated high asset at build time:
+// The Locate LOD is derived from the high build's master at build time:
 // detail/handrail meshes are dropped (except the named silhouette payloads),
-// the kept geometry is simplified, textures are resized, and the published
-// candidate must keep the full 703-node rig. These cases exercise the actual
+// emptied leaves are removed unless the rig names them, the kept geometry is
+// simplified, textures become small KTX2, and the published candidate must
+// keep every rig node. These cases exercise the actual
 // helper functions on small synthetic documents and validate the shipped LOD
 // with the same contract gate used by the build.
 
@@ -16,8 +17,10 @@ import { Document, type Mesh, type Primitive } from '@gltf-transform/core'
 import { validateCandidate } from '../../../scripts/build-iss-model.mjs'
 import {
   buildLocateDocument,
+  pruneEmptyLeaves,
   stripDetailMeshes,
 } from '../../../scripts/build-iss-locate-lod.mjs'
+import { PROTECTED_FRAMES, REQUIRED_NODES } from '../../../scripts/iss-rig-manifest.mjs'
 
 const LOD_ASSET = path.resolve(__dirname, '../../../public/models/iss_igoal_locate.glb')
 const HIGH_ASSET = path.resolve(__dirname, '../../../public/models/iss_igoal.glb')
@@ -80,18 +83,43 @@ describe('buildLocateDocument', () => {
     expect(stats.strippedNodes).toBe(1)
     expect(stats.trianglesAfter).toBeLessThanOrEqual(stats.trianglesBefore)
 
+    expect(stats.emptyNodesRemoved).toBe(1)
+
     const byName = new Map(doc.getRoot().listNodes().map((node) => [node.getName(), node]))
     expect(byName.get('AMS_Details')?.getMesh()).not.toBeNull()
-    expect(byName.get('Truss_S0_Details_Misc')?.getMesh()).toBeNull()
+    expect(byName.has('Truss_S0_Details_Misc')).toBe(false)
     expect(byName.get('Truss_S0')?.getMesh()).not.toBeNull()
+  })
+})
+
+describe('pruneEmptyLeaves', () => {
+  it('removes emptied branches but keeps rig-named nodes, including empty attachment frames', () => {
+    const doc = new Document()
+    const scene = doc.createScene('scene')
+    const frame = PROTECTED_FRAMES[0].node
+    const parent = doc.createNode('Node2')
+    const emptyBranch = doc.createNode('Bracket').addChild(doc.createNode('Bracket_Details'))
+    parent.addChild(doc.createNode(frame)).addChild(emptyBranch)
+    parent.addChild(doc.createNode('Truss_S0').setMesh(meshWithQuad(doc)))
+    scene.addChild(parent)
+
+    expect(pruneEmptyLeaves(doc)).toEqual({ emptyNodesRemoved: 2 })
+    const names = doc.getRoot().listNodes().map((node) => node.getName())
+    expect(names).toEqual(expect.arrayContaining(['Node2', frame, 'Truss_S0']))
+    expect(names).not.toContain('Bracket')
+    expect(names).not.toContain('Bracket_Details')
   })
 })
 
 describe('published Locate LOD', () => {
   it('passes the same rig/format/budget contract as the high asset', async () => {
+    // validateCandidate already enforces the rig; the stripped LOD is smaller
+    // than the 703-node high tree but still names every required node.
     const summary = await validateCandidate(LOD_ASSET)
-    expect(summary.nodes).toBe(703)
-    expect(summary.extensionsUsed).toContain('EXT_texture_webp')
+    expect(summary.nodes).toBeGreaterThanOrEqual(REQUIRED_NODES.length)
+    expect(summary.nodes).toBeLessThan(703)
+    expect(summary.extensionsUsed).toContain('KHR_texture_basisu')
+    expect(summary.textureGpuMiBUpperBound).toBeLessThan(32)
     expect(summary.bytes).toBeLessThan(10 * 1024 * 1024)
     expect(summary.triangles).toBeGreaterThan(100_000)
     expect(summary.triangles).toBeLessThan(1_200_000)
