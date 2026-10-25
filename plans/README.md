@@ -73,15 +73,15 @@ reviewer maintains this table.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [002](002-refresh-fallback-tle.md) | Fresh packaged fallback TLE | P1 | S | — | TODO |
-| [003](003-toolchain-security-and-node22.md) | Patched toolchain, full CI audit, pinned actions, Node 22, scheduled TLE refresh | P1 | S | — | TODO |
-| [004](004-telemetry-correctness.md) | Telemetry: offline-start recovery, confidence, clock rate, stale proxy, bootstrap race, same-instant blend | P1 | M | — | TODO |
-| [005](005-geo-service-correctness.md) | Geo: separate freshness, no frozen clock, validated cache rows | P2 | S–M | — | TODO |
-| [006](006-rendering-correctness.md) | Rendering: stable glint uniforms, composer-variant prep, flare mask, PMREM dispose, lifecycle edges | P1 | S–M | — | TODO |
-| [007](007-bloom-path-msaa.md) | MSAA on the bloom composer target | P2 | S | — | TODO |
-| [008](008-locate-sweep-signed-angle.md) | Signed Locate sweep angle | P2 | S | — | TODO |
-| [009](009-core-math-tests.md) | Known-answer tests: OrbitalEngine, GMST, formatters, rate limiter, orbit-tape math | P2 | S–M | — | TODO |
-| [010](010-hud-hygiene.md) | Production crash screen, sentence-case strings, dead constants | P3 | S | — | TODO |
+| [002](002-refresh-fallback-tle.md) | Fresh packaged fallback TLE | P1 | S | — | DONE (merged c8886b2) |
+| [003](003-toolchain-security-and-node22.md) | Patched toolchain, full CI audit, pinned actions, Node 22, scheduled TLE refresh | P1 | S | — | DONE (merged c8886b2) |
+| [004](004-telemetry-correctness.md) | Telemetry: offline-start recovery, confidence, clock rate, stale proxy, bootstrap race, same-instant blend | P1 | M | — | DONE (merged c8886b2) |
+| [005](005-geo-service-correctness.md) | Geo: separate freshness, no frozen clock, validated cache rows | P2 | S–M | — | DONE (merged c8886b2) |
+| [006](006-rendering-correctness.md) | Rendering: stable glint uniforms, composer-variant prep, flare mask, PMREM dispose, lifecycle edges | P1 | S–M | — | DONE (merged c8886b2) |
+| [007](007-bloom-path-msaa.md) | MSAA on the bloom composer target | P2 | S | — | DONE (merged c8886b2) |
+| [008](008-locate-sweep-signed-angle.md) | Signed Locate sweep angle | P2 | S | — | DONE (merged c8886b2) |
+| [009](009-core-math-tests.md) | Known-answer tests: OrbitalEngine, GMST, formatters, rate limiter, orbit-tape math | P2 | S–M | — | DONE (merged c8886b2) |
+| [010](010-hud-hygiene.md) | Production crash screen, sentence-case strings, dead constants | P3 | S | — | DONE (merged c8886b2) |
 
 Wave 2 (written after wave 1 lands, so excerpts match the merged code):
 penumbra eclipse (roadmap D.1), orbital day/night countdown (B.1, depends on
