@@ -77,10 +77,11 @@ LOD failure demotes to legacy.
 - **2026-10-25 rebuild** (supersedes the sizes and WebP figures above): both
   tiers now ship KTX2 / Basis ETC1S textures and the authored IGOAL materials
   (`docs/ISS_MODEL_CONTEXT.md` §1.1). The LOD is derived from the high build's
-  master, keeps every rig node but drops 418 emptied leaves (285 nodes), and
-  measures 6.53 MiB (≈5.7 MB brotli, was 4.4) with ~20 MiB of GPU texture
-  memory (was ~97). The full asset is 28.1 MiB (≈25 MB brotli, was 16.5) with
-  ≤228 MiB of texture memory (was ~700). Image decode left the main thread
+  master, keeps every rig node, and with rigid batching measures 6.20 MiB
+  (≈5.5 MB brotli, was 4.4), 176 draw primitives (was 432) and ~20 MiB of GPU
+  texture memory (was ~97). The full asset is 27.1 MiB (≈24.2 MB brotli, was
+  16.5) with 217 draw primitives (was 980) and ≤228 MiB of texture memory
+  (was ~700). Image decode left the main thread
   (transcoding runs in workers), so the GPU preparation is shorter.
 - Verified: `npm run verify` exit 0 (246 tests), LOD passes
   `iss-model-manifest --check-only`, high asset unchanged. **Browser-verified

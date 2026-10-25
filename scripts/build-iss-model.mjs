@@ -66,15 +66,21 @@ import {
 import {
   dedup,
   draco,
+  joinPrimitives,
   prune,
   simplifyPrimitive,
   textureCompress,
+  transformPrimitive,
   weld,
 } from '@gltf-transform/functions'
 import draco3d from 'draco3dgltf'
 import { MeshoptSimplifier } from 'meshoptimizer'
 import sharp from 'sharp'
+import { Matrix4 } from 'three'
 import {
+  JOINTS,
+  OSCILLATORS,
+  REQUIRED_NODES,
   TRRJ_LIMITS,
   runtimeSubset,
   validateDocumentRig,
@@ -552,6 +558,116 @@ export function stripVertexColors(document) {
   return stripped
 }
 
+// ─── Step 6: rigid batching (plan 001 Phase D) ───────────────────────────────
+
+/** Nodes the runtime moves; everything beneath one moves rigidly with it. */
+export const MOVING_NODES = new Set([...JOINTS.map((j) => j.nodeName), ...OSCILLATORS.map((o) => o.target)])
+
+/**
+ * Remove nodes left with neither a mesh nor children, repeatedly, so whole
+ * emptied branches go. Rig-named nodes always stay — including the protected
+ * empty attachment frames.
+ */
+export function pruneEmptyLeaves(document, keep = new Set(REQUIRED_NODES)) {
+  let removed = 0
+  for (let changed = true; changed;) {
+    changed = false
+    for (const node of document.getRoot().listNodes()) {
+      if (node.getMesh() || node.listChildren().length > 0 || keep.has(node.getName())) continue
+      node.dispose()
+      removed += 1
+      changed = true
+    }
+  }
+  return { emptyNodesRemoved: removed }
+}
+
+function bakeableClone(prim) {
+  const clone = prim.clone()
+  for (const semantic of prim.listSemantics()) {
+    const source = prim.getAttribute(semantic)
+    clone.setAttribute(semantic, source.clone().setArray(source.getArray().slice()))
+  }
+  const indices = prim.getIndices()
+  // One index width per bucket so compatible primitives always join.
+  if (indices) clone.setIndices(indices.clone().setArray(Uint32Array.from(indices.getArray())))
+  return clone
+}
+
+function joinKey(prim) {
+  const attributes = prim.listSemantics().sort().map((semantic) => {
+    const a = prim.getAttribute(semantic)
+    return `${semantic}:${a.getComponentType()}:${a.getElementSize()}:${a.getNormalized()}`
+  })
+  return `${prim.getMode()}|${prim.getIndices() ? 'i' : 'n'}|${attributes.join(',')}`
+}
+
+/**
+ * Merge static geometry into one primitive per (rigid part × module ×
+ * material), cutting draw calls ~4.5× without touching anything that moves.
+ *   - A rigid part is everything that moves together: the static station, or
+ *     the subtree of one driven joint / camera (MOVING_NODES), stopping at
+ *     the next driven node. Batched meshes hang directly under that part's
+ *     root, in its frame, so every joint still turns exactly what it turned.
+ *   - Within the static station, buckets are split per top-level module, so
+ *     frustum culling keeps module granularity at Inspect range.
+ *   - Each source is baked with its own transform into the root's frame;
+ *     transformPrimitive reverses the winding of the eleven authored mirrored
+ *     (negative-determinant) parts and fixes their normals, so mixing them is
+ *     safe.
+ * Emptied leaves are then removed; rig-named nodes stay.
+ */
+export function batchRigidMeshes(document, moving = MOVING_NODES) {
+  const scene = document.getRoot().listScenes()[0]
+  if (!scene) return { primitivesBefore: 0, primitivesAfter: 0, emptyNodesRemoved: 0 }
+  // The IGOAL scene has one root: descend its single-child conversion roots
+  // (RootNode → SSREF_IGOAL) to the hub whose children are the modules, and
+  // batch the static station in the hub's frame. A scene with several roots
+  // batches each root in its own frame.
+  let hub = scene.listChildren().length === 1 ? scene.listChildren()[0] : null
+  while (hub && hub.listChildren().length === 1 && !hub.getMesh() && !moving.has(hub.listChildren()[0].getName())) {
+    hub = hub.listChildren()[0]
+  }
+  if (hub?.getMesh()) throw new Error(`batching hub "${hub.getName()}" carries a mesh`)
+  const modules = hub ? hub.listChildren() : scene.listChildren()
+
+  const buckets = new Map()
+  let primitivesBefore = 0
+  const rootInverse = new Map()
+  const walk = (node, rigid, module) => {
+    if (moving.has(node.getName())) {
+      rigid = node
+      module = node.getName()
+    }
+    const mesh = node.getMesh()
+    if (mesh) {
+      if (!rootInverse.has(rigid)) rootInverse.set(rigid, new Matrix4().fromArray(rigid.getWorldMatrix()).invert())
+      const relative = rootInverse.get(rigid).clone().multiply(new Matrix4().fromArray(node.getWorldMatrix())).toArray()
+      for (const prim of mesh.listPrimitives()) {
+        primitivesBefore += 1
+        const baked = bakeableClone(prim)
+        transformPrimitive(baked, relative)
+        const material = prim.getMaterial()
+        const key = `${rigid.getName()}|${module}|${material?.getName() ?? ''}|${joinKey(baked)}`
+        if (!buckets.has(key)) buckets.set(key, { rigid, module, material, prims: [] })
+        buckets.get(key).prims.push(baked)
+      }
+      node.setMesh(null)
+    }
+    for (const child of node.listChildren()) walk(child, rigid, module)
+  }
+  for (const module of modules) walk(module, hub ?? module, module.getName())
+
+  for (const { rigid, module, material, prims } of buckets.values()) {
+    const joined = prims.length > 1 ? joinPrimitives(prims) : prims[0]
+    if (joined !== prims[0] || prims.length > 1) for (const p of prims) p.dispose()
+    const name = `${module}.batch.${material?.getName() ?? 'none'}`
+    rigid.addChild(document.createNode(name).setMesh(document.createMesh(name).addPrimitive(joined)))
+  }
+  const pruned = pruneEmptyLeaves(document)
+  return { primitivesBefore, primitivesAfter: buckets.size, ...pruned }
+}
+
 // ─── Step 4: optimize into a CANDIDATE (not the runtime asset) ───────────────
 
 export async function optimize(rawGlb, sourceMaterials) {
@@ -643,6 +759,13 @@ export async function optimize(rawGlb, sourceMaterials) {
   console.log('[build-iss-model] Writing master GLB...')
   await mkdir(WORK_DIR, { recursive: true })
   await io.write(MASTER_PATH, document)
+
+  const batched = batchRigidMeshes(document)
+  await document.transform(prune({ keepLeaves: true }))
+  console.log(
+    `[build-iss-model] rigid batching: ${batched.primitivesBefore} → ${batched.primitivesAfter} primitives, ` +
+      `${batched.emptyNodesRemoved} emptied nodes removed`,
+  )
 
   console.log('[build-iss-model] Encoding KTX2 textures...')
   const { encoded } = await encodeTexturesKtx2(document)

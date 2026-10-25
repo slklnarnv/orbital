@@ -1,7 +1,7 @@
 # ISS model implementation handoff
 
 > STATUS 2026-10-08: plan 001 is COMPLETE (merged via PR #12; Phases A-F
-> landed). Only optional Phase D remains, postponed by user decision.
+> landed). Phase D (rigid batching) landed 2026-10-25.
 > Live ledger: plans/PROGRESS.md (short) + plans/PROGRESS-history.md (archive).
 
 Read [001 — ISS model audit and repair](001-iss-model-audit-and-repair.md) in full before implementing.
@@ -14,7 +14,7 @@ The user requested one consolidated implementation document after a read-only au
 
 | Plan | Priority | Status | Dependencies |
 |---|---|---|---|
-| [001 — Repair ISS articulation, preserve the rig, and correct model integration](001-iss-model-audit-and-repair.md) | P1 | Phases A–C, F and E landed; docs errata done. Only optional Phase D (perf batching) remains — see plans/PROGRESS.md | None; execution phases below |
+| [001 — Repair ISS articulation, preserve the rig, and correct model integration](001-iss-model-audit-and-repair.md) | P1 | All phases landed (Phase D rigid batching 2026-10-25) — see plans/PROGRESS.md | None; execution phases below |
 
 Baseline: `fd5d353` plus the working-tree excerpts and asset hashes recorded in the plan, audited 2026-09-27. Do not assume the commit captures uncommitted source changes.
 

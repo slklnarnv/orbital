@@ -61,8 +61,9 @@
   for brightness parity; the joint state carries across the LOD ⇄ full swap. Details:
   `plans/PROGRESS.md`, `docs/ISS_MODEL_CONTEXT.md` §1.
 - **Locate LOD + two-tier detail (2026-10-23)**: Locate/Follow load
-  `iss_igoal_locate.glb` (now 6.53 MiB, 787k triangles, 285 nodes, full rig);
-  the full 28.1 MiB `iss_igoal.glb` loads only inside the 200/220 km Inspect band;
+  `iss_igoal_locate.glb` (now 6.20 MiB, 787k triangles, 176 draw primitives,
+  full rig); the full 27.1 MiB `iss_igoal.glb` (217 draw primitives) loads only
+  inside the 200/220 km Inspect band;
   `__BUILD_ID__` is an asset-content hash. Earlier the same week: PRs #14
   (texture-upload batching, immutable versioned assets, `H` HUD toggle,
   safe-area insets, OG metadata, LICENSE/NOTICE) and #15 (orbit-ring closure,

@@ -6,6 +6,16 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Parked model items, re-opened (2026-10-25)
+
+- **Rigid batching (plan 001 Phase D) landed.** `batchRigidMeshes` merges
+  static geometry per (rigid part × module × material): 993 → 217 draw
+  primitives on the full model, 438 → 176 on the LOD, 703 → 294 nodes; the
+  files also shrank (full 24.2 MB, LOD 5.5 MB brotli). Joints and cameras
+  turn exactly what they did (the rig simulation passes on the batched
+  assets); mirrored parts keep their facing (unit test); identical-view
+  renders differ only by sub-pixel edge shifts.
+
 ## ISS animation audit (2026-10-25)
 
 The rig was measured instead of eyeballed: the per-frame step moved out of
@@ -293,7 +303,8 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 
 ## Open items
 
-- **Phase D** (animation-safe rigid batching): POSTPONED by user decision.
+- **Phase D** (animation-safe rigid batching): LANDED 2026-10-25 —
+  `batchRigidMeshes`, 993 → 217 draw primitives (full), 438 → 176 (LOD).
   Constraints and rollback asset if ever revisited: history
   §"Remaining work (not started)".
 - **Investigate-first list and deferred majors**: see `plans/README.md`
