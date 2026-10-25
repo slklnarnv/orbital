@@ -16,7 +16,7 @@ point below, and the station's attitude.
 | | | |
 |:-:|:-:|:-:|
 | ![Earth overview with the day-night terminator, city lights and the ISS orbit ring](docs/images/earth-overview.webp) | ![The ISS above Earth's limb in Follow mode](docs/images/follow-limb.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
-| Earth overview: terminator, city lights, orbit | Follow: tracking the station at the limb | Inspect: the full 2.7M-triangle model |
+| Earth overview | Follow: tracking the station at the limb | Inspect: the detailed model |
 
 ## What you are looking at
 
