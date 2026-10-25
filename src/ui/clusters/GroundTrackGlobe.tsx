@@ -1,13 +1,22 @@
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { sampleGroundTrack } from '@/core/orbital/GroundTrack'
+import { issEntity } from '@/core/entities/ISSEntity'
 import { useOrbitalState } from '@/hooks/useOrbitalState'
+import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { useGeoStore } from '@/stores/geoStore'
 import { useSimulationStore } from '@/stores/simulationStore'
+import { ISS_ORBITAL_PERIOD_MIN } from '@/utils/constants'
 import { formatLatitude, formatLongitude } from '@/utils/formatters'
 
 /**
  * GroundTrackGlobe — an orthographic graticule centered on the station's
  * subsatellite point. The grid slides beneath a fixed marker: the view itself
  * is what "follows" the station. Pure SVG, recomputed each 1 Hz telemetry tick.
+ *
+ * The globe also carries the station's ground track: the path of the
+ * subsatellite point, dotted for the half-orbit behind it and solid for the
+ * next half-orbit ahead. The track is resampled once per simulated minute.
  *
  * Beneath it, the ground story: the place being overflown (country + continent
  * or ocean/sea), the coordinates, and the local clock with current weather —
@@ -22,6 +31,8 @@ import { formatLatitude, formatLongitude } from '@/utils/formatters'
 const SIZE = 78
 const C = SIZE / 2
 const R = 31
+const TRACK_STEP_MS = 30_000
+const TRACK_REFRESH_MS = 60_000
 
 interface Projected {
   x: number
@@ -69,6 +80,22 @@ function graticulePath(
 export function GroundTrackGlobe(): JSX.Element {
   const { latitude, longitude } = useOrbitalState()
   const accelerated = useSimulationStore((state) => state.mode === 'ACCELERATED')
+  const simTime = useSimulationClock()
+
+  // Ground track: resample once per simulated minute (or when the TLE changes).
+  const trackMinute = Math.floor(simTime.epochMs / TRACK_REFRESH_MS)
+  const tleKey = issEntity.currentTLE?.line1 ?? ''
+  const trackSamples = useMemo(() => {
+    const halfPeriodMs =
+      ((issEntity.engine.periodMinutes ?? ISS_ORBITAL_PERIOD_MIN) * 60_000) / 2
+    // simTime.epochMs is intentionally read once per trackMinute key, not per tick.
+    return sampleGroundTrack(issEntity.engine, simTime.epochMs, {
+      pastMs: halfPeriodMs,
+      futureMs: halfPeriodMs,
+      stepMs: TRACK_STEP_MS,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackMinute, tleKey])
 
   const { placeName, continent, localTime, tzAbbr, temperatureC, weatherLabel } = useGeoStore(
     useShallow((state) => ({
@@ -107,6 +134,20 @@ export function GroundTrackGlobe(): JSX.Element {
     gridPaths.push(graticulePath(samples, phi0, lam0))
   }
 
+  // Ground track: past (dotted) and future (solid) halves around "now".
+  const toSamples = (points: typeof trackSamples) =>
+    points.map((p) => ({ phi: p.latitude, lam: p.longitude }))
+  const pastTrackPath = graticulePath(
+    toSamples(trackSamples.filter((p) => p.epochMs <= simTime.epochMs)),
+    phi0,
+    lam0
+  )
+  const futureTrackPath = graticulePath(
+    toSamples(trackSamples.filter((p) => p.epochMs > simTime.epochMs)),
+    phi0,
+    lam0
+  )
+
   // Place: country over land (continent as the secondary fact), ocean/sea
   // polygon over water. Unknown stays a quiet em dash — never a guess.
   const placeText = placeName ?? '—'
@@ -133,6 +174,22 @@ export function GroundTrackGlobe(): JSX.Element {
           {equatorPaths.map((d, i) => (
             <path key={i} d={d} fill="none" stroke="rgba(244,247,251,0.3)" strokeWidth={0.7} />
           ))}
+          {/* Ground track: dotted behind the station, solid ahead */}
+          <path
+            d={pastTrackPath}
+            fill="none"
+            stroke="rgba(244,247,251,0.28)"
+            strokeWidth={0.8}
+            strokeDasharray="1.5 2"
+            strokeLinecap="round"
+          />
+          <path
+            d={futureTrackPath}
+            fill="none"
+            stroke="rgba(168,216,255,0.75)"
+            strokeWidth={0.9}
+            strokeLinecap="round"
+          />
           {/* Subsatellite marker: fixed at center, the world moves under it */}
           <circle cx={C} cy={C} r={4.2} fill="none" stroke="rgba(244,247,251,0.5)" strokeWidth={0.75} />
           <circle cx={C} cy={C} r={1.9} fill="#f4f7fb" />
