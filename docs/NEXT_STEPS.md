@@ -7,6 +7,10 @@
 
 ## Current state (2026-10-26)
 
+- **Roadmap written (2026-10-26)**: `plans/017-display-visuals-polish-roadmap.md`
+  covers responsive display, clouds, 8K textures, the sun, the dashed orbit
+  code, icon/loading/name, accessibility and shortcuts, the info panel and
+  the exploded module explorer, with measured evidence and acceptance checks.
 - **Orbit-tape scrub in Follow/Inspect fixed (2026-10-26)**: recorded on the
   production build, a half-revolution scrub swung Earth's limb from the left
   edge to the bottom of the frame and turned the station against the camera:
@@ -152,33 +156,37 @@
 
 ## Next (ranked)
 
-1. Live deployment re-check — done 2026-10-25: no CSP violations or console
-   errors over a minute; Locate shows IGOAL; 60 fps in every Bloom/Shadows
-   combination on the owner's integrated GPU; `/api/tle` 200 (`max-age=60`),
-   `/api/tle?x=1` 404; `/models/*`, `/textures/*` and `/basis/*` answer
-   `immutable` with `?v=<hash>`; `/robots.txt`, `/sitemap.xml` and
-   `/og-image.png` 200. Still open: a human look at the rebuilt
+The display, visuals and polish roadmap is **`plans/017-display-visuals-polish-roadmap.md`**
+(2026-10-26: viewport audit at nine sizes, sun/cloud/orbit captures, code
+read). Its order, merged with the older items:
+
+1. **017 R1–R4 + R7 — responsive display.** Landscape phones get the full
+   desktop HUD (~45% of the height, clock over the station); portrait
+   framing centres the station under the HUD; ground lines at 7 px and tape
+   labels at 8 px; controls down to 23×15 px on touch. Then commit the audit
+   as a Playwright spec.
+2. **017 V1 — close-range clouds** (texel staircase at 300–800 km): smooth
+   and bicubic first, then altitude-faded procedural detail.
+3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
+   panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
+4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
+   the HUD; no apple-touch-icon or manifest).
+5. **017 V4, V3, I2** — dashed orbit in the shader, the sun (round glare
+   pass, limb scattering), staged loading screen.
+6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
    visual pass on the penumbra fade at a terminator crossing (300x), the
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
-   (not the schematic) at Follow and the full model appears only below 200 km.
-2. **B.3 next visible pass** — landed 2026-10-26 (see Current state). Follow-ups
-   if wanted: an observer marker on the globe, pass brightness (magnitude),
-   and a "pass starting" notice while the panel is closed.
-3. **C.5**: a short `CHANGELOG.md` and Dependabot (the scheduled fallback-TLE
-   refresh is done).
-4. **D.6 remainder** (coarse-pointer hit areas, render-scale override) and
-   **C.4** accessibility.
-5. Deferred majors: React 19 + R3F 9 + drei 10, then three r18x, Vite 7/8, and
-   satellite.js 7. The "investigate visually first" list is in
-   `plans/README.md`.
-6. Remaining roadmap and borrow items: A.2 measured perf run, B.4-B.8,
-   C.1-C.3, **D.7** save-frame (a positive-priority `useFrame` disables R3F
-   auto-render, so the capture must not mount while Bloom is off), D.8 (GIBS
-   tiles, only after A.2's baseline), D.9. Optional realism: a park/feather
-   arrays mode and a parked-TRRJ operations profile.
+   (not the schematic) at Follow and the full model appears only below 200 km. Also re-run the Inspect
+   scrub fps (the GPU was busy during the 2026-10-26 measurement).
+7. **C.5** (`CHANGELOG.md`, Dependabot) and **A.2** measured perf baseline —
+   then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
+8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
+   satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
+   exploded module explorer (later). B.3 follow-ups if wanted: an observer
+   marker on the globe, pass magnitude.
 
 ## Roadmap (2026-10-04, after the gcdatlas comparison)
 
