@@ -40,6 +40,8 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
   // Initialize uniforms with null texture — will be assigned after configuration
   const uniformsRef = useRef({
     cloudMap: { value: null as THREE.Texture | null },
+    // Drives the magnified-texel reconstruction in cloudDensity.glsl.
+    cloudTexelSize: { value: new THREE.Vector2(1 / 4096, 1 / 2048) },
     sunDirection: { value: new THREE.Vector3(0, 0, 1) },
     opacity: { value: 0.32 }, // Subtle, photographic cloud density
   })
@@ -64,6 +66,10 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     cloudTexture.needsUpdate = true  // Correct: applies filter/wrapping changes to GPU
 
     uniformsRef.current.cloudMap.value = cloudTexture
+    const cloudImage = cloudTexture.image as { width?: number; height?: number } | undefined
+    if (cloudImage?.width && cloudImage?.height) {
+      uniformsRef.current.cloudTexelSize.value.set(1 / cloudImage.width, 1 / cloudImage.height)
+    }
     // No materialRef.current.needsUpdate = true here — not needed for uniform assignments
   }, [cloudTexture, gl])
 

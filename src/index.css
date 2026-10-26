@@ -752,20 +752,7 @@ body,
   box-shadow: 0 0 6px rgba(241, 237, 228, 0.6);
 }
 
-/* ─── Loading screen ───────────────────────────────────────────────────── */
-
-@keyframes spin-earth-axis {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin-earth {
-  animation: spin-earth-axis 20s linear infinite;
-}
+/* ─── Overlay animations (WebGL recovery overlays) ──────────────────────── */
 
 @keyframes pulse-subtle {
   0%,
@@ -808,6 +795,154 @@ body,
 
 .animate-ping-ring {
   animation: ping-ring 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ─── Loading screen (plan 017 I2) ─────────────────────────────────────── */
+/* Shared by the static first-paint copy in index.html and the live
+   src/ui/loading/LoadingScreen.tsx: the mark with the glint orbiting, then
+   one line per boot stage. The glint path is orbitPath(1.75) from
+   src/ui/loading/bootMark.ts (112 px mark, 64-unit geometry); a unit test
+   keeps the two in sync. */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--space);
+  user-select: none;
+  /* index.html hides the shell until this stylesheet applies */
+  visibility: visible;
+  transition: opacity 800ms ease-in-out;
+}
+
+.boot--exit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.boot-mark {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.boot-mark > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.boot-orbit,
+.boot-trail {
+  fill: none;
+  stroke: var(--hud-hi);
+}
+
+.boot-orbit {
+  stroke-opacity: 0.22;
+  stroke-width: 1.2;
+}
+
+/* The bright arc behind the glint: a 28% dash that leads with the glint. */
+.boot-trail {
+  stroke-opacity: 0.7;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 28 72;
+  stroke-dashoffset: 28;
+  animation: boot-trail 6s linear infinite;
+}
+
+.boot-glint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 35px;
+  height: 35px;
+  offset-path: path('M86.5 53.05A40.25 16.63 -24 0 0 18.5 62.45A40.25 16.63 -24 0 0 86.5 53.05Z');
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  animation: boot-glint 6s linear infinite;
+}
+
+.boot-glint > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes boot-glint {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes boot-trail {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: -72;
+  }
+}
+
+.boot-stages {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 24px;
+  row-gap: 6px;
+  width: 192px;
+  /* The orbit fills only the middle band of the 112 px mark box. */
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  line-height: 1.4;
+}
+
+.boot-stages dt {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--hud-mid);
+}
+
+.boot-stages dd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--hud-hi);
+}
+
+.boot-stages dd.boot-pending {
+  color: var(--hud-lo);
+}
+
+.boot-bar {
+  width: 192px;
+  height: 2px;
+  margin-top: 16px;
+  background: rgba(241, 237, 228, 0.12);
+  overflow: hidden;
+}
+
+.boot-bar-fill {
+  height: 100%;
+  background: var(--hud-hi);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 300ms ease-out;
 }
 
 /* ─── Scrollbars (diagnostic screens) ──────────────────────────────────── */
@@ -1039,6 +1174,12 @@ body,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* The glint parks at its icon position with the trail behind it. */
+  .boot-glint,
+  .boot-trail {
+    animation: none !important;
   }
 }
 

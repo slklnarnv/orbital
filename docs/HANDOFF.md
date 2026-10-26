@@ -51,7 +51,7 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
   "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
   `orbital-settings` localStorage key. The loading overlay swallows pointer
-  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  events until the `progressbar` named "Loading" is gone, and the rAF loop defeats actionability
   waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
@@ -128,12 +128,13 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
   (`OrbitalEngine.periodMinutes`) with the step rounded, not truncated:
   214 km → 11–16 km, the residual being SGP4's own non-closure.
 - The dash pattern slid ~1.8 pitches every refresh because `LineMaterial`
-  keys it on `instanceDistance` measured from the arc's trailing edge, which
-  moves ~460 km per refresh. `dashOffset` now carries that edge's absolute
-  position from the clock. **Do not modulo it by the pitch** — the pitch
-  changes every frame with the camera and the remainder slides by
-  `(phase/pitch)·Δpitch` (~17 km for a 0.3 km change; this was the first
-  implementation and the browser check caught it).
+  keyed it on `instanceDistance` measured from the arc's trailing edge, which
+  moves ~460 km per refresh. #15 fixed it with an absolute `dashOffset` from
+  the clock. 017 V4 (2026-10-26) replaced that: the dash is computed in the
+  shader from each vertex's orbital phase (a function of its epoch, so a
+  point on the ring keeps its phase in every arc) and sized with screen-space
+  derivatives in power-of-two levels — no offset, origin or per-frame sizing
+  (`OrbitPhase.ts`, `orbitLineMaterial.ts`, `shaders/orbitDash.glsl`).
 
 **Merge order mattered: #15 was stacked on #14.** `fix/orbit-line-dashes` was
 branched from `feat/tier0-gains`, so its diff against `main` carried all 25
@@ -194,6 +195,15 @@ landed through its own PR.
   underline (`.hud-link`), never a link colour.
 - **Contrast**: `--hud-lo` is 50% white (4.7:1 on `--space`, AA);
   `HudContrast.test.ts` fails if a token drops below 4.5:1.
+- **Identity and loading**: the mark is an orbit ellipse that brightens
+  toward a station glint (`scripts/build-icons.mjs`, geometry mirrored in
+  `src/ui/loading/bootMark.ts`; `bootMarkSync.test.ts` guards the copies in
+  `index.html` and `src/index.css`). The loading screen (`.boot-*`) is
+  painted first by a static copy in `index.html`, then `LoadingScreen.tsx`
+  takes over. Its stage counts come from wrapping `DefaultLoadingManager`'s
+  `itemStart/itemEnd/itemError` (`assetLoadTracker.ts`, first import in
+  `main.tsx` so the module-scope preloads are seen); the gate is every file
+  ended with both the Earth and station stages started.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
@@ -212,6 +222,7 @@ landed through its own PR.
 | `src/ui/clusters/GroundTrackGlobe.tsx` | Orthographic globe + passing-over lines |
 | `src/ui/common/PassesPanel.tsx` | Visible-pass popover (observer search, pass list, Watch); prediction in `src/core/orbital/PassPredictor.ts` |
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
+| `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |
 | `src/stores/geoStore.ts` | Geo presentation state (written by the service only) |
