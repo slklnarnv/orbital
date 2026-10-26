@@ -12,6 +12,13 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ## [Unreleased]
 
+### Changed
+
+- The sun reads as blinding from orbit: a round camera glare (bright core,
+  wide halo, faint six-point spikes) that fades and reddens as the sun sets
+  behind Earth's limb or hides behind the station, and a red-to-gold
+  sunrise band along the limb as it rises.
+
 ### Added
 
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions

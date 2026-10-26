@@ -6,6 +6,55 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## 017 V3 the sun (2026-10-26)
+
+- **Before.** A ~15 px disc with a faint amber haze, kept under the bloom
+  threshold (UnrealBloom's 1/16 mip squares a compact HDR disc); next to the
+  limb it read as a bright star, and its haze stayed above the limb after
+  the disc had set.
+- **Glare = a camera PSF in two scene layers** (`SunGlare.ts`). The
+  billboard (`sun.vert`/`sun.frag`) draws the photosphere and a blown-out
+  core ~2x the disc through one soft knee `K(1 - exp(-x/K))`, K = 2.0,
+  depth-tested. A screen-space quad (`sunGlare.vert`/`.frag`, clip-space,
+  no depth test, renderOrder 3) draws the halo (Lorentzian, slope 0.55) and
+  six-blade diffraction spikes fixed to the screen, capped by `min(1, ·)`
+  at GLARE_PEAK 0.35. Budget `2.0 + 0.35 x 1.04 + dither < 2.4`
+  (`SunGlareBudget.test.ts`). Scene meshes, so Bloom off has no new pass.
+- **What fades it.** `SunAppearance.apparentSunFlux`: the rendered disc
+  (0.33° radius, `SUN_DISC_RADIUS_RAD`) integrated in 24 rows through the
+  atmosphere toward the billboard — transmittance `exp(-tau e^(-h/8 km))`,
+  tau (4, 8, 16) at tangent height 0 — so it reddens and dims over ~1° of
+  sun elevation, ~15 s of real time. The photosphere uses the same
+  transmittance per pixel. An `ANY_SAMPLES_PASSED_CONSERVATIVE` query on a
+  probe disc (inner 60% of the sun) hides the glare behind the station
+  (damped at 30/s); checked with the sun behind the Lab module (glare 0)
+  and just past an array edge (full, spikes over the array). The exposure
+  ratio (`exposure / 1.05`) scales both layers, and the exposure now drops
+  only for the visible sun (`× sunGlareState.visibility`).
+- **Sunrise band** (`atmosphere.frag`, gated by `limbProximity`, 1 at or
+  behind the limb, 0 from 10° above): forward scattering toward the
+  billboard (HG g 0.9 + 0.6), lit by sunlight reddened along its own
+  grazing path (`hSun`; zero in Earth's shadow), density e-fold 12 km; the
+  limb thread near the sun takes that light's hue. Folded into
+  `(atmoColor, alpha)` so the composer gets exactly `c·a + glow`. The old
+  "forward scatter" rim term was a sun-behind-the-viewer term; its comments
+  now say so (code unchanged).
+- **Lens flare.** Default stays off (ghosts are an optional camera artefact,
+  composer-only, and the glare now carries the "blinding" read). Its halo is
+  gone (it doubled the glare) and it uses the glare's visibility gate
+  instead of its own Earth-only penumbra.
+- **Checked.** Captures, 1280×720, dev build, Edge on the integrated AMD GPU,
+  Bloom on and off: open space, 3° above, grazing, 1° and 4° behind, plus a
+  limb sweep from +6° to −5° (`docs/images/sun-before-after.webp`). With the
+  sun behind the camera, before and after frames are pixel-identical in both
+  pipelines apart from the orbit line and station marker, which also differ
+  between two runs of the old code. GPU timer queries, 1920×1080 (GPU shared
+  with another process, so provisional): overlay 0.37 ms Bloom on (4× MSAA
+  HalfFloat), 0.11–0.14 ms off; 0.24 / 0.08 ms at 1280×720; billboard
+  0.01–0.03 ms; probe ≈ 0; sunrise branch +0.01–0.02 ms. Tests:
+  `SunAppearance.test.ts`, `SunGlareBudget.test.ts`.
+- **Open.** Owner sign-off against ISS photography at the limb.
+
 ## C.5 changelog and Dependabot (2026-10-26)
 
 - `CHANGELOG.md`: Keep a Changelog; no version tags, so each section is the

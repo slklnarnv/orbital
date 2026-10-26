@@ -22,8 +22,10 @@ interface SettingsStore {
   postprocessing: boolean
   /** Orbit-track stroke style (see OrbitLine.tsx). */
   orbitLineStyle: OrbitLineStyle
-  /** Screen-space lens flare — halo + iris ghosts around the sun, gated by
-   *  Earth occlusion. A composer pass, so it needs `postprocessing` on. */
+  /** Screen-space lens flare — iris ghosts mirrored from the sun, gated by
+   *  the sun glare's visibility. A composer pass, so it needs
+   *  `postprocessing` on. Off by default: the glare (always on, both
+   *  pipelines) carries the blinding read; ghosts are an optional extra. */
   lensFlare: boolean
   /** Optional 3D ground track + visibility footprint on the globe
    *  (see rendering/earth/GroundTrack.tsx). Off keeps the calibrated look. */
