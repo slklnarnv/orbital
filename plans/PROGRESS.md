@@ -37,6 +37,21 @@
 - **Open.** `og-image.png` still shows the old wordmark treatment; refresh it
   with the name decision (I3).
 
+## C.5 changelog and Dependabot (2026-10-26)
+
+- `CHANGELOG.md`: Keep a Changelog; no version tags, so each section is the
+  date a change reached `main` (UTC+5:30). PRs add lines under "Unreleased";
+  the merger renames it to the merge date. Built from git history, the merged
+  PRs (#1–#30) and this ledger. Linked from `CLAUDE.md` and the README.
+- `.github/dependabot.yml`: npm and GitHub Actions weekly (Monday), 7-day
+  cooldown. npm minor + patch grouped into one PR. Major bumps ignored for the
+  deferred migrations (react, react-dom and their types, R3F, drei, Vite,
+  `@vitejs/plugin-react`, satellite.js) and `@types/node` (Node 22 floor);
+  three and `@types/three` take patches only, because every rNNN is a 0.x
+  minor bump. Actions are grouped; SHA pins and `persist-credentials` stay.
+- Checked: the file validates against the SchemaStore `dependabot-2.0` schema.
+  Not yet seen: a first Dependabot run (it starts once this is on `main`).
+
 ## Roadmap 017: display, visuals and polish (2026-10-26)
 
 - Viewport audit (nine sizes, 360×640 to 3440×1440, overview and Follow):
