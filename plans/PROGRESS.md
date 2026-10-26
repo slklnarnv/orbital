@@ -35,6 +35,26 @@
   zooms. Open in NEXT_STEPS (item 0).
 - Tests: `benchStats.test.ts` (percentiles, frame and GPU summaries, the
   counter parser, CPU contention sums, process-tree walk).
+## 017 V1 close-range clouds (2026-10-26)
+
+- **Cause.** `clouds.frag` uses map density directly as alpha (no coverage
+  threshold to smooth); the blocks and staircase were bilinear magnification
+  of the 4096×2048 map (~10 km per texel) once a texel spans tens of pixels.
+- **Fix.** `src/rendering/shaders/cloudDensity.glsl`, included by both
+  `clouds.frag` and `earthSurface.frag`: a cubic B-spline (four bilinear
+  taps, `textureLod` level 0) when magnified, blended in over 1–2 px per
+  texel; a zero-mean multiplicative fBm, `d·(1 + s·n·(1 − d))`, in the
+  deck's rotating frame (`vCloudDir`), faded in by camera altitude
+  (3,500 → 1,200 km) and per octave by pixel footprint. The surface shadow
+  uses the same function with two octaves (replaces the five-tap blur) and
+  samples without `fract()`. `CloudLayer` gained the `cloudTexelSize` uniform.
+- **Evidence.** Before/after at 800 km and 300 km over the day side and the
+  overview (Playwright + Edge, camera placed with `__orbitalControls`): no
+  texel edges at 300 km, overview pixel-identical apart from star twinkle.
+  GPU timer queries per pass changed within noise (cloud ~0.7 ms at 300 km);
+  provisional, the GPU was shared. Contract test: both shaders read the
+  shared field (`EarthVisualContracts.test.ts`).
+- **Open.** V1.3 (higher-resolution source) stays with V2 / D.8.
 
 ## C.5 changelog and Dependabot (2026-10-26)
 
@@ -63,6 +83,38 @@
   is the issue).
 - Plan: `plans/017-display-visuals-polish-roadmap.md`; NEXT_STEPS' ranked list
   now follows it.
+
+## 017 V4: dashed orbit in the shader (2026-10-26)
+
+- **Before.** `OrbitLine` sized `dashSize`/`gapSize` every frame from the
+  camera-to-station distance and kept a dash origin plus an absolute
+  `dashOffset` so the pattern would not crawl (PR #15). Pitch was constant
+  only at the station's depth: at Follow 250 km it ran 16 → 7 px from the
+  near to the far end of the arc.
+- **Now.** Each vertex carries its orbital phase (`OrbitPhase.ts`,
+  revolutions of the mean motion at the vertex epoch, relative to a whole
+  revolution so float32 holds it). The fragment shader
+  (`shaders/orbitDash.glsl`) picks 2^n dashes per revolution from the
+  phase's screen-space derivative (13 CSS px target, n ≤ 17) and crossfades
+  neighbouring levels. A point on the ring keeps its phase in every arc, so
+  the pattern cannot crawl and there is no state; the time phase was chosen
+  over the geometric argument of latitude because the node precesses
+  (~0.26 km relabel per refresh). Phase rides in LineMaterial's
+  `instanceDistance` slots (USE_DASH kept for the endcap discard); style is
+  the `orbitDashed` uniform.
+- **Measured** (dev server, headless Edge on the AMD iGPU, frame captures):
+  fixed camera on the future arc, along-track shift 0 px (correlation
+  ≥ 0.987) after seeks of +61/+130/−70 s, a tape scrub, 1× and 300×
+  (18 sim-minutes); pitch 13 px there and 11–13 px along the Follow 250 km
+  arc; 0 programs linked over Dashed → Continuous → Dashed with Bloom on and
+  off; DPR 2 pitch ~35 device px (CSS-sized).
+- **Tests.** `tests/unit/orbital/OrbitPhase.test.ts`: one revolution per
+  period, whole-revolution origin, [0, 2) range, and the same epoch gets the
+  same float32 dash fraction (finest level) from arcs regenerated at
+  1×/300×/scrub/backward-seek offsets.
+- **Look.** Same colour, width, fade and 7/6 duty. What changed: the far arc
+  no longer shrinks to dots, and zooming fades dashes in and out at octave
+  steps instead of rescaling them.
 
 ## Orbit-tape scrub while tracking (2026-10-26)
 
@@ -570,14 +622,15 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
 - **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
   closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
   and the pinned render-scale override from D.6 are still open).
-- **Orbit line, remaining polish**: the ring now closes and the dash phase is
-  fixed to the orbit, but two things are still unverified or open.
+- **Orbit line, remaining polish**: the ring now closes and the dash is
+  anchored to the orbit in the shader (017 V4), but two things are still
+  unverified or open.
   (a) The `alphaCurve` fade was NOT re-tuned — the past trail still fades
   0 → 0.30 and the future arc holds 0.60; whether those read right against
   the now-closed ring is a visual call, not a measurement.
-  (b) No test covers `refreshPath`'s buffer writes or the dash-offset maths —
-  the geometry is covered only by the predictor test (span, closure, step,
-  budget, alpha, centring). A headless test of the instance-buffer layout
+  (b) No test covers `refreshPath`'s buffer writes or the shader — the
+  geometry is covered by the predictor test (span, closure, step, budget,
+  alpha, centring) and the phase by `OrbitPhase.test.ts`. A headless test of the instance-buffer layout
   would need a GL context, so this stays a browser check.
 
 ## Canon decisions (do not re-litigate; full context in history)

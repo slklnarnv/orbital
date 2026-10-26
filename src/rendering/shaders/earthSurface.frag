@@ -12,8 +12,11 @@ uniform float nightIntensity; // city lights brightness multiplier
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
+varying vec3 vCloudDir;
 
 const float TWO_PI = 6.28318530718;
+
+#include "./cloudDensity.glsl"
 
 void main() {
   vec3 normal = normalize(vNormal);
@@ -40,15 +43,17 @@ void main() {
   float lowSun = 1.0 - smoothstep(0.02, 0.35, sunDot);
   vec3 sunWarmth = mix(vec3(1.0), vec3(1.0, 0.52, 0.22), lowSun);
 
-  // Sample the same rotating density field as the visible cloud shell. The
-  // relative Y rotation maps to a longitude offset; a five-tap filter prevents
-  // hard decal-like shadows and keeps the cloud layer visually separated.
-  vec2 cloudUv = vec2(fract(vUv.x - cloudRotation / TWO_PI), vUv.y);
-  float cloudShadowDensity = texture2D(cloudMap, cloudUv).r * 0.40;
-  cloudShadowDensity += texture2D(cloudMap, cloudUv + vec2(cloudTexelSize.x, 0.0)).r * 0.15;
-  cloudShadowDensity += texture2D(cloudMap, cloudUv - vec2(cloudTexelSize.x, 0.0)).r * 0.15;
-  cloudShadowDensity += texture2D(cloudMap, cloudUv + vec2(0.0, cloudTexelSize.y)).r * 0.15;
-  cloudShadowDensity += texture2D(cloudMap, cloudUv - vec2(0.0, cloudTexelSize.y)).r * 0.15;
+  // Sample the same rotating density field as the visible cloud shell, through
+  // the same function (cloudDensity.glsl). The relative Y rotation maps to a
+  // longitude offset; RepeatWrapping wraps it, so no fract() seam (a fract
+  // jump made the derivatives pick the smallest mip along one meridian). The
+  // B-spline reconstruction is itself a soft low-pass, which replaces the old
+  // five-tap blur. The shadow takes two detail octaves: it sits under the
+  // shell and only dims terrain by up to 18%, so finer octaves do not show.
+  vec2 cloudUv = vec2(vUv.x - cloudRotation / TWO_PI, vUv.y);
+  float cloudShadowDensity = cloudDensityAt(
+    cloudMap, cloudUv, 1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, 2
+  );
   float cloudShadowDay = smoothstep(0.04, 0.40, sunDot);
   float cloudTransmittance = 1.0 - cloudShadowDensity * cloudShadowDay * 0.18;
 
