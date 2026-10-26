@@ -81,6 +81,7 @@ import {
   LEGACY_MODEL_URL,
   LOCATE_MODEL_URL,
 } from './modelUrls'
+import { prefersReducedMotion } from '@/utils/reducedMotion'
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
 
@@ -937,8 +938,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       const halfFovRad = (state.camera as THREE.PerspectiveCamera).getEffectiveFOV() * Math.PI / 360
       const worldPerPx = (2 * Math.tan(halfFovRad) * distanceKm) / Math.max(1, state.size.height)
       // Gentle 0.4 Hz pulse on WALL time — sim time would strobe it at
-      // ~120 Hz under 300× acceleration.
-      const pulse = 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
+      // ~120 Hz under 300× acceleration. Held still under reduced motion: it
+      // is decoration, and the glint marks the station without it.
+      const pulse = prefersReducedMotion() ? 1.0 : 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
       glintUniforms.uOpacity.value = glintOpacity

@@ -7,6 +7,29 @@
 
 ## Current state (2026-10-26)
 
+- **017 A1–A4 and P landed (2026-10-26): shortcuts, help overlay, focus,
+  screen readers, About.** One registry (`src/ui/shortcuts/shortcutRegistry.ts`)
+  drives the keys and the `?` overlay: `Space` pause, `1`–`4` rates, `0`
+  live, `L` locate, `R` reset view, `H` HUD, `P` passes, `G` settings, `?`
+  help, `Esc` closes. Nothing fires while typing (Escape excepted), with
+  Ctrl/Cmd/Alt, or — for Space — on a control Space presses; letters match
+  the typed character, with the physical key only on non-Latin layouts.
+  Settings, Passes, Set time, About and the help overlay share one overlay
+  system (`src/ui/overlay/`): one open at a time, keyboard opens move focus
+  in, closing returns it to the trigger. Also a skip link, a text summary of
+  the canvas (`aria-describedby`: place, daylight, countdown in whole
+  minutes), a polite live region for settled camera modes and sunrise/sunset
+  (silent at accelerated rates; the camera label is no longer a live region),
+  and an About panel beside the wordmark (measured vs illustrative, credits
+  from `NOTICE.md`, build id, link to the shortcuts). Contrast: `--hud-lo`
+  measured 3.1:1 on space black; raised from 38% to 50% white (4.7:1, pinned
+  by `HudContrast.test.ts`). Over the bright limb in Follow no HUD tone holds
+  AA (worst pixel 1.6:1 under the TLE line, 1.9:1 under the eclipse line) —
+  a scrim/legibility call, listed below. Reduced motion now also holds the
+  glint pulse still and drops the flare's sweeping ghosts (halo kept). Edge
+  on the owner's GPU: the smoke specs pass (11 run; Locate reached Follow ·
+  Locked separately), including six new ones (overlay, rates, typing in the
+  place search, focus return, About, a focus ring on every Tab stop).
 - **017 I1 icon + manifest, I2 staged loading screen (2026-10-26)**: a new
   mark (an orbit ellipse brightening toward a station glint, `--hud-hi` on
   `--space`) replaces the cyan globe: `favicon.svg`, a 16/32/48 `.ico`, a
@@ -224,8 +247,10 @@ read). Its order, merged with the older items:
 2. **017 V1 — close-range clouds**: V1.1 (bicubic reconstruction) and V1.2
    (altitude-faded detail) landed 2026-10-26; V1.3, a higher-resolution
    cloud source, waits for V2 / D.8.
-3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
-   panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
+3. **017 A1 + P** — shortcuts, help overlay and About landed 2026-10-26.
+   Follow-up from A4: HUD text over the bright daylight limb (Follow) falls
+   to ~1.6:1 at worst; any fix — a stronger scrim or a faint text shadow
+   (removed earlier by request) — is a design call.
 4. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
    (ALL CAPS wordmark, blue limb, no new mark); I1/I2 landed 2026-10-26.
 5. **017 V3** — the sun (round glare pass, limb scattering).
@@ -503,7 +528,7 @@ Earth-centre distance and at Follow range the track never flickers, the far
 limb is hidden behind the globe and the station occludes the track
 (`docs/verification.md`, "Ground track").
 
-#### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line pending B.7)
+#### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line landed with the About panel, 2026-10-26)
 
 **Problem (as of 2026-10-19, now fixed):** the repo shipped no LICENSE file,
 while `public/models/*.glb` are IGOAL/NASA derived, the textures are derived
@@ -642,7 +667,8 @@ Cost: one session. Low value for a tracker; listed for completeness.
 
 ### Small items that fold into existing work
 
-- `F1` help overlay + one shortcut registry (their `?` modal) -> C.4.
+- `F1` help overlay + one shortcut registry (their `?` modal) -> C.4 —
+  landed as 017 A1 (`?` overlay, `src/ui/shortcuts/shortcutRegistry.ts`).
 - Accent-folded place search (`normalizeQuery`: dotless i, NFD) -> B.3 —
   landed with the offline city search (`src/core/geo/CitySearch.ts`).
 - Render scale -> D.6.
@@ -691,10 +717,10 @@ the perf baseline.
   (2026-09-28/29). Lens flare: reworked 2026-10-04. Hide-HUD toggle (`H`):
   done 2026-10-19 (PR #14). Still open, small: Branding pass
   (icon set and loading screen landed 2026-10-26 as 017 I1/I2; the share
-  image waits on the name, I3), Info/About panel (doubles as
-  roadmap B.7 "What's real").
-- **Time controls (old item 2).** DONE 2026-09-28. Remaining: `L` / `R`
-  shortcuts -> roadmap C.4 (`H` is now the HUD toggle).
+  image waits on the name, I3). Info/About panel: landed 2026-10-26 (017 P,
+  was B.7 "What's real").
+- **Time controls (old item 2).** DONE 2026-09-28. `L` / `R` and the rate
+  shortcuts landed 2026-10-26 (017 A1).
 - **ISS attitude (old item 3).** DONE - LVLH/TEA in `ISSGroup`, SARJ
   tracking, BGA beta tilt landed 2026-10-04, TRRJ illustrative mode.
   The TRRJ law (edge-to-Sun in daylight, face-to-Earth in eclipse) is

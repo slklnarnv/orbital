@@ -49,3 +49,6 @@ export const ORBIT_PATH_STEP_S = 30;
 
 /** Orbit prediction refresh interval in milliseconds */
 export const ORBIT_PATH_REFRESH_MS = 60_000;
+
+/** Time-rate presets on the transport row and the 1–4 shortcuts (× wall rate). */
+export const TIME_RATE_PRESETS: readonly number[] = [1, 10, 60, 300];

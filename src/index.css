@@ -56,7 +56,9 @@
   /* Warm instrument white, four intensities */
   --hud-hi: #f1ede4;
   --hud-mid: rgba(241, 237, 228, 0.64);
-  --hud-lo: rgba(241, 237, 228, 0.38);
+  /* 0.5, not 0.38: 4.7:1 on --space, the WCAG AA floor for small text
+     (0.38 measured 3.1:1). Pinned by tests/unit/ui/HudContrast.test.ts. */
+  --hud-lo: rgba(241, 237, 228, 0.5);
   --hud-line: rgba(241, 237, 228, 0.22);
   --hud-line-strong: rgba(241, 237, 228, 0.45);
 
@@ -966,7 +968,7 @@ body,
 
 /* ─── HUD visibility (H) ───────────────────────────────────────────────── */
 /*
- * `useHudVisibility` toggles this class on <html>. Only the overlay layers
+ * The `H` shortcut (`ui/shortcuts/useShortcuts.ts`) toggles this class on <html>. Only the overlay layers
  * are hidden: the canvas keeps rendering and the simulation keeps running,
  * so a screenshot or a presentation shows the scene alone. `visibility`
  * rather than `display` keeps the layout stable for the popovers that
@@ -1179,4 +1181,208 @@ body,
   .boot-trail {
     animation: none !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Keyboard, screen readers and About (roadmap 017 A1–A4, P)
+
+   One block, apart from the responsive frame above (reworked in parallel):
+   the shared overlay panels (About, keyboard shortcuts), key caps, the skip
+   link and text links. Same voice as the rest of the HUD: warm white at four
+   intensities, hairline frames, no colour.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The About panel opens from this corner; like the top-right corner it must
+   paint over the camera reticle on narrow screens. */
+.hud-corner--tl {
+  z-index: 20;
+}
+
+/* Skip link: the first stop for Tab, visible only while focused. */
+.hud-skip-link {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 80;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--hud-hi);
+  background: rgba(4, 8, 14, 0.94);
+  border: 1px solid var(--hud-line-strong);
+  text-decoration: none;
+  transform: translateY(calc(-100% - 24px));
+}
+
+.hud-skip-link:focus {
+  transform: none;
+}
+
+/* The skip target is a region, not a control: no ring around the frame. */
+#hud-main:focus {
+  outline: none;
+}
+
+/* ─── Overlay panels (About, keyboard shortcuts) ───────────────────────── */
+
+.hud-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: rgba(4, 8, 14, 0.94);
+  border: 1px solid var(--hud-line);
+  color: var(--hud-mid);
+  user-select: text;
+}
+
+/* The panel takes focus only so its title is announced; not a control. */
+.hud-panel:focus {
+  outline: none;
+}
+
+.hud-panel--about {
+  top: calc(48px + env(safe-area-inset-top));
+  left: max(22px, env(safe-area-inset-left));
+  width: min(360px, calc(100vw - 28px));
+}
+
+.hud-panel--help {
+  top: 50%;
+  left: 50%;
+  z-index: 70;
+  width: min(600px, calc(100vw - 28px));
+  transform: translate(-50%, -50%);
+}
+
+.hud-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  background: rgba(2, 4, 9, 0.55);
+}
+
+.hud-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hud-panel__title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--hud-hi);
+}
+
+.hud-panel__section {
+  display: block;
+  margin: 14px 0 5px;
+}
+
+.hud-panel__body {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.hud-panel__body > p:first-child {
+  margin-top: 8px;
+}
+
+.hud-panel__muted {
+  margin-top: 10px;
+  color: var(--hud-lo);
+}
+
+.hud-panel__note {
+  margin-top: 14px;
+  color: var(--hud-lo);
+  line-height: 1.5;
+}
+
+.hud-panel__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hud-line);
+}
+
+.hud-about__list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+}
+
+.hud-about__list > li {
+  position: relative;
+  padding-left: 12px;
+}
+
+.hud-about__list > li::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--hud-lo);
+}
+
+/* Text links: warm white over a hairline underline, never a link colour. */
+.hud-link {
+  color: var(--hud-hi);
+  text-decoration: underline;
+  text-decoration-color: var(--hud-line-strong);
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--transition-ui);
+}
+
+.hud-link:hover {
+  text-decoration-color: var(--hud-hi);
+}
+
+/* ─── Key caps and the shortcut table ──────────────────────────────────── */
+
+.hud-kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--hud-hi);
+  border: 1px solid var(--hud-line-strong);
+}
+
+.hud-help__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  column-gap: 28px;
+}
+
+.hud-keys {
+  display: grid;
+  gap: 5px;
+}
+
+.hud-keys__row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.hud-keys__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
