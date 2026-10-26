@@ -6,6 +6,36 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## A.2 bench harness (2026-10-26)
+
+- `npm run bench` (`scripts/bench/`): bench-mode build (`vite build --mode
+  bench`: production bundle + `__orbital*` hooks via `src/utils/debugHooks.ts`;
+  production strips them), `vite preview` with the production CSP, installed
+  Edge headless on ANGLE/D3D11, 1280×720 at DPR 1.5, network stubbed, the
+  simulation seeked to ≥ 25 min of station daylight at 1× (`--at` pins it).
+- Scenarios × Bloom on/off: overview, Follow (Locate click), Follow tape
+  scrub (25 ↔ 75%, 4 s period), Inspect (wheel zoom to ≤ 130 km, full model
+  ready + 5 s), Inspect scrub. Per scenario: fps, p50/p90/p99/max, frames
+  > 20 ms; GPU ms per frame and per pass from timer queries cut at every
+  draw-framebuffer bind and blit (`page-probe.js`); tracked GPU memory from
+  every texture / renderbuffer / buffer allocation; app state (mode, DPR,
+  detail model, sunlit).
+- Contention guard (`contention.mjs`): refuses when another process uses a
+  GPU 3D/compute engine ≥ 10% or other processes take ≥ 15% of all cores;
+  samples both every second during the run and flags contended scenarios
+  (`--allow-busy-gpu` to measure anyway, exit 3). The CPU half exists
+  because sibling agents' SwiftShader browsers (~85% of 16 cores) stalled
+  frames for 200 ms while the GPU counters read idle.
+- **Baseline pending**: refused all day on 2026-10-26 (a game at ~90% GPU,
+  then sibling sessions' browsers). Trial runs on a busy machine are not
+  recorded.
+- Found: wheel zoom while tracking with the clock running moves ~1% per
+  tick (the station-frame carry's per-frame `setLookAt(…, false)` cancels
+  camera-controls' smoothed dolly); the bench pauses the clock while it
+  zooms. Open in NEXT_STEPS (item 0).
+- Tests: `benchStats.test.ts` (percentiles, frame and GPU summaries, the
+  counter parser, CPU contention sums, process-tree walk).
+
 ## C.5 changelog and Dependabot (2026-10-26)
 
 - `CHANGELOG.md`: Keep a Changelog; no version tags, so each section is the

@@ -542,8 +542,10 @@ silent in code and obvious only in render.
    time and IGNORES `timeScale`. To accelerate:
    `window.__orbitalSimulation.getState().setMode('ACCELERATED');
    setTimeScale(n)`. Restore `setMode('REALTIME'); setTimeScale(1)` after.
-   Dev hooks exposed in `main.tsx`: `__orbitalSimulation`, `__orbitalClock`,
-   `__orbitalTelemetry`, `__orbitalControls`.
+   Hooks exposed in dev and bench builds (`src/utils/debugHooks.ts`):
+   `__orbitalSimulation`, `__orbitalClock`, `__orbitalTelemetry`,
+   `__orbitalStores` (camera, loading, settings, telemetry) from `main.tsx`;
+   `__orbitalControls`, `__orbitalScene`, `__orbitalRenderer` from `SceneRoot`.
 7. **Texture format**: the runtime assets' textures are KTX2 (Basis ETC1S);
    neither sharp nor the Read tool decodes them — extract with
    `ktx extract --transcode rgba8 --level 0 in.ktx2 out.png`, or inspect the

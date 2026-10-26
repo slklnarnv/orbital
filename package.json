@@ -16,6 +16,7 @@
     "build:cities": "node scripts/build-city-index.mjs",
     "patch:basis": "node scripts/patch-basis-transcoder.mjs",
     "preview": "vite preview",
+    "bench": "node scripts/bench/bench.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint . --max-warnings 0",
     "refresh:tle": "node scripts/refresh-fallback-tle.mjs",

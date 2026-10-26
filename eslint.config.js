@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'public', '.tmp-iss-build', '.zcode', '.claude', 'test-results', 'playwright-report'] },
+  { ignores: ['dist', 'node_modules', 'public', '.tmp-iss-build', '.zcode', '.claude', 'test-results', 'playwright-report', '.bench'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -23,5 +23,10 @@ export default tseslint.config(
     files: ['**/*.{js,mjs}'],
     extends: [js.configs.recommended],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Injected into the page by `npm run bench` (addInitScript): browser code.
+    files: ['scripts/bench/page-probe.js'],
+    languageOptions: { globals: { ...globals.browser } },
   },
 )

@@ -29,6 +29,10 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (CI does this
   Mon/Thu and commits to `main`; run it by hand only if CI is off)
 - `npm run preview` - production bundle locally
+- `npm run bench` - measured perf run: headless Edge on the real GPU,
+  fps / frame-time percentiles / GPU ms per pass / tracked GPU memory per
+  scenario, refuses to run while another process uses the GPU or CPU
+  (`docs/bench/README.md`; Windows + installed Edge)
 - `npm run verify` - the gate (see Rule 1)
 
 ## Map

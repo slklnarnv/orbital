@@ -7,6 +7,23 @@
 
 ## Current state (2026-10-26)
 
+- **A.2 bench harness (2026-10-26)**: `npm run bench` builds the app in bench
+  mode (production bundle plus the `window.__orbital*` hooks, now exposed via
+  `src/utils/debugHooks.ts` in dev and bench builds only), serves it with
+  `vite preview` and drives installed Edge headless on the real GPU through
+  overview, Follow, a Follow tape scrub, Inspect (full model settled) and an
+  Inspect scrub, each with Bloom on and off. It reports fps, p50/p90/p99
+  frame time, frames over 20 ms, GPU ms per frame and per pass (timer
+  queries around framebuffer binds and blits) and tracked GPU memory, to
+  JSON. It refuses to run while another process uses the GPU (Windows GPU
+  engine counters) or the CPU (other processes at ≥ 15% of all cores:
+  other agents' SwiftShader browsers never show on the GPU counters), and
+  keeps checking during the run. Docs: `docs/bench/README.md`. **The
+  committed baseline is pending**: every attempt on 2026-10-26 found the
+  machine busy. Found while building it: **wheel zoom barely works while
+  tracking with the clock running** (~1% per tick, ~19% when paused) — the
+  station-frame carry's per-frame `setLookAt(…, false)` cancels each
+  smoothed dolly (Next, item 0).
 - **C.5 changelog and Dependabot (2026-10-26)**: `CHANGELOG.md` (Keep a
   Changelog, sections named by the date a change reached `main`, since every
   merge deploys and there are no version tags; PRs add lines under
@@ -170,6 +187,15 @@ The display, visuals and polish roadmap is **`plans/017-display-visuals-polish-r
 (2026-10-26: viewport audit at nine sizes, sun/cloud/orbit captures, code
 read). Its order, merged with the older items:
 
+0. **Wheel zoom while tracking (regression from the 2026-10-26 scrub fix).**
+   In Follow/Inspect with the clock running each wheel tick dollies ~1%
+   (352 → 328 km over ten ticks; paused, six ticks go 354 → 102 km). The
+   carry in `CameraController.tsx` fires every frame (`MIN_CARRY_ANGLE_RAD`
+   is 1e-7) and its `setLookAt(…, false)` resets camera-controls' end pose,
+   so a smoothed dolly keeps one frame of progress; it also clears the
+   `_isUserControlling*` flags (the trap HANDOFF documents for
+   `FreeOrbitControls`). Carry the end pose too, then add a regression test
+   (a wheel dolly while carrying reaches the same radius as without).
 1. **017 R1–R4 + R7 — responsive display.** Landscape phones get the full
    desktop HUD (~45% of the height, clock over the station); portrait
    framing centres the station under the HUD; ground lines at 7 px and tape
@@ -191,7 +217,8 @@ read). Its order, merged with the older items:
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km. Also re-run the Inspect
    scrub fps (the GPU was busy during the 2026-10-26 measurement).
-7. **A.2** measured perf baseline — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
+7. **A.2 baseline** (the harness landed: record `npm run bench` on an idle
+   machine, `docs/bench/README.md`) — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
    exploded module explorer (later). B.3 follow-ups if wanted: an observer
@@ -212,6 +239,11 @@ can be extended. "Touches" lists the files expected to change.
    planetary × Bloom on/off × flare on/off × model quality, plus 300×.
    Record p50/p95/p99 and `renderer.info.memory` after 5 Bloom toggles and
    3 model switches (leak check). Table goes in PROGRESS before any cut.
+   **Harness LANDED 2026-10-26** (`npm run bench`, `docs/bench/README.md`):
+   overview / Follow / Follow scrub / Inspect / Inspect scrub × Bloom on/off,
+   fps and p50/p90/p99, GPU ms per pass, tracked GPU memory, with a GPU and
+   CPU contention guard. Still open: the committed baseline (machine busy),
+   the flare and 300× rows, and the leak check.
 3. **Browser smoke suite (Playwright).** LANDED 2026-10-25 (plan 013):
    `tests/e2e/smoke.spec.ts` + `fixtures.ts`, `playwright.config.ts`, Chromium
    on software WebGL against `vite preview` with the network stubbed, `npm run
