@@ -17,7 +17,8 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 - The sun reads as blinding from orbit: a round camera glare (bright core,
   wide halo, faint six-point spikes) that fades and reddens as the sun sets
   behind Earth's limb or hides behind the station, and a red-to-gold
-  sunrise band along the limb as it rises.
+  sunrise band along the limb as it rises
+  ([#43](https://github.com/slklnarnv/orbital/pull/43)).
 
 ### Added
 
