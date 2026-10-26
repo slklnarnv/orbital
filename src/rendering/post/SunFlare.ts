@@ -47,6 +47,30 @@ const _invQuat = new THREE.Quaternion()
  * flare, so a negative radius is returned: `earthMask` is then 1 everywhere
  * and the CPU occlusion test still gates `uStrength`.
  */
+/**
+ * NDC translation a camera view offset applies (HUD-aware framing,
+ * HudAwareFraming.tsx, shifts the projection while tracking). The flare
+ * projects the sun by hand from fov and aspect, so without this it would
+ * drift off the sun billboard by the offset. Assumes a full-size window
+ * (view width/height equal to the full size), which is the only kind the
+ * app sets.
+ */
+export function viewOffsetNdc(
+  view: { enabled: boolean; fullWidth: number; fullHeight: number; offsetX: number; offsetY: number } | null,
+  out: { x: number; y: number },
+): { x: number; y: number } {
+  if (!view || !view.enabled || view.fullWidth <= 0 || view.fullHeight <= 0) {
+    out.x = 0
+    out.y = 0
+  } else {
+    out.x = (-2 * view.offsetX) / view.fullWidth
+    out.y = (2 * view.offsetY) / view.fullHeight
+  }
+  return out
+}
+
+const _ndcShift = { x: 0, y: 0 }
+
 export function earthMaskRadius(earthCamZ: number, angEarth: number, tanHalf: number): number {
   if (earthCamZ >= 0) return -1
   return tanHalf > 0 ? Math.tan(angEarth) / tanHalf : 0
@@ -181,9 +205,10 @@ export class SunFlare {
       angEarth + OCCLUSION_PENUMBRA_RAD,
     )
 
+    viewOffsetNdc(camera.view, _ndcShift)
     _camSpace.copy(_sunDir).applyQuaternion(_invQuat)
-    const sunX = (_camSpace.x / -_camSpace.z) / halfAspect
-    const sunY = (_camSpace.y / -_camSpace.z) / tanHalf
+    const sunX = (_camSpace.x / -_camSpace.z) / halfAspect + _ndcShift.x
+    const sunY = (_camSpace.y / -_camSpace.z) / tanHalf + _ndcShift.y
 
     // Earth centre, for the shader-side disc mask.
     _camSpace.copy(camera.position).multiplyScalar(-1).applyQuaternion(_invQuat)
@@ -191,8 +216,8 @@ export class SunFlare {
     // by ~0 at the plane), so park the centre at a finite point; the mask is
     // disabled below via a negative radius.
     const earthInFront = _camSpace.z < 0
-    const earthX = earthInFront ? (_camSpace.x / -_camSpace.z) / halfAspect : 0
-    const earthY = earthInFront ? (_camSpace.y / -_camSpace.z) / tanHalf : 0
+    const earthX = earthInFront ? (_camSpace.x / -_camSpace.z) / halfAspect + _ndcShift.x : 0
+    const earthY = earthInFront ? (_camSpace.y / -_camSpace.z) / tanHalf + _ndcShift.y : 0
 
     const edge = Math.min(1 - Math.abs(sunX), 1 - Math.abs(sunY))
     const frameFade = THREE.MathUtils.smoothstep(edge, FRAME_FADE_LO, FRAME_FADE_HI)

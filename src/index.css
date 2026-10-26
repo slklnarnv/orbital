@@ -85,6 +85,20 @@
 
   /* Motion */
   --transition-ui: 150ms ease;
+
+  /* Type scale floor (plan 017 R3). Nothing in the HUD renders below 9 px:
+     a line that cannot fit at 9 px is dropped, not shrunk. The vmin term
+     keeps phones (vmin 360–430) on the floor and returns the desktop design
+     sizes from vmin ≈ 768 up. */
+  --hud-fs-micro: clamp(9px, 1.2vmin, 9.5px);
+  --hud-fs-place: clamp(9.5px, 1.45vmin, 11px);
+
+  /* Large-screen scale (R5): every HUD cluster is CSS-zoomed by this, so type,
+     spacing and hit areas grow together with real layout. Stepped by
+     min(width / 1920, height / 1080) further down. */
+  --hud-zoom: 1;
+  /* Extra side inset on ultrawide screens (R5), in unzoomed px. */
+  --hud-gutter: 0px;
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────── */
@@ -110,6 +124,14 @@ body,
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The dynamic viewport tracks the iOS address bar, so the canvas and the
+   bottom-anchored HUD follow it as it collapses and expands. */
+@supports (height: 100dvh) {
+  #root {
+    height: 100dvh;
+  }
 }
 
 ::selection {
@@ -157,6 +179,15 @@ body,
    color; hover brightens it and adds a soft round halo so it reads as a
    control without breaking the corner's typography. */
 .hud-btn-gear {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 5px;
+  margin: -5px;
+  border-radius: 50%;
+  cursor: pointer;
   transition: color 140ms ease, background-color 140ms ease;
 }
 
@@ -231,11 +262,14 @@ body,
      pins itself to the root layer directly under the gear. */
   position: fixed;
   top: calc(48px + env(safe-area-inset-top));
-  right: max(22px, env(safe-area-inset-right));
+  right: calc(max(22px, env(safe-area-inset-right)) + var(--hud-gutter));
   z-index: 60;
   display: flex;
   flex-direction: column;
   min-width: 218px;
+  max-height: calc(100vh - 60px - env(safe-area-inset-top));
+  max-height: calc(100dvh - 60px - env(safe-area-inset-top));
+  overflow-y: auto;
   padding: 12px 14px;
   background: rgba(4, 8, 14, 0.92);
   border: 1px solid var(--hud-line);
@@ -248,7 +282,7 @@ body,
 .hud-passes-popover {
   width: min(320px, calc(100vw - 28px));
   max-height: calc(100vh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  overflow-y: auto;
+  max-height: calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
 /* Bare typographic control (Passes, Change): no box, brightens on hover. */
@@ -356,13 +390,13 @@ body,
 
 .hud-scrim--top {
   top: 0;
-  height: 130px;
+  height: calc(130px * var(--hud-zoom));
   background: linear-gradient(to bottom, rgba(2, 4, 9, 0.55), transparent);
 }
 
 .hud-scrim--bottom {
   bottom: 0;
-  height: 220px;
+  height: calc(220px * var(--hud-zoom));
   background: linear-gradient(to top, rgba(2, 4, 9, 0.68) 0%, rgba(2, 4, 9, 0.28) 55%, transparent);
 }
 
@@ -419,6 +453,11 @@ body,
   transition: transform var(--transition-ui);
 }
 
+.hud-btn-locate .hud-reticle {
+  width: 44px;
+  height: 44px;
+}
+
 .hud-btn-locate:hover .hud-reticle path {
   stroke: rgba(241, 237, 228, 0.85);
 }
@@ -453,7 +492,7 @@ body,
 .hud-camera {
   position: fixed;
   top: calc(46px + env(safe-area-inset-top));
-  right: max(22px, env(safe-area-inset-right));
+  right: calc(max(22px, env(safe-area-inset-right)) + var(--hud-gutter));
   z-index: 10;
   display: flex;
   align-items: center;
@@ -521,7 +560,7 @@ body,
 
 .hud-place {
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--hud-fs-place);
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--hud-hi);
@@ -532,7 +571,47 @@ body,
 }
 
 .hud-bottom-right .hud-fine {
-  font-size: 9px;
+  font-size: var(--hud-fs-micro);
+}
+
+/* Ground cluster: globe over its passing-over lines. On phones the text
+   column moves beside the globe (responsive frame below). */
+.hud-ground {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.hud-ground__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.hud-ground__caption {
+  font-size: var(--hud-fs-micro);
+}
+
+/* ─── Mission clock (bottom-center) ────────────────────────────────────── */
+
+.hud-clock__date {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+}
+
+.hud-clock__time {
+  font-size: clamp(30px, 7vw, 44px);
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+}
+
+.hud-clock__caption {
+  margin-top: 2px;
+  color: var(--hud-hi);
+  font-weight: 500;
 }
 
 /* ─── Status dot ───────────────────────────────────────────────────────── */
@@ -656,8 +735,8 @@ body,
 
 .hud-tape {
   position: absolute;
-  left: 24px;
-  right: 24px;
+  left: calc(24px + var(--hud-gutter));
+  right: calc(24px + var(--hud-gutter));
   bottom: 0;
   height: 36px;
   z-index: 9;
@@ -704,7 +783,7 @@ body,
   top: 19px;
   transform: translateX(-50%);
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: var(--hud-fs-micro);
   font-weight: 400;
   letter-spacing: 0.05em;
   color: var(--hud-lo);
@@ -721,7 +800,7 @@ body,
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: var(--hud-fs-micro);
   font-weight: 400;
   letter-spacing: 0.05em;
   color: var(--hud-lo);
@@ -851,7 +930,25 @@ body,
  * unchanged on hardware where the insets are 0 (every desktop browser), and
  * the HUD clears the hardware chrome on a notched phone. `viewport-fit=cover`
  * in index.html is what makes `env()` report non-zero at all.
+ *
+ * Breakpoints (plan 017 R1–R5):
+ *   max-width 639px   portrait phones: one bottom composition (clock row,
+ *                     instrument row beneath)
+ *   max-height 500px  landscape phones: one compact bottom row + thin tape
+ *   pointer: coarse   44 px hit areas (padding + negative margin, so glyphs
+ *                     and layout keep their size)
+ *   >= 2208x1242 ...  large screens: every cluster zoomed by --hud-zoom
+ *   aspect >= 2       ultrawide: clusters pulled in by --hud-gutter
  */
+
+.hud-corner,
+.hud-camera,
+.hud-bottom-left,
+.hud-bottom-center,
+.hud-bottom-right,
+.hud-tape {
+  zoom: var(--hud-zoom);
+}
 
 .hud-corner {
   position: absolute;
@@ -863,12 +960,12 @@ body,
 
 .hud-corner--tl {
   top: max(18px, env(safe-area-inset-top));
-  left: max(22px, env(safe-area-inset-left));
+  left: calc(max(22px, env(safe-area-inset-left)) + var(--hud-gutter));
 }
 
 .hud-corner--tr {
   top: max(18px, env(safe-area-inset-top));
-  right: max(22px, env(safe-area-inset-right));
+  right: calc(max(22px, env(safe-area-inset-right)) + var(--hud-gutter));
   /* Above .hud-camera (fixed, z-10, later in DOM) so the settings popover
      opened from this corner paints over the camera reticle. */
   z-index: 20;
@@ -876,7 +973,7 @@ body,
 
 .hud-bottom-left {
   position: absolute;
-  left: max(26px, env(safe-area-inset-left));
+  left: calc(max(26px, env(safe-area-inset-left)) + var(--hud-gutter));
   bottom: max(48px, env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
@@ -893,11 +990,12 @@ body,
   display: flex;
   flex-direction: column;
   align-items: center;
+  white-space: nowrap;
 }
 
 .hud-bottom-right {
   position: absolute;
-  right: max(26px, env(safe-area-inset-right));
+  right: calc(max(26px, env(safe-area-inset-right)) + var(--hud-gutter));
   bottom: max(48px, env(safe-area-inset-bottom));
   z-index: 10;
   display: flex;
@@ -914,7 +1012,10 @@ body,
   }
 }
 
-@media (max-width: 639px) {
+/* Phones, and touch tablets in portrait: at 768 px the 44 px transport row
+   no longer fits between the corner instruments, so the stacked
+   composition takes over there too. */
+@media (max-width: 639px), (pointer: coarse) and (max-width: 899px) and (min-height: 501px) {
   .hud-corner--tl {
     top: max(14px, env(safe-area-inset-top));
     left: max(14px, env(safe-area-inset-left));
@@ -976,15 +1077,31 @@ body,
   }
 
   .hud-frame .hud-bottom-right .hud-fine {
-    font-size: 7px;
     letter-spacing: 0;
     white-space: nowrap;
   }
 
   .hud-frame .hud-place {
-    font-size: 8.5px;
     letter-spacing: 0;
     max-width: 112px;
+  }
+
+  /* Ground cluster as a row (globe beside its lines) so it is no taller
+     than the gauges. The weather line cannot fit at the 9 px floor, so it
+     is dropped rather than shrunk (R3). */
+  .hud-frame .hud-ground {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hud-frame .hud-ground__text {
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .hud-frame .hud-groundwx {
+    display: none;
   }
 
   /* Camera control parks alone in the top-right on small screens */
@@ -1000,7 +1117,7 @@ body,
 
   /* Real (not transform) downscale so layout boxes shrink with them */
   .hud-frame .hud-gauge {
-    width: 76px !important;
+    width: 72px !important;
     gap: 1px;
   }
 
@@ -1009,7 +1126,7 @@ body,
   }
 
   .hud-frame .hud-gauge__unit {
-    font-size: 8.5px;
+    font-size: 9px;
   }
 
   .hud-frame .hud-bezel {
@@ -1024,6 +1141,374 @@ body,
 
   .hud-tape {
     display: none;
+  }
+}
+
+/* ─── Short viewports: landscape phones (R1) ───────────────────────────── */
+/*
+ * At 844×390 the desktop frame took ~75% of the height and put the clock on
+ * the station. Here everything collapses to one top row and one bottom row —
+ * gauges (values only) · clock (time + transport) · ground summary — with
+ * the tape as a bare line underneath. Secondary lines are hidden, not
+ * shrunk. Comes after the portrait block so a small landscape phone
+ * (568×320 matches both) gets this layout.
+ */
+@media (max-height: 500px) {
+  :root {
+    /* Layout width of the Passes + gear row plus a gap; the camera control
+       parks to its left. The viewport spec fails on any overlap if the row
+       grows. */
+    --hud-tr-width: 100px;
+  }
+
+  .hud-scrim--top {
+    height: 84px;
+  }
+
+  .hud-scrim--bottom {
+    height: 120px;
+  }
+
+  .hud-corner--tl {
+    top: max(10px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left));
+  }
+
+  .hud-corner__meta,
+  .hud-corner__divider {
+    display: none;
+  }
+
+  .hud-corner--tr {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(18px, env(safe-area-inset-right));
+    height: 36px;
+  }
+
+  .hud-camera {
+    top: max(10px, env(safe-area-inset-top));
+    right: calc(max(18px, env(safe-area-inset-right)) + var(--hud-tr-width));
+    gap: 8px;
+  }
+
+  .hud-btn-locate {
+    padding: 4px;
+    margin: -4px;
+  }
+
+  .hud-btn-locate .hud-reticle {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hud-camera__state {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .hud-camera .hud-zoommeter {
+    display: none;
+  }
+
+  .hud-settings-popover {
+    top: calc(54px + env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+  }
+
+  .hud-frame {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-areas: 'left clock right';
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
+    column-gap: 12px;
+    row-gap: 0;
+    padding: 0 max(14px, env(safe-area-inset-right))
+      max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    /* The tape's hit area runs under the instrument row; only the real
+       controls take touches, so the rest of the strip scrubs. */
+    pointer-events: none;
+  }
+
+  .hud-frame .hud-camera,
+  .hud-frame button,
+  .hud-transport-popover {
+    pointer-events: auto;
+  }
+
+  .hud-frame .hud-bottom-left {
+    grid-area: left;
+    position: static;
+    justify-self: start;
+  }
+
+  .hud-frame .hud-bottom-center {
+    grid-area: clock;
+    position: static;
+    transform: none;
+    width: auto;
+  }
+
+  .hud-frame .hud-bottom-right {
+    grid-area: right;
+    position: static;
+    justify-self: end;
+    min-width: 0;
+  }
+
+  .hud-clock__date,
+  .hud-clock__caption {
+    display: none;
+  }
+
+  .hud-clock__time {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .hud-transport {
+    margin-top: 0;
+  }
+
+  .hud-transport-popover {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  /* Gauges: the two values stacked, their units naming them; labels and
+     the eclipse line hidden. */
+  .hud-gauges__row {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+
+  .hud-frame .hud-gauge {
+    width: auto !important;
+  }
+
+  .hud-frame .hud-gauge > .hud-label,
+  .hud-gauges__eclipse {
+    display: none;
+  }
+
+  .hud-frame .hud-gauge__value {
+    font-size: 17px !important;
+  }
+
+  .hud-frame .hud-gauge__unit {
+    font-size: 9px;
+  }
+
+  /* Ground summary: place and coordinates only. */
+  .hud-frame .hud-bezel,
+  .hud-ground__caption,
+  .hud-frame .hud-groundwx {
+    display: none;
+  }
+
+  .hud-frame .hud-ground__text {
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .hud-frame .hud-ground,
+  .hud-frame .hud-ground__text,
+  .hud-frame .hud-place {
+    max-width: 100%;
+  }
+
+  /* Thin tape: line, ticks and marker only, along the very bottom. */
+  .hud-tape {
+    display: block;
+    left: max(14px, env(safe-area-inset-left));
+    right: max(14px, env(safe-area-inset-right));
+    height: 24px;
+  }
+
+  .hud-tape__label,
+  .hud-tape__period {
+    display: none;
+  }
+
+  .hud-tape__line,
+  .hud-tape__tick,
+  .hud-tape__trail,
+  .hud-tape__dot {
+    top: calc(100% - 9px);
+  }
+}
+
+/* ─── Coarse pointers: 44 px hit areas (R4) ────────────────────────────── */
+/*
+ * Targets grow by padding, and negative margins of the same amount hand the
+ * space back, so glyphs and layout keep their size. Where a hit area would
+ * reach a neighbour the gap widens instead.
+ */
+@media (pointer: coarse) {
+  .hud-transport {
+    gap: 0;
+  }
+
+  .hud-transport__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 6px;
+    border-bottom: 0;
+  }
+
+  .hud-transport > .hud-transport__btn {
+    margin-block: -12px;
+  }
+
+  /* The hairline underline would sit at the foot of the 44 px box; draw it
+     under the label instead. */
+  .hud-transport__btn--active {
+    background: linear-gradient(var(--hud-line-strong), var(--hud-line-strong)) no-repeat
+      50% calc(50% + 9px) / calc(100% - 16px) 1px;
+  }
+
+  .hud-transport__icon {
+    padding: 0;
+  }
+
+  .hud-corner--tr {
+    gap: 24px;
+  }
+
+  .hud-btn-gear {
+    padding: 15.5px;
+    margin: -15.5px;
+  }
+
+  .hud-btn-text {
+    min-height: 44px;
+    padding: 15px 8px;
+    margin: -15px -8px;
+  }
+
+  .hud-btn-earth {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12px;
+    border-bottom: 0;
+    text-decoration: underline;
+    text-decoration-color: var(--hud-line);
+    text-underline-offset: 4px;
+  }
+
+  .hud-tape {
+    height: 44px;
+  }
+
+  .hud-option,
+  .hud-suggestion {
+    min-height: 44px;
+  }
+
+  .hud-suggestion {
+    align-content: center;
+  }
+
+  /* 16 px stops iOS Safari zooming the page when a field takes focus. */
+  .hud-input,
+  .hud-transport-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
+/* Desktop frame on a touch screen (landscape tablets): the camera control
+   steps down so its reticle clears the taller Passes + gear hit areas. */
+@media (pointer: coarse) and (min-width: 900px) and (min-height: 501px) {
+  .hud-camera {
+    top: calc(54px + env(safe-area-inset-top));
+  }
+
+  .hud-settings-popover {
+    top: calc(56px + env(safe-area-inset-top));
+  }
+}
+
+/* Stacked composition on a touch screen: the Passes + gear row steps down
+   below the reach of Reset View's hit area, and in from the edge so the
+   gear's stays on screen. */
+@media (pointer: coarse) and (max-width: 899px) and (min-height: 501px) {
+  .hud-corner--tr {
+    top: calc(88px + env(safe-area-inset-top));
+    right: max(18px, env(safe-area-inset-right));
+  }
+
+  .hud-settings-popover {
+    top: calc(118px + env(safe-area-inset-top));
+  }
+}
+
+/* Touch tablets in portrait share the stacked composition but not the
+   phone's squeeze: tablet-size gauges, and room for the weather line. */
+@media (pointer: coarse) and (min-width: 640px) and (max-width: 899px) and (min-height: 501px) {
+  .hud-frame .hud-gauge {
+    width: 96px !important;
+  }
+
+  .hud-frame .hud-gauge__value {
+    font-size: 26px !important;
+  }
+
+  .hud-frame .hud-gauge__unit {
+    font-size: 10px;
+  }
+
+  .hud-frame .hud-groundwx {
+    display: inline;
+  }
+}
+
+/* ─── Large screens (R5) ───────────────────────────────────────────────── */
+/*
+ * Above 1080p the HUD kept its pixel sizes, so it read small and the corners
+ * drifted apart. Zoom steps at min(width / 1920, height / 1080) ≈ 1.15, 1.3,
+ * 1.6, 1.9, applied to whole clusters so type, spacing and hit areas stay in
+ * proportion. Media steps rather than a continuous vmin zoom: `zoom` takes a
+ * number, and dividing lengths in calc() is not yet supported everywhere.
+ */
+@media (min-width: 2208px) and (min-height: 1242px) {
+  :root {
+    --hud-zoom: 1.15;
+  }
+}
+
+@media (min-width: 2496px) and (min-height: 1404px) {
+  :root {
+    --hud-zoom: 1.3;
+  }
+}
+
+@media (min-width: 3072px) and (min-height: 1728px) {
+  :root {
+    --hud-zoom: 1.6;
+  }
+}
+
+@media (min-width: 3648px) and (min-height: 2052px) {
+  :root {
+    --hud-zoom: 1.9;
+  }
+}
+
+/* Ultrawide: hold the clusters to an 18:9 frame around the centred clock
+   instead of the far edges. Divided by the zoom because it is applied
+   inside zoomed clusters. */
+@media (min-aspect-ratio: 2/1) and (min-width: 2200px) {
+  :root {
+    --hud-gutter: calc((100vw - 200vh) / 2 / var(--hud-zoom));
   }
 }
 

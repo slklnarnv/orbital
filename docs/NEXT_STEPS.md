@@ -7,6 +7,32 @@
 
 ## Current state (2026-10-26)
 
+- **017 R1–R7 responsive display landed (2026-10-26)**: measured with a
+  viewport audit at ten sizes (360×640 to 3440×1440, overview and Follow,
+  headless Edge on the owner's GPU). Before → after:
+  - landscape phones: HUD 77% (844×390) and 84% (740×360) of the height →
+    26% and 28%. A `max-height: 500px` layout gives one compact bottom row
+    (gauge values · clock + transport · place and coordinates) and a thin
+    tape;
+  - Follow: the station overlapped the clock at 360×640, 390×844, 844×390
+    and 740×360 → clear at every size. `HudAwareFraming` shifts the
+    projection (`camera.setViewOffset`, never the pose) so the tracked
+    station centres in the band the HUD leaves free. It re-measures on
+    resize, rotation, `H` and every second, and eases in and out. On
+    desktop the shift is also on (76 px up at 1080p, clearing the clock). The
+    lens flare adds the same offset, so it stays on the sun billboard;
+  - text: six styles at 7–8.5 px → none below 9 px (clamp() floor tokens;
+    the phone weather line is dropped, not shrunk);
+  - touch: every control was under 44 px (Pause 23×15) → none under 44×44
+    on coarse pointers. Hit areas grow by padding with negative margins, so
+    the glyphs and layout keep their size. Touch tablets in portrait use
+    the stacked composition;
+  - QHD and up: whole clusters zoom (1.15/1.3/1.6/1.9 steps); ultrawide
+    pulls them in to an 18:9 frame (280 px each side at 3440×1440);
+  - render scale (D.6): a settings row (Auto, 100%, 75%, 50%) pins the pixel
+    ratio and pauses the governor. The DPR-2 ceiling on coarse pointers was
+    already in force (R3F default) and is now explicit.
+  Guarded by `tests/e2e/viewport.spec.ts` (station check under `E2E_DEV=1`).
 - **Roadmap written (2026-10-26)**: `plans/017-display-visuals-polish-roadmap.md`
   covers responsive display, clouds, 8K textures, the sun, the dashed orbit
   code, icon/loading/name, accessibility and shortcuts, the info panel and
@@ -160,11 +186,9 @@ The display, visuals and polish roadmap is **`plans/017-display-visuals-polish-r
 (2026-10-26: viewport audit at nine sizes, sun/cloud/orbit captures, code
 read). Its order, merged with the older items:
 
-1. **017 R1–R4 + R7 — responsive display.** Landscape phones get the full
-   desktop HUD (~45% of the height, clock over the station); portrait
-   framing centres the station under the HUD; ground lines at 7 px and tape
-   labels at 8 px; controls down to 23×15 px on touch. Then commit the audit
-   as a Playwright spec.
+1. ~~**017 R1–R7 — responsive display.**~~ Landed 2026-10-26 (see Current
+   state). Follow-up only if wanted: a real-device pass on iOS Safari
+   (address-bar collapse with `100dvh`, notch insets in landscape).
 2. **017 V1 — close-range clouds** (texel staircase at 300–800 km): smooth
    and bicubic first, then altitude-faded procedural detail.
 3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
@@ -489,7 +513,7 @@ artwork, not a screenshot: canvas `toDataURL` returns a cleared buffer under
 palette and self-hosted fonts. The generator is a throwaway script, not
 committed - regenerate from this description if the branding changes.
 
-#### D.6 - Mobile frame: safe-area insets, coarse-pointer sizing, render scale - LANDED 2026-10-19 (CSS half; render-scale override still open)
+#### D.6 - Mobile frame: safe-area insets, coarse-pointer sizing, render scale - LANDED (CSS half 2026-10-19; hit areas and render scale 2026-10-26, plan 017 R4/R6)
 
 **Problem (as of 2026-10-19, CSS half now fixed):** `src/index.css` had zero
 `env(safe-area-inset-*)` and no `(pointer: coarse)` branch; on a notched phone
@@ -511,8 +535,10 @@ Cost: one session, CSS + one settings field. Folds into C.3.
 `env(safe-area-inset-*)` through `max()`, so the old spacing is the floor and
 desktop layout is byte-identical. `index.html` gained `viewport-fit=cover` -
 without it `env()` reports zero on iOS and the whole change is inert.
-Still open: the `(pointer: coarse)` hit-area block and the pinned render-scale
-override.
+**Landed 2026-10-26 (plan 017 R4/R6):** the `(pointer: coarse)` block gives
+every HUD control a ≥ 44×44 hit area. "Render scale" in the settings popover
+(`renderScale.ts`) pins the DPR at 100/75/50% of the ceiling and stops the
+governor sampling; Auto starts a fresh governor.
 
 #### D.7 - Save-frame (screenshot)
 
