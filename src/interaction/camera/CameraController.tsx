@@ -16,6 +16,7 @@ import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
 import { easeInOutCubic } from '@/utils/math'
+import { prefersReducedMotion } from '@/utils/reducedMotion'
 import type { CameraTransitionState } from '@/types/camera'
 
 // ─── Hoisted Static Vectors to Achieve Complete Zero-GC Frame Loops ──────────
@@ -376,7 +377,7 @@ export const CameraController = React.memo(function CameraController({
         // keep the path, so arrival orientation and context are preserved,
         // but fly it in a fraction of the time. A cut would be more
         // disorienting than a short glide.
-        const motionScale = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0.35 : 1
+        const motionScale = prefersReducedMotion() ? 0.35 : 1
         flightRef.current = {
           transition, path, elapsedMs: 0, horizon,
           // Time scales with the visible work: the route's own estimate, plus

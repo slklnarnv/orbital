@@ -1,8 +1,6 @@
 import { useCameraStore } from '@/stores/cameraStore'
 import { hasCommittedDetail, useLoadingStore } from '@/stores/loadingStore'
-import { CameraStateMachine } from '@/interaction/camera/CameraStateMachine'
-import type { PerspectiveCamera } from 'three'
-import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
+import { requestResetView } from '@/interaction/camera/resetView'
 
 /** "PLANETARY" -> "Planetary" — enum values spoken in the console's voice. */
 function sentenceCase(value: string): string {
@@ -20,7 +18,6 @@ export function CameraCluster(): JSX.Element {
   const zoomProgress = useCameraStore((state) => state.zoomProgress)
   const triggerLocateISS = useCameraStore((state) => state.triggerLocateISS)
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
-  const triggerResetView = useCameraStore((state) => state.triggerResetView)
   const isResetting = useCameraStore((state) => state.isTransitioning && state.transition?.toMode === 'ORBITAL')
   // Reset View measures the live camera against its home framing (initial or
   // post-Reset overview): any orbit, zoom, or pan away makes it appear, and a
@@ -46,13 +43,6 @@ export function CameraCluster(): JSX.Element {
       ? 'ISS unavailable'
       : isResetting ? 'Resetting view' : isTransitioning ? 'Locating ISS' : sentenceCase(cameraMode)
 
-  const resetView = () => {
-    const controls = cameraControlsRef.current
-    if (!controls) return
-    const camera = controls.camera as PerspectiveCamera
-    triggerResetView(CameraStateMachine.overviewDistanceForViewport(camera, controls.maxDistance))
-  }
-
   return (
     <div className="hud-camera hud-text">
       <button
@@ -63,6 +53,7 @@ export function CameraCluster(): JSX.Element {
         onFocus={requestISSDetail}
         aria-busy={isTransitioning}
         aria-label="Locate ISS — fly the camera to the station"
+        aria-keyshortcuts="L"
         // Working state spans the WHOLE press — departure wait included —
         // and ends only at arrival, so the motion never cuts mid-way.
         className={`hud-btn-locate${isTransitioning ? ' is-working' : ''}`}
@@ -95,7 +86,9 @@ export function CameraCluster(): JSX.Element {
       </button>
 
       <div className="hud-camera__state">
-        <span className="hud-label" role="status">
+        {/* Not a live region: settled modes are announced once by the
+            SceneAnnouncer, without the Locked/Free chatter of every zoom. */}
+        <span className="hud-label hud-camera__status">
           <span style={{ color: 'var(--hud-hi)' }}>{status}</span>
           <span style={{ color: 'var(--hud-lo)' }}>
             {`  ·  ${issDetail.status === 'unavailable' ? 'Unavailable' : showingFallback ? 'Low detail' : isTracking ? 'Locked' : 'Free'}`}
@@ -117,7 +110,8 @@ export function CameraCluster(): JSX.Element {
             type="button"
             className="hud-label hud-btn-earth"
             aria-label="Reset View"
-            onClick={resetView}
+            aria-keyshortcuts="R"
+            onClick={requestResetView}
           >
             Reset View
           </button>

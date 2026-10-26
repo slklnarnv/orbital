@@ -6,7 +6,9 @@ import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
 import { scheduleLocatePrefetch } from '@/rendering/iss/prefetchDetail'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
-import { useHudVisibility } from '@/hooks/useHudVisibility'
+import { useShortcuts } from '@/ui/shortcuts/useShortcuts'
+import { ShortcutHelp } from '@/ui/overlay/ShortcutHelp'
+import { SceneAnnouncer, SceneSummary, SCENE_SUMMARY_ID } from '@/ui/a11y/SceneAnnouncer'
 import { TopBar } from '@/ui/layout/TopBar'
 import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
 import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
@@ -48,19 +50,37 @@ function checkWebGLSupport(): boolean {
  * cluster subscribes to its own slice of the 1 Hz throttled stores, so
  * high-frequency updates stay confined to their dedicated components and the
  * container never re-renders.
+ *
+ * Keyboard and screen-reader layer (roadmap 017 A): one global shortcut
+ * handler, a skip link past the top bar, the canvas described in words and a
+ * polite live region for mode and daylight changes.
  */
 const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
-  useHudVisibility()
+  useShortcuts()
 
   return (
     <>
+      <a
+        href="#hud-main"
+        className="hud-skip-link"
+        onClick={(event) => {
+          // Focus without rewriting the URL's hash.
+          event.preventDefault()
+          document.getElementById('hud-main')?.focus()
+        }}
+      >
+        Skip to time and camera controls
+      </a>
+      <SceneSummary />
+      <SceneAnnouncer />
+
       {/* Edge scrims: legibility gradients, never interactive */}
       <div aria-hidden="true" className="hud-scrim hud-scrim--top" />
       <div aria-hidden="true" className="hud-scrim hud-scrim--bottom" />
 
       <TopBar />
 
-      <main aria-label="Mission telemetry and camera controls" className="hud-frame select-none">
+      <main id="hud-main" tabIndex={-1} aria-label="Mission telemetry and camera controls" className="hud-frame select-none">
         <OrbitTape />
         <GaugesCluster />
         <MissionClockCluster />
@@ -69,6 +89,8 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         </div>
         <CameraCluster />
       </main>
+
+      <ShortcutHelp />
     </>
   )
 })
@@ -480,7 +502,12 @@ export default function App(): JSX.Element {
   return (
     <div className="w-full h-full relative overflow-hidden bg-[var(--space)] text-[var(--hud-hi)] select-none">
       {/* Layer 3: High-Performance 3D R3F Viewport - Stable (Never Re-renders!) */}
-      <div className="absolute inset-0 z-0 w-full h-full">
+      <div
+        className="absolute inset-0 z-0 w-full h-full"
+        role="img"
+        aria-label="Live 3D view of Earth and the International Space Station"
+        aria-describedby={SCENE_SUMMARY_ID}
+      >
         <SceneRoot />
       </div>
 

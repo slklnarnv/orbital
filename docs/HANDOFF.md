@@ -112,8 +112,9 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
 - `__BUILD_ID__` → `?v=` on the model/texture URLs; `/models` and `/textures`
   are `immutable`. **`/draco` is NOT** — `useGLTF.setDecoderPath` builds its
   own URLs with no `?v=`, so `immutable` there would pin a stale decoder.
-- `H` hides the HUD (`src/hooks/useHudVisibility.ts`, `.hud-hidden` on
-  `<html>`, `visibility` so layout is untouched). Not persisted.
+- `H` hides the HUD (`toggleHud` in `src/ui/shortcuts/useShortcuts.ts`,
+  `.hud-hidden` on `<html>`, `visibility` so layout is untouched). Not
+  persisted. Since 017 A1 every global key lives in `shortcutRegistry.ts`.
 - Safe-area insets on every anchored cluster + `viewport-fit=cover`
   (without it `env()` is 0 on iOS).
 - OG/Twitter metadata, `robots.txt`, `sitemap.xml`, generated `og-image.png`;
@@ -186,6 +187,13 @@ landed through its own PR.
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
+- **Overlays** (017 A1/P): every popover and panel goes through
+  `src/ui/overlay/` — one open at a time, Escape closes, focus returns to the
+  trigger; new panels use `HudPanel` and `useOverlay`, never their own
+  outside-click/Escape effect. Text links are warm white with a hairline
+  underline (`.hud-link`), never a link colour.
+- **Contrast**: `--hud-lo` is 50% white (4.7:1 on `--space`, AA);
+  `HudContrast.test.ts` fails if a token drops below 4.5:1.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
