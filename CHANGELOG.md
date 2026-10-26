@@ -14,12 +14,21 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- A render-scale setting (Auto, 100%, 75%, 50%) to trade sharpness for
+  frame rate ([#42](https://github.com/slklnarnv/orbital/pull/42)).
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
 
 ### Changed
 
+- The HUD fits phones in both orientations, tablets and large screens: a
+  compact layout on landscape phones, the tracked station framed clear of
+  the HUD, no text under 9 px, 44 px touch targets, and a larger HUD on QHD
+- The HUD fits phones in both orientations, tablets and large screens: a
+  compact layout on landscape phones, the tracked station framed clear of
+  the HUD, no text under 9 px, 44 px touch targets, and a larger HUD on QHD
+  and ultrawide displays ([#42](https://github.com/slklnarnv/orbital/pull/42)).
 - Clouds stay smooth up close: no more texel blocks at 800 km or staircase
   edges at 300 km, with fine cloud detail fading in near the deck and
   matching cloud shadows ([#37](https://github.com/slklnarnv/orbital/pull/37)).
