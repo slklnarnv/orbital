@@ -14,9 +14,24 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- Keyboard shortcuts with a `?` overlay: `Space`, `1`–`4`, `0`, `L`, `R`,
+  `H`, `P`, `G` and `Esc`, never while typing in a field
+  ([#40](https://github.com/slklnarnv/orbital/pull/40)).
+- An About panel beside the wordmark: what is measured and what is
+  illustrative, data sources and credits, and the build id
+  ([#40](https://github.com/slklnarnv/orbital/pull/40)).
+- Screen-reader support: a skip link, a text summary of the view, and spoken
+  camera-mode and sunrise/sunset changes; panels return focus to the control
+  that opened them ([#40](https://github.com/slklnarnv/orbital/pull/40)).
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
+
+### Changed
+
+- The quietest HUD text is brighter (4.7:1 contrast on black, up from 3.1:1),
+  and reduced motion now also stills the station glint and the lens flare's
+  ghosts ([#40](https://github.com/slklnarnv/orbital/pull/40)).
 
 ## 2026-10-26
 
