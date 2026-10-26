@@ -460,4 +460,5 @@ it next. As of 2026-10-25 the top of that list is:
    schematic) at Follow, with the full model appearing only below 200 km.
 2. **B.3 — next visible pass** (reuse `isSunlit` and the forecaster pattern;
    needs CSP and `Permissions-Policy` changes for city search and geolocation).
-3. C.5 (CHANGELOG + Dependabot), then D.6's remainder and C.4 accessibility.
+3. D.6's remainder and C.4 accessibility (C.5, the changelog and
+   Dependabot, landed 2026-10-26).

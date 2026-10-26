@@ -24,6 +24,16 @@
   "Not available on this model". Picking tests batches in bounding-sphere
   order and stops at the first sure hit, so a hover pick touches one to
   three of the 217 batches.
+- **C.5 changelog and Dependabot (2026-10-26)**: `CHANGELOG.md` (Keep a
+  Changelog, sections named by the date a change reached `main`, since every
+  merge deploys and there are no version tags; PRs add lines under
+  "Unreleased") covers the history back to the first commit, with PR links.
+  `.github/dependabot.yml` opens weekly npm and GitHub Actions PRs: npm minor
+  and patch bumps in one group, majors one per PR, a 7-day cooldown, and the
+  deferred majors ignored (React/R3F/drei, three beyond r170.x, Vite and its
+  React plugin, satellite.js, and `@types/node` past the Node 22 floor).
+  Actions stay pinned to SHAs; Dependabot rewrites the SHA and its version
+  comment.
 - **Roadmap written (2026-10-26)**: `plans/017-display-visuals-polish-roadmap.md`
   covers responsive display, clouds, 8K textures, the sun, the dashed orbit
   code, icon/loading/name, accessibility and shortcuts, the info panel and
@@ -198,8 +208,7 @@ read). Its order, merged with the older items:
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km. Also re-run the Inspect
    scrub fps (the GPU was busy during the 2026-10-26 measurement).
-7. **C.5** (`CHANGELOG.md`, Dependabot) and **A.2** measured perf baseline —
-   then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
+7. **A.2** measured perf baseline — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8. **017 X1**
    follow-ups if wanted: per-truss-segment entries (P4–P6 and S4–S6 are one
@@ -295,7 +304,7 @@ can be extended. "Touches" lists the files expected to change.
    a high-contrast HUD class.
 5. **Release routine.** Scheduled CI job running `npm run refresh:tle`:
    LANDED (`refresh-tle.yml`, Mon/Thu, verify-gated, commits directly to
-   `main`). Still open: a short `CHANGELOG.md`.
+   `main`). `CHANGELOG.md` and `.github/dependabot.yml`: LANDED 2026-10-26.
 6. **Faster Locate (fresh load).** Locate is a primary feature. A cold session
    used to wait for the full high pipeline, and on a slow connection the 8 s
    departure gate expired, so the camera departed on Model A and swapped
