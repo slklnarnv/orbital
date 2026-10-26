@@ -51,7 +51,7 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
   "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
   `orbital-settings` localStorage key. The loading overlay swallows pointer
-  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  events until the `progressbar` named "Loading" is gone, and the rAF loop defeats actionability
   waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
@@ -186,6 +186,15 @@ landed through its own PR.
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
+- **Identity and loading**: the mark is an orbit ellipse that brightens
+  toward a station glint (`scripts/build-icons.mjs`, geometry mirrored in
+  `src/ui/loading/bootMark.ts`; `bootMarkSync.test.ts` guards the copies in
+  `index.html` and `src/index.css`). The loading screen (`.boot-*`) is
+  painted first by a static copy in `index.html`, then `LoadingScreen.tsx`
+  takes over. Its stage counts come from wrapping `DefaultLoadingManager`'s
+  `itemStart/itemEnd/itemError` (`assetLoadTracker.ts`, first import in
+  `main.tsx` so the module-scope preloads are seen); the gate is every file
+  ended with both the Earth and station stages started.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
@@ -204,6 +213,7 @@ landed through its own PR.
 | `src/ui/clusters/GroundTrackGlobe.tsx` | Orthographic globe + passing-over lines |
 | `src/ui/common/PassesPanel.tsx` | Visible-pass popover (observer search, pass list, Watch); prediction in `src/core/orbital/PassPredictor.ts` |
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
+| `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |
 | `src/stores/geoStore.ts` | Geo presentation state (written by the service only) |
