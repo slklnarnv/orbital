@@ -1,0 +1,67 @@
+# Weekly version updates for npm and GitHub Actions. Every PR runs the
+# `verify` workflow like any other; nothing here auto-merges.
+#
+# Deferred majors are planned as their own migrations (docs/NEXT_STEPS.md,
+# "Deferred majors"), so their major bumps are ignored below. Drop an
+# ignore entry in the same PR that starts that migration.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let a release sit a week before proposing it (supply-chain hygiene).
+    # Security updates are not delayed.
+    cooldown:
+      default-days: 7
+    groups:
+      # One PR per week for every minor and patch bump; any major that is not
+      # ignored below still arrives as its own PR.
+      npm-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # React 19 + R3F 9 + drei 10 move together.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: '@types/react'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@types/react-dom'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@react-three/fiber'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@react-three/drei'
+        update-types: [version-update:semver-major]
+      # three is 0.x: every rNNN release is a "minor" bump and can break, so
+      # only patches within r170 are proposed.
+      - dependency-name: three
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: '@types/three'
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      # Vite 7/8; the React plugin's majors follow Vite's.
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+      - dependency-name: '@vitejs/plugin-react'
+        update-types: [version-update:semver-major]
+      - dependency-name: satellite.js
+        update-types: [version-update:semver-major]
+      # Node types track the runtime floor (.nvmrc, engines: Node 22).
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+
+  # Workflows pin actions to a full commit SHA with a `# vX.Y.Z` comment.
+  # Dependabot keeps that form: it bumps the SHA and rewrites the comment, and
+  # leaves the `with:` inputs (persist-credentials) alone.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ['*']
