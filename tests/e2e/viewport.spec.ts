@@ -209,8 +209,11 @@ test.describe('station framing', () => {
       test.setTimeout(360_000)
       await page.setViewportSize({ width: size[0], height: size[1] })
       await boot(page)
-      const hasHooks = await page.evaluate(() => '__orbitalControls' in window)
-      test.skip(!hasHooks, 'needs the DEV scene hooks: run with E2E_DEV=1')
+      // main.tsx sets __orbitalSimulation at module load in DEV only, so it
+      // tells the builds apart without racing the controls mounting.
+      const isDev = await page.evaluate(() => '__orbitalSimulation' in window)
+      test.skip(!isDev, 'needs the DEV scene hooks: run with E2E_DEV=1')
+      await page.waitForFunction(() => '__orbitalControls' in window && '__orbitalScene' in window)
 
       const locate = await page.locator('#btn-locate-iss').boundingBox()
       if (!locate) throw new Error('Locate has no box')
