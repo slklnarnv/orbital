@@ -7,6 +7,22 @@
 
 ## Current state (2026-10-26)
 
+- **017 V4 dashed orbit in the shader (2026-10-26)**: the dash is now
+  computed in the line's fragment shader (`src/rendering/shaders/orbitDash.glsl`,
+  material in `src/rendering/iss/orbitLineMaterial.ts`), keyed on each
+  vertex's orbital phase (`src/core/orbital/OrbitPhase.ts`: revolutions of
+  the mean motion at the vertex's epoch) and sized with screen-space
+  derivatives: a power-of-two number of dashes per revolution chosen per
+  fragment, neighbouring levels crossfaded. The per-frame dash sizing,
+  `dashOffset` and dash-origin state are gone; `OrbitLine.tsx` went from
+  361 to 192 lines. Measured with frame captures (fixed camera on the
+  future arc): 0 px along-track shift after seeks of +61 s, +130 s and
+  −70 s, an orbit-tape scrub, 1× and 18 sim-minutes at 300×. Pitch is now
+  even along the whole arc: at Follow 250 km the old dash ran 16 → 7 px
+  from the near to the far end, the new one 11–13 px (8–16 px across all
+  overview and Follow captures; the octave crossfade sets that band).
+  Dashed/Continuous links no new program;
+  Bloom on and off both render it, and the pitch holds at DPR 2.
 - **Roadmap written (2026-10-26)**: `plans/017-display-visuals-polish-roadmap.md`
   covers responsive display, clouds, 8K textures, the sun, the dashed orbit
   code, icon/loading/name, accessibility and shortcuts, the info panel and
@@ -171,8 +187,8 @@ read). Its order, merged with the older items:
    panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
 4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
    the HUD; no apple-touch-icon or manifest).
-5. **017 V4, V3, I2** — dashed orbit in the shader, the sun (round glare
-   pass, limb scattering), staged loading screen.
+5. **017 V3, I2** — the sun (round glare pass, limb scattering), staged
+   loading screen.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human

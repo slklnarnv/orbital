@@ -1,4 +1,5 @@
 import { temeToWorld } from './CoordinateConversions'
+import { arcPhaseOrigin, orbitPhase } from './OrbitPhase'
 import { ORBIT_PATH_STEP_S, ISS_ORBITAL_PERIOD_MIN } from '@/utils/constants'
 import type { OrbitalEngine } from './OrbitalEngine'
 
@@ -10,6 +11,11 @@ export interface OrbitPathPoint {
   alpha: number
   /** epochMs of this point */
   epochMs: number
+  /**
+   * Orbital phase in revolutions, relative to a whole-revolution origin, so
+   * it lies in [0, 2) and rises by exactly 1 across the arc (see OrbitPhase).
+   */
+  phase: number
 }
 
 /**
@@ -60,6 +66,7 @@ export function generateOrbitPath(
     Math.min(Math.round(periodMs / (ORBIT_PATH_STEP_S * 1000)), MAX_ORBIT_POINTS - 1),
   )
 
+  const phaseOrigin = arcPhaseOrigin(startMs, periodMs)
   const points: OrbitPathPoint[] = []
   for (let i = 0; i <= steps; i++) {
     const t = startMs + (periodMs * i) / steps
@@ -70,6 +77,7 @@ export function generateOrbitPath(
       // Alpha: 0 at the trailing edge, 1 at the leading edge.
       alpha: (t - startMs) / (endMs - startMs),
       epochMs: t,
+      phase: orbitPhase(t, periodMs) - phaseOrigin,
     })
   }
 
