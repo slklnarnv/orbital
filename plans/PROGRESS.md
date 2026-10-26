@@ -6,6 +6,37 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## 017 I1 icon + manifest, I2 loading screen (2026-10-26)
+
+- **Icon.** One parametric mark (orbit ellipse, gradient toward a glint;
+  `--hud-hi` on `--space`) drawn by `scripts/build-icons.mjs`
+  (`npm run build:icons`, sharp): `favicon.svg` (size-optimised, no sparkle
+  rays), `favicon.ico` (16/32/48 PNG frames), `apple-touch-icon.png` (180,
+  full bleed), `icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
+  (mark scaled 0.82 to sit inside the 80% safe zone). `favicon.png` removed.
+  `index.html`: icon links, manifest, `theme-color` #020409,
+  `color-scheme: dark`. `vercel.json`: 1-day cache for icons, manifest
+  served as `application/manifest+json`; CSP unchanged (same-origin).
+- **Loading screen.** Stages: data link (bootstrap promise settled →
+  `telemetryModeVisual` label and dot), Earth (`/textures/`, incl. the star
+  map) and station (`/models/`, `/draco/`, `/basis/`, GLTF blob textures),
+  counted per distinct URL from `DefaultLoadingManager` item hooks. The gate
+  is assets only (the link never blocks: the bundled TLE propagates
+  meanwhile). Static first-paint copy in `index.html`; the React screen
+  carries the shell's animation clock over (`bootShell.ts`). Reduced motion:
+  glint parked at the icon position, no fade.
+- **Measured** (local production builds of `main` and this branch, headless
+  Edge, 12 Mbps / 80 ms, cache off, one run each): first contentful paint
+  840 → 520 ms (388 ms with reduced motion); the old build was blank at
+  0.3 s, the new one shows the stages. Assets still settle in ~5–7 s on that
+  link (unchanged; same files).
+- **Tests.** `tests/unit/ui/bootProgress.test.ts` (classification, repeat
+  starts, growing totals, failures, the gate), `bootMarkSync.test.ts`
+  (index.html, CSS offset-path and the icon script share one geometry); e2e
+  waits on the `progressbar` named "Loading".
+- **Open.** `og-image.png` still shows the old wordmark treatment; refresh it
+  with the name decision (I3).
+
 ## 017 V1 close-range clouds (2026-10-26)
 
 - **Cause.** `clouds.frag` uses map density directly as alpha (no coverage

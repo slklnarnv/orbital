@@ -17,9 +17,17 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
+- The site can be installed as an app, with its own icon and a dark title
+  bar ([#39](https://github.com/slklnarnv/orbital/pull/39)).
 
 ### Changed
 
+- A new site icon, an orbit with the station's glint, replaces the cyan
+  wireframe globe ([#39](https://github.com/slklnarnv/orbital/pull/39)).
+- The loading screen appears straight away and shows what it is waiting for
+  (the data link, Earth and the station, file by file) instead of a single
+  percentage; with reduced motion the glint stays still
+  ([#39](https://github.com/slklnarnv/orbital/pull/39)).
 - Clouds stay smooth up close: no more texel blocks at 800 km or staircase
   edges at 300 km, with fine cloud detail fading in near the deck and
   matching cloud shadows ([#37](https://github.com/slklnarnv/orbital/pull/37)).
