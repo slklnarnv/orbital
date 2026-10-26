@@ -17,6 +17,10 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
+- Sharper Earth up close on desktops: a few seconds after the first frame,
+  computers that can hold it swap in 8K day and night-lights maps (NASA Blue
+  Marble and Black Marble, about 22 MB more, streamed without a stutter);
+  phones, tablets and Save-Data connections keep the 4K maps.
 
 ### Changed
 

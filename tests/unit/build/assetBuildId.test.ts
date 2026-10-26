@@ -32,6 +32,14 @@ afterEach(async () => {
 })
 
 describe('computeAssetBuildId', () => {
+  it('changes when a deferred .ktx2 texture changes', async () => {
+    const ktx2 = path.join(root, 'public/textures/earth-day-8k.ktx2')
+    await writeFile(ktx2, Buffer.from([9, 9]))
+    const before = computeAssetBuildId(root)
+    await writeFile(ktx2, Buffer.from([9, 8]))
+    expect(computeAssetBuildId(root)).not.toBe(before)
+  })
+
   it('hashes only .glb/.webp bytes — README line endings and other files do not change it', async () => {
     await writeFile(readme, 'a\r\nb\r\n')
     const crlf = computeAssetBuildId(root)

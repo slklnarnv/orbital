@@ -171,7 +171,8 @@ The full `iss_igoal.glb` is requested only inside the 200/220 km Inspect band
 high-tier failure keeps the LOD; a LOD failure demotes the requested path to
 legacy. Rebuild after any high-asset rebuild with `npm run build:iss-lod`.
 Both tiers load through drei's `useGLTF` with a `KTX2Loader` (transcoder
-self-hosted in `public/basis/`). The `.js` glue is NOT a plain copy of
+self-hosted in `public/basis/`); the loader lives in
+`src/rendering/iss/ktx2Loader.ts`, shared with the deferred 8K Earth maps. The `.js` glue is NOT a plain copy of
 `three/examples/jsm/libs/basis`: three's embind glue builds its invokers with
 `new Function`, which the production CSP (no `'unsafe-eval'`) blocks inside
 the blob: transcoder workers — the worker dies at init without answering and

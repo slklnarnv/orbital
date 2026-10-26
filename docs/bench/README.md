@@ -136,3 +136,40 @@ Read with care:
   of the 330 MiB at overview. The specular mask is single-channel data
   stored as RGBA8 (a C.2 target). Inspect adds the full model: textures 593
   MiB, buffers 280 MiB.
+
+### 2026-10-26 — 017 V2, 8K Earth (`--earth-8k off` vs `on`)
+
+Same machine and simulation time (`--at 1793010488953`). The JSON stays
+local (`.bench/results/`); the numbers that matter are here.
+
+Full runs (`.bench/results/v2-off.json`, `v2-on.json`; 8 s per row):
+
+| Scenario | fps off → on | p99 ms off → on | GPU ms off → on | tracked GPU MiB off → on |
+|---|---|---|---|---|
+| overview, Bloom | 59.9 → 59.9 | 17.2 → 17.7 | 9.3 → 12.4 ¹ | 526 → 526 |
+| Follow, Bloom | 59.9 → 59.9 | 16.9 → 19.0 ² | 11.3 → 11.3 | 640 → 640 |
+| Follow, no Bloom | 59.9 → 59.9 | 17.1 → 17.4 | 16.1 → 16.1 | 452 → 452 |
+| Follow scrub, Bloom | 59.3 → 59.9 | 17.1 → 17.1 | 11.2 → 10.1 | 640 → 640 |
+| Inspect, no Bloom | 59.9 → 59.9 | 17.3 → 17.4 | 16.2 → 16.2 | 893 → 893 |
+| Inspect scrub, Bloom | 59.9 → 59.9 | 17.1 → 17.1 | 15.6 → 15.8 | 1,081 → 1,081 |
+
+¹ Not reproducible: three alternating off/on pairs (`--scenarios
+overview,follow --duration 6`) gave overview with Bloom 9.22 vs 8.89 ms
+(means), without Bloom 12.39 vs 12.25 ms, Follow with Bloom 11.34 vs 11.46
+ms. The 8K maps cost no measurable GPU time.
+² A row flagged contended (another browser at 28% CPU); the other rows of
+the "on" run that were contended are left out of the table.
+
+- **Memory:** tracked GPU memory is identical after the swap in every row.
+  Two 8K maps as BC7 (`0x8e8d`, 42.7 MiB each with mips) replace the two 4K
+  RGBA8 maps, whose GPU copies are released. During the upload both exist
+  for ~1.5 s (+85 MiB peak).
+- **Before the swap:** with `--earth-8k off`, every row matches the A.2
+  baseline (overview with Bloom 9.29 vs 9.23 ms, Inspect 15.2 vs 15.3 ms),
+  so the gate and the hook cost nothing.
+- **The swap itself** (`earth-8k-swap`, the frames from first paint until 2 s
+  after the swap). In the three repeats: load (download plus worker
+  transcode) 1.8–2.2 s, upload 1.44 s, **no frame over 20 ms**, max 17.3–18
+  ms. One run with other processes at 16% CPU had 2 frames over 20 ms
+  (max 50 ms). For comparison, uploading each map in one call
+  (`initTexture`) blocked 27–45 ms per map.

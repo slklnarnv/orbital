@@ -7,6 +7,22 @@
 
 ## Current state (2026-10-26)
 
+- **017 V2 8K Earth (2026-10-26)**: first paint keeps the 4K WebP maps;
+  ~2.5 s later, on capable desktops (`MAX_TEXTURE_SIZE` ≥ 8192, fine
+  pointer, no Save-Data, a GPU compressed format; `earthDetail.ts`) an 8K
+  day map (KTX2 / Basis **UASTC**, 20.5 MiB) and 8K night lights (ETC1S,
+  1.4 MiB) stream in, are uploaded at most 1 MiB per frame
+  (`progressiveUpload.ts`: one-call uploads stalled 27–45 ms per map) and
+  swap together; the 4K maps' GPU copies are then released. ETC1S was
+  tried for the day map (4.1 MiB) but left 4×4 block halos along every
+  coastline at orbital magnification. Sources are the NASA originals the 4K
+  maps came from (identified by RMSE: Blue Marble NG July 2004 topo-bathy,
+  Black Marble 2016), rebuilt by `npm run build:earth-8k` with pinned
+  SHA-256. The KTX2 loader moved to `src/rendering/iss/ktx2Loader.ts`
+  (shared). Captures: `docs/images/earth-8k-day.webp`,
+  `earth-8k-night.webp`. Bench: `npm run bench -- --earth-8k on|off`
+  measures the swap itself as `earth-8k-swap`; numbers in
+  `docs/bench/README.md`.
 - **A.2 bench harness (2026-10-26)**: `npm run bench` builds the app in bench
   mode (production bundle plus the `window.__orbital*` hooks, now exposed via
   `src/utils/debugHooks.ts` in dev and bench builds only), serves it with
@@ -254,9 +270,9 @@ read). Its order, merged with the older items:
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km.
-7. **017 V2** (8K day/night as deferred KTX2 on capable desktops only; the A.2
-   baseline it is gated on landed 2026-10-26). A.2 leftovers: the flare and
-   300× rows, the leak check, and why Bloom off costs more GPU time than on.
+7. A.2 leftovers: the flare and 300× rows, the leak check, and why Bloom
+   off costs more GPU time than on. 017 V2 landed 2026-10-26; beyond 8K is
+   D.8 (GIBS tiles).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
    exploded module explorer (later). B.3 follow-ups if wanted: an observer
