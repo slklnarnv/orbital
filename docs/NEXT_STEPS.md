@@ -23,6 +23,22 @@
   cloud pass 0.69 → 0.71 ms at 300 km, 0.80 → 0.75 ms at 800 km, overview
   unchanged at ~0.48 ms; surface pass unchanged (~0.65–0.70 ms).
   Still open: V1.3, a higher-resolution source (with V2 / D.8).
+- **017 V4 dashed orbit in the shader (2026-10-26)**: the dash is now
+  computed in the line's fragment shader (`src/rendering/shaders/orbitDash.glsl`,
+  material in `src/rendering/iss/orbitLineMaterial.ts`), keyed on each
+  vertex's orbital phase (`src/core/orbital/OrbitPhase.ts`: revolutions of
+  the mean motion at the vertex's epoch) and sized with screen-space
+  derivatives: a power-of-two number of dashes per revolution chosen per
+  fragment, neighbouring levels crossfaded. The per-frame dash sizing,
+  `dashOffset` and dash-origin state are gone; `OrbitLine.tsx` went from
+  361 to 192 lines. Measured with frame captures (fixed camera on the
+  future arc): 0 px along-track shift after seeks of +61 s, +130 s and
+  −70 s, an orbit-tape scrub, 1× and 18 sim-minutes at 300×. Pitch is now
+  even along the whole arc: at Follow 250 km the old dash ran 16 → 7 px
+  from the near to the far end, the new one 11–13 px (8–16 px across all
+  overview and Follow captures; the octave crossfade sets that band).
+  Dashed/Continuous links no new program;
+  Bloom on and off both render it, and the pitch holds at DPR 2.
 - **C.5 changelog and Dependabot (2026-10-26)**: `CHANGELOG.md` (Keep a
   Changelog, sections named by the date a change reached `main`, since every
   merge deploys and there are no version tags; PRs add lines under
@@ -198,8 +214,8 @@ read). Its order, merged with the older items:
    panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
 4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
    the HUD; no apple-touch-icon or manifest).
-5. **017 V4, V3, I2** — dashed orbit in the shader, the sun (round glare
-   pass, limb scattering), staged loading screen.
+5. **017 V3, I2** — the sun (round glare pass, limb scattering), staged
+   loading screen.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
