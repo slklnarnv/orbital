@@ -218,7 +218,9 @@ test.describe('station framing', () => {
       const locate = await page.locator('#btn-locate-iss').boundingBox()
       if (!locate) throw new Error('Locate has no box')
       await page.touchscreen.tap(locate.x + locate.width / 2, locate.y + locate.height / 2)
-      await expect(page.locator('[role="status"]').first()).toHaveText(/Follow\s*·\s*Locked/, { timeout: 270_000 })
+      // The camera label, not `[role="status"]`: since 017 A3 the first status
+      // region is the screen-reader announcer ("Following the station").
+      await expect(page.locator('.hud-camera__status')).toHaveText(/Follow\s*·\s*Locked/, { timeout: 270_000 })
       // Let the framing shift finish easing in.
       await page.waitForTimeout(2_000)
 
