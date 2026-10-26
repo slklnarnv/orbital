@@ -33,6 +33,32 @@
     ratio and pauses the governor. The DPR-2 ceiling on coarse pointers was
     already in force (R3F default) and is now explicit.
   Guarded by `tests/e2e/viewport.spec.ts` (station check under `E2E_DEV=1`).
+- **017 V1 close-range clouds landed (2026-10-26)**: the cloud shell and the
+  surface's cloud shadows now read one shared field,
+  `src/rendering/shaders/cloudDensity.glsl`. Magnified texels (more than one
+  pixel per texel, picked with `dFdx`/`dFdy`) are reconstructed with a cubic
+  B-spline in four bilinear taps, which removes the texel blocks at 800 km
+  and the staircase at 300 km; below ~3,500 km camera altitude a zero-mean,
+  multiplicative 3D value-noise fBm (four octaves from 9 km, each faded out
+  below ~8 px so it never shimmers) breaks up thin and mid density while
+  dense cores and the large-scale field stay the real map. The shadow takes
+  the same function with two octaves, rotated into the deck's frame, and
+  lost its `fract()` seam. Captured at 800 km, 300 km and overview over the
+  day side: no texel edges at 300 km, overview unchanged. Per-pass GPU timer
+  queries on the integrated GPU (shared with other sessions, so provisional):
+  cloud pass 0.69 → 0.71 ms at 300 km, 0.80 → 0.75 ms at 800 km, overview
+  unchanged at ~0.48 ms; surface pass unchanged (~0.65–0.70 ms).
+  Still open: V1.3, a higher-resolution source (with V2 / D.8).
+- **C.5 changelog and Dependabot (2026-10-26)**: `CHANGELOG.md` (Keep a
+  Changelog, sections named by the date a change reached `main`, since every
+  merge deploys and there are no version tags; PRs add lines under
+  "Unreleased") covers the history back to the first commit, with PR links.
+  `.github/dependabot.yml` opens weekly npm and GitHub Actions PRs: npm minor
+  and patch bumps in one group, majors one per PR, a 7-day cooldown, and the
+  deferred majors ignored (React/R3F/drei, three beyond r170.x, Vite and its
+  React plugin, satellite.js, and `@types/node` past the Node 22 floor).
+  Actions stay pinned to SHAs; Dependabot rewrites the SHA and its version
+  comment.
 - **Roadmap written (2026-10-26)**: `plans/017-display-visuals-polish-roadmap.md`
   covers responsive display, clouds, 8K textures, the sun, the dashed orbit
   code, icon/loading/name, accessibility and shortcuts, the info panel and
@@ -189,8 +215,9 @@ read). Its order, merged with the older items:
 1. ~~**017 R1–R7 — responsive display.**~~ Landed 2026-10-26 (see Current
    state). Follow-up only if wanted: a real-device pass on iOS Safari
    (address-bar collapse with `100dvh`, notch insets in landscape).
-2. **017 V1 — close-range clouds** (texel staircase at 300–800 km): smooth
-   and bicubic first, then altitude-faded procedural detail.
+2. **017 V1 — close-range clouds**: V1.1 (bicubic reconstruction) and V1.2
+   (altitude-faded detail) landed 2026-10-26; V1.3, a higher-resolution
+   cloud source, waits for V2 / D.8.
 3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
    panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
 4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
@@ -205,8 +232,7 @@ read). Its order, merged with the older items:
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km. Also re-run the Inspect
    scrub fps (the GPU was busy during the 2026-10-26 measurement).
-7. **C.5** (`CHANGELOG.md`, Dependabot) and **A.2** measured perf baseline —
-   then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
+7. **A.2** measured perf baseline — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
    exploded module explorer (later). B.3 follow-ups if wanted: an observer
@@ -299,7 +325,7 @@ can be extended. "Touches" lists the files expected to change.
    a high-contrast HUD class.
 5. **Release routine.** Scheduled CI job running `npm run refresh:tle`:
    LANDED (`refresh-tle.yml`, Mon/Thu, verify-gated, commits directly to
-   `main`). Still open: a short `CHANGELOG.md`.
+   `main`). `CHANGELOG.md` and `.github/dependabot.yml`: LANDED 2026-10-26.
 6. **Faster Locate (fresh load).** Locate is a primary feature. A cold session
    used to wait for the full high pipeline, and on a slow connection the 8 s
    departure gate expired, so the camera departed on Model A and swapped
@@ -578,7 +604,7 @@ level 0.
 
 Integration risks, all real:
 
-- Our surface shader owns the terminator, the 5-tap cloud shadow, the ocean
+- Our surface shader owns the terminator, the cloud shadow (`cloudDensity.glsl`), the ocean
   Fresnel and the city-light curve. Their `tile.frag` re-derives lighting and
   has none of the cloud-shadow taps; porting the tile path means porting
   those features or accepting a visible regression at the swap.

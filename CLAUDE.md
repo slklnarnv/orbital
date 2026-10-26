@@ -76,7 +76,9 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
    errata banner - fix the stale text instead.
 2. `plans/PROGRESS.md` - short ledger (current state, open items, canon
    decisions). Full history: `plans/PROGRESS-history.md`.
-3. Deep docs, on demand only:
+3. `CHANGELOG.md` - user-facing changes by release date. A PR with a
+   user-facing change adds one line under "Unreleased".
+4. Deep docs, on demand only:
    - `docs/HANDOFF.md` - camera facts, geo service facts, HUD design system,
      debugging playbook. Read when touching camera/geo/HUD.
    - `docs/ISS_MODEL_CONTEXT.md` + `docs/MODEL_AUDIT.md` - GLB pipeline, rig
