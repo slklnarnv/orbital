@@ -142,6 +142,7 @@ pattern is then anchored to the orbit by construction and the per-frame CPU
 work and phase state go away.
 *Accept*: no crawl at 1×, 300× or during a scrub; constant on-screen pitch;
 pure phase math unit-tested; the file roughly halves.
+*Done 2026-10-26*: see `plans/PROGRESS.md` §"017 V4".
 
 ## I — Identity
 
