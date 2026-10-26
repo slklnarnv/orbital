@@ -6,6 +6,27 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## 017 V1 close-range clouds (2026-10-26)
+
+- **Cause.** `clouds.frag` uses map density directly as alpha (no coverage
+  threshold to smooth); the blocks and staircase were bilinear magnification
+  of the 4096×2048 map (~10 km per texel) once a texel spans tens of pixels.
+- **Fix.** `src/rendering/shaders/cloudDensity.glsl`, included by both
+  `clouds.frag` and `earthSurface.frag`: a cubic B-spline (four bilinear
+  taps, `textureLod` level 0) when magnified, blended in over 1–2 px per
+  texel; a zero-mean multiplicative fBm, `d·(1 + s·n·(1 − d))`, in the
+  deck's rotating frame (`vCloudDir`), faded in by camera altitude
+  (3,500 → 1,200 km) and per octave by pixel footprint. The surface shadow
+  uses the same function with two octaves (replaces the five-tap blur) and
+  samples without `fract()`. `CloudLayer` gained the `cloudTexelSize` uniform.
+- **Evidence.** Before/after at 800 km and 300 km over the day side and the
+  overview (Playwright + Edge, camera placed with `__orbitalControls`): no
+  texel edges at 300 km, overview pixel-identical apart from star twinkle.
+  GPU timer queries per pass changed within noise (cloud ~0.7 ms at 300 km);
+  provisional, the GPU was shared. Contract test: both shaders read the
+  shared field (`EarthVisualContracts.test.ts`).
+- **Open.** V1.3 (higher-resolution source) stays with V2 / D.8.
+
 ## Roadmap 017: display, visuals and polish (2026-10-26)
 
 - Viewport audit (nine sizes, 360×640 to 3440×1440, overview and Follow):
