@@ -100,6 +100,8 @@ the equator, magnified across the screen at Follow/Inspect distances.
 3. Source (later): a higher-resolution cloud field (KTX2, deferred load) or
    tiles (D.8).
 *Accept*: no visible texel edges at 300 km in a side-by-side capture.
+*Status (2026-10-26)*: 1 and 2 landed (`cloudDensity.glsl`, shared with the
+surface's cloud shadows); 3 remains.
 
 **V2. 8K Earth textures — yes, but not as plain 8K WebP.** Today: day 1.0 MB,
 night 0.25 MB, specular 0.39 MB, clouds 1.97 MB (all 4K WebP) inside a
