@@ -1,0 +1,2435 @@
+{
+  "schema": 1,
+  "label": "A.2 baseline (4K Earth)",
+  "startedAt": "2026-10-26T10:20:11.953Z",
+  "commit": "a102306+dirty",
+  "contended": false,
+  "machine": {
+    "os": "Windows_NT 10.0.26200",
+    "cpu": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+    "ramGiB": 28,
+    "gpu": {
+      "renderer": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "maxTextureSize": 16384,
+      "timerQueries": true
+    },
+    "browser": "msedge 156.0.4314.42"
+  },
+  "config": {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "deviceScaleFactor": 1.5,
+    "durationS": 8,
+    "settleS": 3,
+    "simulationEpochMs": 1793009810743,
+    "inspectDistanceKm": 130
+  },
+  "preflight": {
+    "supported": true,
+    "samples": {
+      "gpu": 2,
+      "cpu": 2
+    },
+    "contended": false,
+    "gpuBusy": [],
+    "gpuAll": [],
+    "ownGpuPeakPct": 0,
+    "cpu": {
+      "foreignPct": 2.9,
+      "busy": false,
+      "top": [
+        {
+          "pid": 32760,
+          "name": "?",
+          "pct": 2.1,
+          "own": false
+        },
+        {
+          "pid": 23792,
+          "name": "claude.exe",
+          "pct": 0.5,
+          "own": false
+        },
+        {
+          "pid": 13012,
+          "name": "claude.exe",
+          "pct": 0.3,
+          "own": false
+        }
+      ],
+      "ownPct": 0
+    }
+  },
+  "pageErrors": [],
+  "scenarios": [
+    {
+      "id": "overview/bloom",
+      "scenario": "overview",
+      "bloom": true,
+      "frames": {
+        "frames": 479,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17.7,
+        "max": 18,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 480,
+        "meanMs": 9.23,
+        "p50Ms": 9.15,
+        "p90Ms": 10.47,
+        "p99Ms": 11.15,
+        "drawsP50": 28,
+        "passes": [
+          {
+            "name": "fb3 1920x1080",
+            "meanMs": 3.811,
+            "p90Ms": 3.99,
+            "perFrameMs": 3.811,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #3",
+            "meanMs": 1.16,
+            "p90Ms": 1.8,
+            "perFrameMs": 1.16,
+            "ranInPct": 100
+          },
+          {
+            "name": "blit 1920x1080",
+            "meanMs": 0.927,
+            "p90Ms": 0.96,
+            "perFrameMs": 0.927,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb10 480x270",
+            "meanMs": 0.641,
+            "p90Ms": 1.915,
+            "perFrameMs": 0.641,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb9 480x270",
+            "meanMs": 0.515,
+            "p90Ms": 1.882,
+            "perFrameMs": 0.515,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb17 1920x1080",
+            "meanMs": 0.577,
+            "p90Ms": 0.59,
+            "perFrameMs": 0.288,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb5 1920x1080",
+            "meanMs": 0.57,
+            "p90Ms": 0.588,
+            "perFrameMs": 0.285,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb6 960x540",
+            "meanMs": 0.261,
+            "p90Ms": 0.268,
+            "perFrameMs": 0.261,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb17 1920x1080 #2",
+            "meanMs": 0.523,
+            "p90Ms": 0.533,
+            "perFrameMs": 0.261,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb5 1920x1080 #2",
+            "meanMs": 0.519,
+            "p90Ms": 0.535,
+            "perFrameMs": 0.259,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb13 120x68",
+            "meanMs": 0.223,
+            "p90Ms": 0.742,
+            "perFrameMs": 0.223,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb8 960x540",
+            "meanMs": 0.161,
+            "p90Ms": 0.151,
+            "perFrameMs": 0.161,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb7 960x540 #2",
+            "meanMs": 0.149,
+            "p90Ms": 0.147,
+            "perFrameMs": 0.149,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb7 960x540",
+            "meanMs": 0.124,
+            "p90Ms": 0.121,
+            "perFrameMs": 0.124,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb11 240x135",
+            "meanMs": 0.048,
+            "p90Ms": 0.042,
+            "perFrameMs": 0.048,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb16 60x34",
+            "meanMs": 0.042,
+            "p90Ms": 0.014,
+            "perFrameMs": 0.042,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb12 240x135",
+            "meanMs": 0.031,
+            "p90Ms": 0.029,
+            "perFrameMs": 0.031,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb15 60x34",
+            "meanMs": 0.022,
+            "p90Ms": 0.02,
+            "perFrameMs": 0.022,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb14 120x68",
+            "meanMs": 0.017,
+            "p90Ms": 0.019,
+            "perFrameMs": 0.017,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 525.5,
+        "texturesMiB": 330,
+        "textureCount": 24,
+        "renderbuffersMiB": 128.9,
+        "buffersMiB": 3.3,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "960x540",
+            "format": "0x881a",
+            "MiB": 4
+          }
+        ]
+      },
+      "state": {
+        "mode": "ORBITAL",
+        "transitioning": false,
+        "detail": {
+          "status": "idle",
+          "active": null
+        },
+        "bloom": true,
+        "sunlit": true,
+        "altitudeKm": 425,
+        "simEpoch": "2026-10-26T10:17:05.473Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 18000,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 26,
+          "textures": 22,
+          "programs": 21
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 8,
+          "cpu": 9
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 2308,
+            "engine": "high priority 3d",
+            "pct": 0.6,
+            "anyPct": 0.6,
+            "name": "dwm.exe",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 54.1,
+        "cpu": {
+          "foreignPct": 0,
+          "busy": false,
+          "top": [],
+          "ownPct": 3
+        }
+      }
+    },
+    {
+      "id": "overview/no-bloom",
+      "scenario": "overview",
+      "bloom": false,
+      "frames": {
+        "frames": 478,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17.2,
+        "max": 17.7,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 479,
+        "meanMs": 12.47,
+        "p50Ms": 13.67,
+        "p90Ms": 15.4,
+        "p99Ms": 18.14,
+        "drawsP50": 13,
+        "passes": [
+          {
+            "name": "canvas 1920x1080",
+            "meanMs": 12.472,
+            "p90Ms": 15.4,
+            "perFrameMs": 12.472,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 337.6,
+        "texturesMiB": 268,
+        "textureCount": 10,
+        "renderbuffersMiB": 3,
+        "buffersMiB": 3.3,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "1x1",
+            "format": "0x1908",
+            "MiB": 0
+          },
+          {
+            "size": "1x1",
+            "format": "0x1908",
+            "MiB": 0
+          }
+        ]
+      },
+      "state": {
+        "mode": "ORBITAL",
+        "transitioning": false,
+        "detail": {
+          "status": "idle",
+          "active": null
+        },
+        "bloom": false,
+        "sunlit": true,
+        "altitudeKm": 425,
+        "simEpoch": "2026-10-26T10:17:20.304Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 18000,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 25,
+          "textures": 8,
+          "programs": 21
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [],
+        "ownGpuPeakPct": 31.9,
+        "cpu": {
+          "foreignPct": 0,
+          "busy": false,
+          "top": [],
+          "ownPct": 2.7
+        }
+      }
+    },
+    {
+      "id": "follow/bloom",
+      "scenario": "follow",
+      "bloom": true,
+      "frames": {
+        "frames": 478,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 16.9,
+        "max": 17.2,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 479,
+        "meanMs": 11.42,
+        "p50Ms": 11.07,
+        "p90Ms": 12.62,
+        "p99Ms": 14.14,
+        "drawsP50": 198,
+        "passes": [
+          {
+            "name": "fb19 1920x1080",
+            "meanMs": 6.566,
+            "p90Ms": 6.798,
+            "perFrameMs": 6.566,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #3",
+            "meanMs": 1.15,
+            "p90Ms": 1.305,
+            "perFrameMs": 1.15,
+            "ranInPct": 100
+          },
+          {
+            "name": "blit 1920x1080",
+            "meanMs": 0.999,
+            "p90Ms": 1.029,
+            "perFrameMs": 0.999,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb21 1920x1080",
+            "meanMs": 0.782,
+            "p90Ms": 0.771,
+            "perFrameMs": 0.392,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb33 1920x1080",
+            "meanMs": 0.786,
+            "p90Ms": 0.773,
+            "perFrameMs": 0.392,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb22 960x540",
+            "meanMs": 0.344,
+            "p90Ms": 0.308,
+            "perFrameMs": 0.344,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb21 1920x1080 #2",
+            "meanMs": 0.59,
+            "p90Ms": 0.608,
+            "perFrameMs": 0.296,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb33 1920x1080 #2",
+            "meanMs": 0.59,
+            "p90Ms": 0.613,
+            "perFrameMs": 0.295,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb24 960x540",
+            "meanMs": 0.286,
+            "p90Ms": 0.779,
+            "perFrameMs": 0.286,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb23 960x540 #2",
+            "meanMs": 0.142,
+            "p90Ms": 0.136,
+            "perFrameMs": 0.142,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb25 480x270",
+            "meanMs": 0.128,
+            "p90Ms": 0.074,
+            "perFrameMs": 0.128,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb23 960x540",
+            "meanMs": 0.099,
+            "p90Ms": 0.091,
+            "perFrameMs": 0.099,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb27 240x135",
+            "meanMs": 0.061,
+            "p90Ms": 0.04,
+            "perFrameMs": 0.061,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb19 1920x1080 #2",
+            "meanMs": 0.057,
+            "p90Ms": 0,
+            "perFrameMs": 0.057,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb26 480x270",
+            "meanMs": 0.042,
+            "p90Ms": 0.045,
+            "perFrameMs": 0.042,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb29 120x68",
+            "meanMs": 0.042,
+            "p90Ms": 0.032,
+            "perFrameMs": 0.042,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb28 240x135",
+            "meanMs": 0.04,
+            "p90Ms": 0.028,
+            "perFrameMs": 0.04,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb30 120x68",
+            "meanMs": 0.024,
+            "p90Ms": 0.016,
+            "perFrameMs": 0.024,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb31 60x34",
+            "meanMs": 0.022,
+            "p90Ms": 0.02,
+            "perFrameMs": 0.022,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb32 60x34",
+            "meanMs": 0.015,
+            "p90Ms": 0.013,
+            "perFrameMs": 0.015,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 1.681,
+            "p90Ms": 2.231,
+            "perFrameMs": 0.014,
+            "ranInPct": 0.8
+          },
+          {
+            "name": "fb20 1920x1080 #2",
+            "meanMs": 0.011,
+            "p90Ms": 0,
+            "perFrameMs": 0.011,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 639.8,
+        "texturesMiB": 365.6,
+        "textureCount": 138,
+        "renderbuffersMiB": 144.9,
+        "buffersMiB": 66,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          }
+        ]
+      },
+      "state": {
+        "mode": "FOLLOW",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "locate"
+        },
+        "bloom": true,
+        "sunlit": true,
+        "altitudeKm": 425,
+        "simEpoch": "2026-10-26T10:17:40.586Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 354,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 202,
+          "textures": 136,
+          "programs": 45
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [],
+        "ownGpuPeakPct": 71.4,
+        "cpu": {
+          "foreignPct": 0.7,
+          "busy": false,
+          "top": [
+            {
+              "pid": 12428,
+              "name": "steamwebhelper.exe",
+              "pct": 0.3,
+              "own": false
+            },
+            {
+              "pid": 16496,
+              "name": "firefox.exe",
+              "pct": 0.2,
+              "own": false
+            },
+            {
+              "pid": 19296,
+              "name": "steam.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 20312,
+              "name": "Discord.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 4.8
+        }
+      }
+    },
+    {
+      "id": "follow/no-bloom",
+      "scenario": "follow",
+      "bloom": false,
+      "frames": {
+        "frames": 478,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 17.1,
+        "p99": 17.6,
+        "max": 18.1,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 479,
+        "meanMs": 16.17,
+        "p50Ms": 16.2,
+        "p90Ms": 17.25,
+        "p99Ms": 18.39,
+        "drawsP50": 183,
+        "passes": [
+          {
+            "name": "canvas 1920x1080",
+            "meanMs": 16.052,
+            "p90Ms": 17.25,
+            "perFrameMs": 16.052,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #2",
+            "meanMs": 13.05,
+            "p90Ms": 13.136,
+            "perFrameMs": 0.109,
+            "ranInPct": 0.8
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 1.368,
+            "p90Ms": 1.432,
+            "perFrameMs": 0.011,
+            "ranInPct": 0.8
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 451.9,
+        "texturesMiB": 303.7,
+        "textureCount": 124,
+        "renderbuffersMiB": 19,
+        "buffersMiB": 66,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          }
+        ]
+      },
+      "state": {
+        "mode": "FOLLOW",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "locate"
+        },
+        "bloom": false,
+        "sunlit": true,
+        "altitudeKm": 425,
+        "simEpoch": "2026-10-26T10:17:55.393Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 354,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 201,
+          "textures": 122,
+          "programs": 37
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 8,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 2308,
+            "engine": "high priority 3d",
+            "pct": 0.3,
+            "anyPct": 0.3,
+            "name": "dwm.exe",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 53.1,
+        "cpu": {
+          "foreignPct": 0,
+          "busy": false,
+          "top": [],
+          "ownPct": 4.9
+        }
+      }
+    },
+    {
+      "id": "follow-scrub/bloom",
+      "scenario": "follow-scrub",
+      "bloom": true,
+      "frames": {
+        "frames": 476,
+        "fps": 59.3,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17,
+        "max": 100.2,
+        "over20ms": 1,
+        "over20msPct": 0.2
+      },
+      "gpu": {
+        "frames": 477,
+        "meanMs": 11.12,
+        "p50Ms": 10.73,
+        "p90Ms": 12.4,
+        "p99Ms": 13.92,
+        "drawsP50": 198,
+        "passes": [
+          {
+            "name": "fb34 1920x1080",
+            "meanMs": 4.602,
+            "p90Ms": 6.703,
+            "perFrameMs": 4.602,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb34 1920x1080 #2",
+            "meanMs": 1.692,
+            "p90Ms": 6.159,
+            "perFrameMs": 1.692,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #3",
+            "meanMs": 1.059,
+            "p90Ms": 1.153,
+            "perFrameMs": 1.059,
+            "ranInPct": 100
+          },
+          {
+            "name": "blit 1920x1080",
+            "meanMs": 0.999,
+            "p90Ms": 1.038,
+            "perFrameMs": 0.999,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 1.745,
+            "p90Ms": 2.239,
+            "perFrameMs": 0.487,
+            "ranInPct": 27.9
+          },
+          {
+            "name": "fb36 1920x1080",
+            "meanMs": 0.733,
+            "p90Ms": 0.75,
+            "perFrameMs": 0.366,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb48 1920x1080",
+            "meanMs": 0.714,
+            "p90Ms": 0.737,
+            "perFrameMs": 0.358,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb36 1920x1080 #2",
+            "meanMs": 0.566,
+            "p90Ms": 0.61,
+            "perFrameMs": 0.283,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb48 1920x1080 #2",
+            "meanMs": 0.562,
+            "p90Ms": 0.603,
+            "perFrameMs": 0.282,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb37 960x540",
+            "meanMs": 0.277,
+            "p90Ms": 0.291,
+            "perFrameMs": 0.277,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb39 960x540",
+            "meanMs": 0.161,
+            "p90Ms": 0.136,
+            "perFrameMs": 0.161,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb38 960x540 #2",
+            "meanMs": 0.132,
+            "p90Ms": 0.137,
+            "perFrameMs": 0.132,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb38 960x540",
+            "meanMs": 0.092,
+            "p90Ms": 0.082,
+            "perFrameMs": 0.092,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb40 480x270",
+            "meanMs": 0.08,
+            "p90Ms": 0.075,
+            "perFrameMs": 0.08,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb41 480x270",
+            "meanMs": 0.046,
+            "p90Ms": 0.043,
+            "perFrameMs": 0.046,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb42 240x135",
+            "meanMs": 0.046,
+            "p90Ms": 0.039,
+            "perFrameMs": 0.046,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb44 120x68",
+            "meanMs": 0.037,
+            "p90Ms": 0.031,
+            "perFrameMs": 0.037,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb43 240x135",
+            "meanMs": 0.033,
+            "p90Ms": 0.026,
+            "perFrameMs": 0.033,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb47 60x34",
+            "meanMs": 0.031,
+            "p90Ms": 0.013,
+            "perFrameMs": 0.031,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb46 60x34",
+            "meanMs": 0.027,
+            "p90Ms": 0.018,
+            "perFrameMs": 0.027,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb45 120x68",
+            "meanMs": 0.024,
+            "p90Ms": 0.016,
+            "perFrameMs": 0.024,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb35 1920x1080 #2",
+            "meanMs": 0.007,
+            "p90Ms": 0,
+            "perFrameMs": 0.007,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 639.8,
+        "texturesMiB": 365.6,
+        "textureCount": 138,
+        "renderbuffersMiB": 144.9,
+        "buffersMiB": 66,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          }
+        ]
+      },
+      "state": {
+        "mode": "FOLLOW",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "locate"
+        },
+        "bloom": true,
+        "sunlit": true,
+        "altitudeKm": 425,
+        "simEpoch": "2026-10-26T10:18:10.353Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 354,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 202,
+          "textures": 136,
+          "programs": 45
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 2308,
+            "engine": "high priority 3d",
+            "pct": 0.4,
+            "anyPct": 0.4,
+            "name": "dwm.exe",
+            "own": false
+          },
+          {
+            "pid": 4,
+            "engine": "copy",
+            "pct": 0,
+            "anyPct": 0.2,
+            "name": "System",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 71.9,
+        "cpu": {
+          "foreignPct": 0.2,
+          "busy": false,
+          "top": [
+            {
+              "pid": 20312,
+              "name": "Discord.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 16428,
+              "name": "WhatsApp.Root.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 7.1
+        }
+      }
+    },
+    {
+      "id": "follow-scrub/no-bloom",
+      "scenario": "follow-scrub",
+      "bloom": false,
+      "frames": {
+        "frames": 483,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 16.9,
+        "max": 17.3,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 484,
+        "meanMs": 15.93,
+        "p50Ms": 16.24,
+        "p90Ms": 17.68,
+        "p99Ms": 18.98,
+        "drawsP50": 183,
+        "passes": [
+          {
+            "name": "canvas 1920x1080",
+            "meanMs": 11.465,
+            "p90Ms": 16.91,
+            "perFrameMs": 11.465,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #2",
+            "meanMs": 14.994,
+            "p90Ms": 16.517,
+            "perFrameMs": 4.089,
+            "ranInPct": 27.3
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 1.392,
+            "p90Ms": 1.453,
+            "perFrameMs": 0.38,
+            "ranInPct": 27.3
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 451.9,
+        "texturesMiB": 303.7,
+        "textureCount": 124,
+        "renderbuffersMiB": 19,
+        "buffersMiB": 66,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          },
+          {
+            "size": "512x512",
+            "format": "0x8e8d",
+            "MiB": 0.3
+          }
+        ]
+      },
+      "state": {
+        "mode": "FOLLOW",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "locate"
+        },
+        "bloom": false,
+        "sunlit": true,
+        "altitudeKm": 424,
+        "simEpoch": "2026-10-26T10:18:25.185Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 354,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 201,
+          "textures": 122,
+          "programs": 37
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 8,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 4,
+            "engine": "copy",
+            "pct": 0,
+            "anyPct": 0.1,
+            "name": "System",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 52.9,
+        "cpu": {
+          "foreignPct": 0.3,
+          "busy": false,
+          "top": [
+            {
+              "pid": 16496,
+              "name": "firefox.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 20312,
+              "name": "Discord.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 19296,
+              "name": "steam.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 5.7
+        }
+      }
+    },
+    {
+      "id": "inspect/bloom",
+      "scenario": "inspect",
+      "bloom": true,
+      "frames": {
+        "frames": 479,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 16.9,
+        "max": 18,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 480,
+        "meanMs": 15.34,
+        "p50Ms": 15.02,
+        "p90Ms": 16.11,
+        "p99Ms": 19.13,
+        "drawsP50": 238,
+        "passes": [
+          {
+            "name": "fb49 1920x1080",
+            "meanMs": 9.72,
+            "p90Ms": 10.926,
+            "perFrameMs": 9.72,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #3",
+            "meanMs": 1.116,
+            "p90Ms": 1.148,
+            "perFrameMs": 1.116,
+            "ranInPct": 100
+          },
+          {
+            "name": "blit 1920x1080",
+            "meanMs": 1.074,
+            "p90Ms": 1.161,
+            "perFrameMs": 1.074,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb49 1920x1080 #2",
+            "meanMs": 0.831,
+            "p90Ms": 0,
+            "perFrameMs": 0.831,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb63 1920x1080",
+            "meanMs": 0.808,
+            "p90Ms": 0.843,
+            "perFrameMs": 0.404,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb51 1920x1080",
+            "meanMs": 0.795,
+            "p90Ms": 0.843,
+            "perFrameMs": 0.398,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb52 960x540",
+            "meanMs": 0.345,
+            "p90Ms": 0.359,
+            "perFrameMs": 0.345,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb51 1920x1080 #2",
+            "meanMs": 0.652,
+            "p90Ms": 0.69,
+            "perFrameMs": 0.326,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb63 1920x1080 #2",
+            "meanMs": 0.649,
+            "p90Ms": 0.675,
+            "perFrameMs": 0.325,
+            "ranInPct": 50
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 3.826,
+            "p90Ms": 4.232,
+            "perFrameMs": 0.303,
+            "ranInPct": 7.9
+          },
+          {
+            "name": "fb53 960x540 #2",
+            "meanMs": 0.127,
+            "p90Ms": 0.134,
+            "perFrameMs": 0.127,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb54 960x540",
+            "meanMs": 0.122,
+            "p90Ms": 0.13,
+            "perFrameMs": 0.122,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb53 960x540",
+            "meanMs": 0.063,
+            "p90Ms": 0.055,
+            "perFrameMs": 0.063,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb55 480x270",
+            "meanMs": 0.063,
+            "p90Ms": 0.069,
+            "perFrameMs": 0.063,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb56 480x270",
+            "meanMs": 0.028,
+            "p90Ms": 0.029,
+            "perFrameMs": 0.028,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb57 240x135",
+            "meanMs": 0.026,
+            "p90Ms": 0.029,
+            "perFrameMs": 0.026,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb59 120x68",
+            "meanMs": 0.02,
+            "p90Ms": 0.021,
+            "perFrameMs": 0.02,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb58 240x135",
+            "meanMs": 0.015,
+            "p90Ms": 0.015,
+            "perFrameMs": 0.015,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb61 60x34",
+            "meanMs": 0.01,
+            "p90Ms": 0.014,
+            "perFrameMs": 0.01,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb60 120x68",
+            "meanMs": 0.007,
+            "p90Ms": 0.007,
+            "perFrameMs": 0.007,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #2",
+            "meanMs": 0.006,
+            "p90Ms": 0,
+            "perFrameMs": 0.006,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb62 60x34",
+            "meanMs": 0.006,
+            "p90Ms": 0.006,
+            "perFrameMs": 0.006,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 1081.1,
+        "texturesMiB": 593.3,
+        "textureCount": 251,
+        "renderbuffersMiB": 144.9,
+        "buffersMiB": 279.6,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          }
+        ]
+      },
+      "state": {
+        "mode": "INSPECT",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "high"
+        },
+        "bloom": true,
+        "sunlit": true,
+        "altitudeKm": 424,
+        "simEpoch": "2026-10-26T10:18:48.975Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 125,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 419,
+          "textures": 249,
+          "programs": 45
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 9
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 4,
+            "engine": "copy",
+            "pct": 0,
+            "anyPct": 1.8,
+            "name": "System",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 96.3,
+        "cpu": {
+          "foreignPct": 0.4,
+          "busy": false,
+          "top": [
+            {
+              "pid": 12604,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 16496,
+              "name": "firefox.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 1728,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 19400,
+              "name": "RadeonSoftware.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 7.3
+        }
+      }
+    },
+    {
+      "id": "inspect/no-bloom",
+      "scenario": "inspect",
+      "bloom": false,
+      "frames": {
+        "frames": 479,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17.1,
+        "max": 17.4,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 480,
+        "meanMs": 16.13,
+        "p50Ms": 16.21,
+        "p90Ms": 16.53,
+        "p99Ms": 18.59,
+        "drawsP50": 223,
+        "passes": [
+          {
+            "name": "canvas 1920x1080",
+            "meanMs": 15.971,
+            "p90Ms": 16.514,
+            "perFrameMs": 15.971,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #2",
+            "meanMs": 14.895,
+            "p90Ms": 15.887,
+            "perFrameMs": 0.124,
+            "ranInPct": 0.8
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 3.686,
+            "p90Ms": 3.847,
+            "perFrameMs": 0.031,
+            "ranInPct": 0.8
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 893.2,
+        "texturesMiB": 531.3,
+        "textureCount": 237,
+        "renderbuffersMiB": 19,
+        "buffersMiB": 279.6,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8d",
+            "MiB": 5.3
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8c",
+            "MiB": 5.3
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8d",
+            "MiB": 5.3
+          }
+        ]
+      },
+      "state": {
+        "mode": "INSPECT",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "high"
+        },
+        "bloom": false,
+        "sunlit": true,
+        "altitudeKm": 424,
+        "simEpoch": "2026-10-26T10:19:16.360Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 125,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 418,
+          "textures": 235,
+          "programs": 37
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 8,
+          "cpu": 9
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [],
+        "ownGpuPeakPct": 71.3,
+        "cpu": {
+          "foreignPct": 0.2,
+          "busy": false,
+          "top": [
+            {
+              "pid": 19412,
+              "name": "firefox.exe",
+              "pct": 0.2,
+              "own": false
+            }
+          ],
+          "ownPct": 4.1
+        }
+      }
+    },
+    {
+      "id": "inspect-scrub/bloom",
+      "scenario": "inspect-scrub",
+      "bloom": true,
+      "frames": {
+        "frames": 484,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17,
+        "max": 17.7,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 485,
+        "meanMs": 15.95,
+        "p50Ms": 15.06,
+        "p90Ms": 18.77,
+        "p99Ms": 20.04,
+        "drawsP50": 239,
+        "passes": [
+          {
+            "name": "fb64 1920x1080",
+            "meanMs": 7.659,
+            "p90Ms": 11.052,
+            "perFrameMs": 7.659,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb64 1920x1080 #2",
+            "meanMs": 2.97,
+            "p90Ms": 10.607,
+            "perFrameMs": 2.97,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 3.955,
+            "p90Ms": 4.291,
+            "perFrameMs": 1.117,
+            "ranInPct": 28.2
+          },
+          {
+            "name": "blit 1920x1080",
+            "meanMs": 1.076,
+            "p90Ms": 1.15,
+            "perFrameMs": 1.076,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #3",
+            "meanMs": 1.036,
+            "p90Ms": 1.134,
+            "perFrameMs": 1.036,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb66 1920x1080",
+            "meanMs": 0.75,
+            "p90Ms": 0.801,
+            "perFrameMs": 0.376,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb78 1920x1080",
+            "meanMs": 0.746,
+            "p90Ms": 0.8,
+            "perFrameMs": 0.372,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb66 1920x1080 #2",
+            "meanMs": 0.604,
+            "p90Ms": 0.659,
+            "perFrameMs": 0.303,
+            "ranInPct": 50.1
+          },
+          {
+            "name": "fb78 1920x1080 #2",
+            "meanMs": 0.605,
+            "p90Ms": 0.664,
+            "perFrameMs": 0.302,
+            "ranInPct": 49.9
+          },
+          {
+            "name": "fb67 960x540",
+            "meanMs": 0.298,
+            "p90Ms": 0.325,
+            "perFrameMs": 0.298,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb69 960x540",
+            "meanMs": 0.122,
+            "p90Ms": 0.128,
+            "perFrameMs": 0.122,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb68 960x540 #2",
+            "meanMs": 0.12,
+            "p90Ms": 0.127,
+            "perFrameMs": 0.12,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb70 480x270",
+            "meanMs": 0.055,
+            "p90Ms": 0.06,
+            "perFrameMs": 0.055,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb68 960x540",
+            "meanMs": 0.051,
+            "p90Ms": 0.052,
+            "perFrameMs": 0.051,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb71 480x270",
+            "meanMs": 0.027,
+            "p90Ms": 0.028,
+            "perFrameMs": 0.027,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb72 240x135",
+            "meanMs": 0.023,
+            "p90Ms": 0.025,
+            "perFrameMs": 0.023,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb74 120x68",
+            "meanMs": 0.016,
+            "p90Ms": 0.02,
+            "perFrameMs": 0.016,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb73 240x135",
+            "meanMs": 0.015,
+            "p90Ms": 0.015,
+            "perFrameMs": 0.015,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb75 120x68",
+            "meanMs": 0.006,
+            "p90Ms": 0.006,
+            "perFrameMs": 0.006,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb76 60x34",
+            "meanMs": 0.006,
+            "p90Ms": 0.008,
+            "perFrameMs": 0.006,
+            "ranInPct": 100
+          },
+          {
+            "name": "fb77 60x34",
+            "meanMs": 0.005,
+            "p90Ms": 0.005,
+            "perFrameMs": 0.005,
+            "ranInPct": 100
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 1081.1,
+        "texturesMiB": 593.3,
+        "textureCount": 251,
+        "renderbuffersMiB": 144.9,
+        "buffersMiB": 279.6,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "1920x1080",
+            "format": "0x881a",
+            "MiB": 15.8
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          }
+        ]
+      },
+      "state": {
+        "mode": "INSPECT",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "high"
+        },
+        "bloom": true,
+        "sunlit": true,
+        "altitudeKm": 424,
+        "simEpoch": "2026-10-26T10:19:43.559Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 125,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 419,
+          "textures": 249,
+          "programs": 45
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 2308,
+            "engine": "high priority 3d",
+            "pct": 0.1,
+            "anyPct": 0.1,
+            "name": "dwm.exe",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 99.7,
+        "cpu": {
+          "foreignPct": 1.5,
+          "busy": false,
+          "top": [
+            {
+              "pid": 20312,
+              "name": "Discord.exe",
+              "pct": 1.1,
+              "own": false
+            },
+            {
+              "pid": 1728,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 20512,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 24604,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            },
+            {
+              "pid": 24308,
+              "name": "claude.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 10.9
+        }
+      }
+    },
+    {
+      "id": "inspect-scrub/no-bloom",
+      "scenario": "inspect-scrub",
+      "bloom": false,
+      "frames": {
+        "frames": 483,
+        "fps": 59.9,
+        "p50": 16.7,
+        "p90": 16.8,
+        "p99": 17.2,
+        "max": 17.7,
+        "over20ms": 0,
+        "over20msPct": 0
+      },
+      "gpu": {
+        "frames": 484,
+        "meanMs": 16.15,
+        "p50Ms": 16.21,
+        "p90Ms": 18.43,
+        "p99Ms": 20.96,
+        "drawsP50": 224,
+        "passes": [
+          {
+            "name": "canvas 1920x1080",
+            "meanMs": 11.454,
+            "p90Ms": 16.808,
+            "perFrameMs": 11.454,
+            "ranInPct": 100
+          },
+          {
+            "name": "canvas 1920x1080 #2",
+            "meanMs": 14.531,
+            "p90Ms": 15.612,
+            "perFrameMs": 3.753,
+            "ranInPct": 25.8
+          },
+          {
+            "name": "fb18 2048x2048",
+            "meanMs": 3.648,
+            "p90Ms": 3.872,
+            "perFrameMs": 0.942,
+            "ranInPct": 25.8
+          }
+        ]
+      },
+      "gpuDisjointFrames": 0,
+      "memory": {
+        "trackedMiB": 893.2,
+        "texturesMiB": 531.3,
+        "textureCount": 237,
+        "renderbuffersMiB": 19,
+        "buffersMiB": 279.6,
+        "drawingBufferMiB": 63.3,
+        "largestTextures": [
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8c43",
+            "MiB": 42.7
+          },
+          {
+            "size": "4096x2048",
+            "format": "0x8058",
+            "MiB": 42.7
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8058",
+            "MiB": 16
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "768x1024",
+            "format": "0x881a",
+            "MiB": 6
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8d",
+            "MiB": 5.3
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8c",
+            "MiB": 5.3
+          },
+          {
+            "size": "2048x2048",
+            "format": "0x8e8d",
+            "MiB": 5.3
+          }
+        ]
+      },
+      "state": {
+        "mode": "INSPECT",
+        "transitioning": false,
+        "detail": {
+          "status": "ready",
+          "active": "high"
+        },
+        "bloom": false,
+        "sunlit": true,
+        "altitudeKm": 424,
+        "simEpoch": "2026-10-26T10:20:11.222Z",
+        "clockMode": "REALTIME",
+        "cameraDistanceKm": 125,
+        "pixelRatio": 1.5,
+        "drawingBuffer": "1920x1080",
+        "rendererInfo": {
+          "geometries": 418,
+          "textures": 235,
+          "programs": 37
+        }
+      },
+      "contention": {
+        "supported": true,
+        "samples": {
+          "gpu": 9,
+          "cpu": 8
+        },
+        "contended": false,
+        "gpuBusy": [],
+        "gpuAll": [
+          {
+            "pid": 4,
+            "engine": "copy",
+            "pct": 0,
+            "anyPct": 0.8,
+            "name": "System",
+            "own": false
+          }
+        ],
+        "ownGpuPeakPct": 72.6,
+        "cpu": {
+          "foreignPct": 0.4,
+          "busy": false,
+          "top": [
+            {
+              "pid": 6736,
+              "name": "sihost.exe",
+              "pct": 0.3,
+              "own": false
+            },
+            {
+              "pid": 16080,
+              "name": "firefox.exe",
+              "pct": 0.1,
+              "own": false
+            }
+          ],
+          "ownPct": 5.9
+        }
+      }
+    }
+  ]
+}
