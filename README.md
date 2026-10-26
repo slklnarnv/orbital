@@ -110,11 +110,18 @@ station jump.
 | Right-drag or two-finger pan | Move the pivot (releases tracking) |
 | **Locate ISS** | Fly to the station and follow it |
 | **Reset View** | Return to the Earth overview |
-| `Space` · `H` | Pause or resume · hide the HUD |
+| `Space` · `1`–`4` · `0` | Pause or resume · run at 1×, 10×, 60×, 300× · return to live time |
+| `L` · `R` · `H` | Locate the ISS · reset view · hide the HUD |
+| `P` · `G` · `?` · `Esc` | Passes · render settings · keyboard shortcuts · close the open panel |
 | 1× 10× 60× 300× · Live · Set time | Time rate, return to wall clock, seek to a UTC instant |
 | Revolution tape | Drag or click to scrub through the current orbit |
 | **Passes** | Set your location and see the next visible passes; **Watch** plays one |
 | Gear icon | Model quality, orbit style, bloom, lens flare, ground track, shadows |
+| **About** | What is measured and what is illustrative, data sources and credits |
+
+Shortcuts pause while you type in a field. A skip link, a text summary of
+the view and spoken mode and sunrise/sunset changes support screen readers;
+reduced motion shortens flights and stills the glint and flare.
 
 ## Getting started
 

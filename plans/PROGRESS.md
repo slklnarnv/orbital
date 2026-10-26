@@ -34,6 +34,104 @@
   takeover sync is needed.
 - **Captured** in headless Edge on the owner's GPU (dev build): hover,
   card, exploding, exploded, focused, assembled, "not available" at 3,250 km.
+
+## 017 R1–R7: responsive display (2026-10-26)
+
+- **Audit** (scratch Playwright script, headless Edge on the owner's GPU,
+  ten sizes, overview + Follow, station box from the dev hooks). Before:
+  landscape-phone HUD 77% / 84% of the height; the station under the clock
+  in Follow at four phone sizes; six text styles at 7–8.5 px; every control
+  under 44 px. After: 26% / 28%; the station clear of every cluster at all
+  ten sizes; nothing below 9 px; no coarse target below 44 px; no
+  overlapping hit areas; nothing off-screen; no horizontal scroll.
+- **R1** `@media (max-height: 500px)`: one bottom row, thin tape (its hit
+  area runs under the row; the row passes touches through except on
+  buttons), camera control left of Passes + gear in one top row.
+- **R2** `HudAwareFraming.tsx` + pure `hudFraming.ts`: target shift = the
+  centre of the band no HUD box covers within the centred 50% column,
+  clamped to ±25% of the height; eased (τ 0.12 s) while tracking or flying
+  to Follow, 0 under `H`. `camera.setViewOffset` at `FRAME_PRIORITY.viewOffset`
+  (−1); the pose and frame order are untouched. `SunFlare` adds
+  `viewOffsetNdc`, so the flare stays on the sun billboard.
+- **R3** `--hud-fs-micro` / `--hud-fs-place` clamp() tokens; **R4**
+  coarse-pointer block (padding + negative margin; 16 px inputs against iOS
+  focus zoom); touch tablets in portrait take the stacked composition (the
+  44 px transport row did not fit between the corner instruments at 768).
+- **R5** `--hud-zoom` steps and an ultrawide `--hud-gutter` (CSS `zoom` keeps
+  percentages and centring, and scales lengths; checked in Edge).
+- **R6** `renderScale` setting (persisted, sanitized); `AdaptiveDpr` pins and
+  re-creates the governor. Checked: 50% on a DPR-3 phone → a 360 px canvas
+  at 360 CSS px; Auto → 720.
+- **R7** `tests/e2e/viewport.spec.ts`; `E2E_DEV=1` serves the dev server so
+  the station-framing check can read the scene hooks.
+- Tests: `hudFraming.test.ts`, `renderScale.test.ts`, `viewOffsetNdc`
+  (matches three's projection), `renderScale` in `settingsStore.test.ts`.
+
+## 017 A1–A4 + P: keyboard, screen readers, About (2026-10-26)
+
+- **Shortcuts.** `src/ui/shortcuts/shortcutRegistry.ts` (pure, unit-tested)
+  + `useShortcuts` (the one global keydown handler; `useHudVisibility` and
+  the Space effect in `TimeControls` folded in). Keys: Space, 1–4, 0, L, R,
+  H, P, G, ?, Esc. Rules: never while typing (Escape excepted), never with
+  Ctrl/Cmd/Alt, Space yields to activatable controls, repeats swallowed,
+  the help overlay is modal (only ? and Esc). Letters match `key`; `code`
+  only when the layout typed no ASCII character (Dvorak-safe, Cyrillic
+  works). `findConflicts` also guards the keys controls own (tape arrows,
+  radio arrows, Enter, Tab).
+- **Overlay system.** `src/ui/overlay/` — `overlay.ts` store (one open at a
+  time, `switchOverlay` chains About → help and returns focus to About),
+  `useOverlay` (trigger registration, keyboard-open focus-in, outside
+  pointerdown closes without stealing focus), `HudPanel` (titled dialog,
+  Tab trap when modal). Settings, Passes and Set time moved onto it; their
+  three copies of the outside-click/Escape effect are gone.
+- **Screen readers.** Skip link → `#hud-main`; canvas wrapper `role="img"`
+  described by `#scene-summary` (`sceneSummary.ts`, whole minutes); polite
+  `SceneAnnouncer` (camera mode after 1.2 s settle, sunlit flips, silent when
+  accelerated). The camera status label lost `role="status"` (it announced
+  every Locked/Free flip); the smoke spec selects `.hud-camera__status`.
+- **Contrast/motion.** `--hud-lo` 0.38 → 0.5 (3.1 → 4.7:1 on `--space`;
+  `HudContrast.test.ts`). Measured in Edge, worst background pixel under each
+  `--hud-lo` line: overview 4.4–4.7:1 except the tape period over the orbit
+  ring (2.1:1); Follow at the limb 1.6–4.7:1. `prefersReducedMotion()`
+  (`src/utils/reducedMotion.ts`) now gates the glint pulse and the flare's
+  ghosts as well as flights.
+- **About.** `src/ui/layout/AboutPanel.tsx`, beside the wordmark: measured vs
+  illustrative, credits (keep in step with `NOTICE.md`), `__BUILD_ID__`, a
+  button into the shortcut overlay.
+- **Verified.** Unit: `shortcutRegistry`, `overlayStore`, `sceneSummary`,
+  `HudContrast`. Playwright (Edge, real GPU): smoke specs green, 6 new.
+
+## 017 I1 icon + manifest, I2 loading screen (2026-10-26)
+
+- **Icon.** One parametric mark (orbit ellipse, gradient toward a glint;
+  `--hud-hi` on `--space`) drawn by `scripts/build-icons.mjs`
+  (`npm run build:icons`, sharp): `favicon.svg` (size-optimised, no sparkle
+  rays), `favicon.ico` (16/32/48 PNG frames), `apple-touch-icon.png` (180,
+  full bleed), `icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
+  (mark scaled 0.82 to sit inside the 80% safe zone). `favicon.png` removed.
+  `index.html`: icon links, manifest, `theme-color` #020409,
+  `color-scheme: dark`. `vercel.json`: 1-day cache for icons, manifest
+  served as `application/manifest+json`; CSP unchanged (same-origin).
+- **Loading screen.** Stages: data link (bootstrap promise settled →
+  `telemetryModeVisual` label and dot), Earth (`/textures/`, incl. the star
+  map) and station (`/models/`, `/draco/`, `/basis/`, GLTF blob textures),
+  counted per distinct URL from `DefaultLoadingManager` item hooks. The gate
+  is assets only (the link never blocks: the bundled TLE propagates
+  meanwhile). Static first-paint copy in `index.html`; the React screen
+  carries the shell's animation clock over (`bootShell.ts`). Reduced motion:
+  glint parked at the icon position, no fade.
+- **Measured** (local production builds of `main` and this branch, headless
+  Edge, 12 Mbps / 80 ms, cache off, one run each): first contentful paint
+  840 → 520 ms (388 ms with reduced motion); the old build was blank at
+  0.3 s, the new one shows the stages. Assets still settle in ~5–7 s on that
+  link (unchanged; same files).
+- **Tests.** `tests/unit/ui/bootProgress.test.ts` (classification, repeat
+  starts, growing totals, failures, the gate), `bootMarkSync.test.ts`
+  (index.html, CSS offset-path and the icon script share one geometry); e2e
+  waits on the `progressbar` named "Loading".
+- **Open.** `og-image.png` still shows the old wordmark treatment; refresh it
+  with the name decision (I3).
+
 ## 017 V1 close-range clouds (2026-10-26)
 
 - **Cause.** `clouds.frag` uses map density directly as alpha (no coverage
@@ -82,6 +180,38 @@
   is the issue).
 - Plan: `plans/017-display-visuals-polish-roadmap.md`; NEXT_STEPS' ranked list
   now follows it.
+
+## 017 V4: dashed orbit in the shader (2026-10-26)
+
+- **Before.** `OrbitLine` sized `dashSize`/`gapSize` every frame from the
+  camera-to-station distance and kept a dash origin plus an absolute
+  `dashOffset` so the pattern would not crawl (PR #15). Pitch was constant
+  only at the station's depth: at Follow 250 km it ran 16 → 7 px from the
+  near to the far end of the arc.
+- **Now.** Each vertex carries its orbital phase (`OrbitPhase.ts`,
+  revolutions of the mean motion at the vertex epoch, relative to a whole
+  revolution so float32 holds it). The fragment shader
+  (`shaders/orbitDash.glsl`) picks 2^n dashes per revolution from the
+  phase's screen-space derivative (13 CSS px target, n ≤ 17) and crossfades
+  neighbouring levels. A point on the ring keeps its phase in every arc, so
+  the pattern cannot crawl and there is no state; the time phase was chosen
+  over the geometric argument of latitude because the node precesses
+  (~0.26 km relabel per refresh). Phase rides in LineMaterial's
+  `instanceDistance` slots (USE_DASH kept for the endcap discard); style is
+  the `orbitDashed` uniform.
+- **Measured** (dev server, headless Edge on the AMD iGPU, frame captures):
+  fixed camera on the future arc, along-track shift 0 px (correlation
+  ≥ 0.987) after seeks of +61/+130/−70 s, a tape scrub, 1× and 300×
+  (18 sim-minutes); pitch 13 px there and 11–13 px along the Follow 250 km
+  arc; 0 programs linked over Dashed → Continuous → Dashed with Bloom on and
+  off; DPR 2 pitch ~35 device px (CSS-sized).
+- **Tests.** `tests/unit/orbital/OrbitPhase.test.ts`: one revolution per
+  period, whole-revolution origin, [0, 2) range, and the same epoch gets the
+  same float32 dash fraction (finest level) from arcs regenerated at
+  1×/300×/scrub/backward-seek offsets.
+- **Look.** Same colour, width, fade and 7/6 duty. What changed: the far arc
+  no longer shrinks to dots, and zooming fades dashes in and out at octave
+  steps instead of rescaling them.
 
 ## Orbit-tape scrub while tracking (2026-10-26)
 
@@ -586,17 +716,18 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
   D.6. D.1 (penumbra) and D.3 (ground-track depth, solved with a constant
   clip-space bias) landed 2026-10-25 with plans 011 and 015. Still open: D.7,
   D.8, D.9.
-- **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
-  closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
-  and the pinned render-scale override from D.6 are still open).
-- **Orbit line, remaining polish**: the ring now closes and the dash phase is
-  fixed to the orbit, but two things are still unverified or open.
+- **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14; the D.6
+  coarse-pointer hit areas and the pinned render-scale override landed
+  2026-10-26 with plan 017 R4/R6.
+- **Orbit line, remaining polish**: the ring now closes and the dash is
+  anchored to the orbit in the shader (017 V4), but two things are still
+  unverified or open.
   (a) The `alphaCurve` fade was NOT re-tuned — the past trail still fades
   0 → 0.30 and the future arc holds 0.60; whether those read right against
   the now-closed ring is a visual call, not a measurement.
-  (b) No test covers `refreshPath`'s buffer writes or the dash-offset maths —
-  the geometry is covered only by the predictor test (span, closure, step,
-  budget, alpha, centring). A headless test of the instance-buffer layout
+  (b) No test covers `refreshPath`'s buffer writes or the shader — the
+  geometry is covered by the predictor test (span, closure, step, budget,
+  alpha, centring) and the phase by `OrbitPhase.test.ts`. A headless test of the instance-buffer layout
   would need a GL context, so this stays a browser check.
 
 ## Canon decisions (do not re-litigate; full context in history)

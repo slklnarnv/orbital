@@ -14,6 +14,7 @@
     "build:iss-lod": "node scripts/build-iss-locate-lod.mjs",
     "build:places": "node scripts/build-place-index.mjs",
     "build:cities": "node scripts/build-city-index.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
     "patch:basis": "node scripts/patch-basis-transcoder.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",

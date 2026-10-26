@@ -32,11 +32,11 @@ export function GaugesCluster(): JSX.Element {
     <div className="hud-bottom-left hud-text">
       {/* columnGap: 'inherit' keeps .hud-bottom-left's gap (20px, 10px on mobile); inline px would beat the media query. */}
       <div style={{ display: 'flex', flexDirection: 'column', rowGap: 6, columnGap: 'inherit' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', columnGap: 'inherit' }}>
+        <div className="hud-gauges__row" style={{ display: 'flex', alignItems: 'flex-end', columnGap: 'inherit' }}>
           <HudGauge label="Speed" value={speed.toFixed(2)} unit="km/s" width={96} />
           <HudGauge label="Altitude" value={altitude.toFixed(1)} unit="km" width={96} />
         </div>
-        <span className="hud-fine" style={{ color: 'var(--hud-lo)', whiteSpace: 'nowrap' }}>
+        <span className="hud-fine hud-gauges__eclipse" style={{ color: 'var(--hud-lo)', whiteSpace: 'nowrap' }}>
           {eclipseText}
         </span>
       </div>

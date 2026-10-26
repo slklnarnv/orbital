@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { EARTH_RADIUS_KM, SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import type { Vec3 } from '@/utils/math'
+import { prefersReducedMotion } from '@/utils/reducedMotion'
 
 /**
  * SunFlare — the screen-space lens flare, as a composer pass.
@@ -26,6 +27,10 @@ import type { Vec3 } from '@/utils/math'
  *     edge),
  *   - and the shader itself blanks the flare inside the planet's disc, so it
  *     can never paint over the Earth.
+ *
+ * Reduced motion keeps the halo (it sits still on the sun) and drops the
+ * ghosts: mirrored through the frame centre, they sweep across the screen
+ * against every camera move — parallax motion the preference asks to avoid.
  */
 
 /** Angular softness of the Earth's limb, radians (~1.1°) */
@@ -47,6 +52,30 @@ const _invQuat = new THREE.Quaternion()
  * flare, so a negative radius is returned: `earthMask` is then 1 everywhere
  * and the CPU occlusion test still gates `uStrength`.
  */
+/**
+ * NDC translation a camera view offset applies (HUD-aware framing,
+ * HudAwareFraming.tsx, shifts the projection while tracking). The flare
+ * projects the sun by hand from fov and aspect, so without this it would
+ * drift off the sun billboard by the offset. Assumes a full-size window
+ * (view width/height equal to the full size), which is the only kind the
+ * app sets.
+ */
+export function viewOffsetNdc(
+  view: { enabled: boolean; fullWidth: number; fullHeight: number; offsetX: number; offsetY: number } | null,
+  out: { x: number; y: number },
+): { x: number; y: number } {
+  if (!view || !view.enabled || view.fullWidth <= 0 || view.fullHeight <= 0) {
+    out.x = 0
+    out.y = 0
+  } else {
+    out.x = (-2 * view.offsetX) / view.fullWidth
+    out.y = (2 * view.offsetY) / view.fullHeight
+  }
+  return out
+}
+
+const _ndcShift = { x: 0, y: 0 }
+
 export function earthMaskRadius(earthCamZ: number, angEarth: number, tanHalf: number): number {
   if (earthCamZ >= 0) return -1
   return tanHalf > 0 ? Math.tan(angEarth) / tanHalf : 0
@@ -63,6 +92,8 @@ const SunFlareShader = {
     uEarthRadius: { value: 0 },
     uAspect: { value: 1 },
     uStrength: { value: 0 },
+    /** 1 draws the iris ghosts; 0 under reduced motion. */
+    uGhosts: { value: 1 },
     uHaloColor: { value: new THREE.Color('#ffc27a') },
     uGhostColor: { value: new THREE.Color('#9fc4ff') },
   },
@@ -80,6 +111,7 @@ const SunFlareShader = {
     uniform float uEarthRadius;
     uniform float uAspect;
     uniform float uStrength;
+    uniform float uGhosts;
     uniform vec3 uHaloColor;
     uniform vec3 uGhostColor;
     varying vec2 vUv;
@@ -123,7 +155,7 @@ const SunFlareShader = {
 
       // Ghosts are strongest with the sun near the frame centre, as the
       // lens elements line up; the halo stays put.
-      float central = 1.0 - smoothstep(0.2, 1.4, length(uSunNdc));
+      float central = (1.0 - smoothstep(0.2, 1.4, length(uSunNdc))) * uGhosts;
 
       vec3 flare = uHaloColor * (halo + ghostWarm * central) + uGhostColor * (ghostCool * central);
       gl_FragColor = vec4(base.rgb + flare * (uStrength * earthMask), base.a);
@@ -181,9 +213,10 @@ export class SunFlare {
       angEarth + OCCLUSION_PENUMBRA_RAD,
     )
 
+    viewOffsetNdc(camera.view, _ndcShift)
     _camSpace.copy(_sunDir).applyQuaternion(_invQuat)
-    const sunX = (_camSpace.x / -_camSpace.z) / halfAspect
-    const sunY = (_camSpace.y / -_camSpace.z) / tanHalf
+    const sunX = (_camSpace.x / -_camSpace.z) / halfAspect + _ndcShift.x
+    const sunY = (_camSpace.y / -_camSpace.z) / tanHalf + _ndcShift.y
 
     // Earth centre, for the shader-side disc mask.
     _camSpace.copy(camera.position).multiplyScalar(-1).applyQuaternion(_invQuat)
@@ -191,8 +224,8 @@ export class SunFlare {
     // by ~0 at the plane), so park the centre at a finite point; the mask is
     // disabled below via a negative radius.
     const earthInFront = _camSpace.z < 0
-    const earthX = earthInFront ? (_camSpace.x / -_camSpace.z) / halfAspect : 0
-    const earthY = earthInFront ? (_camSpace.y / -_camSpace.z) / tanHalf : 0
+    const earthX = earthInFront ? (_camSpace.x / -_camSpace.z) / halfAspect + _ndcShift.x : 0
+    const earthY = earthInFront ? (_camSpace.y / -_camSpace.z) / tanHalf + _ndcShift.y : 0
 
     const edge = Math.min(1 - Math.abs(sunX), 1 - Math.abs(sunY))
     const frameFade = THREE.MathUtils.smoothstep(edge, FRAME_FADE_LO, FRAME_FADE_HI)
@@ -202,5 +235,6 @@ export class SunFlare {
     u.uEarthRadius.value = earthMaskRadius(_camSpace.z, angEarth, tanHalf)
     u.uAspect.value = camera.aspect
     u.uStrength.value = occl * frameFade
+    u.uGhosts.value = prefersReducedMotion() ? 0 : 1
   }
 }

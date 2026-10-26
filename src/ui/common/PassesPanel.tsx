@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react'
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { usePassStore, type ObserverLocation } from '@/stores/passStore'
 import { useSimulationStore } from '@/stores/simulationStore'
@@ -6,6 +6,8 @@ import { compassPoint, type VisiblePass } from '@/core/orbital/PassPredictor'
 import { parseCoordinates, type City, type CityIndex } from '@/core/geo/CitySearch'
 import { loadCityIndex } from '@/core/geo/cityIndexLoader'
 import { formatLatitude, formatLongitude } from '@/utils/formatters'
+import { closeOverlay } from '../overlay/overlay'
+import { useOverlay } from '../overlay/useOverlay'
 
 // ─── Visible passes (roadmap B.3) ────────────────────────────────────────────
 // A "Passes" control beside the render-settings gear (controls live top
@@ -245,46 +247,29 @@ function PassList({ onWatched }: { onWatched: () => void }): JSX.Element {
 }
 
 export function PassesPanel(): JSX.Element {
-  const [isOpen, setIsOpen] = useState(false)
+  // Shared overlay system (ui/overlay/overlay.ts): `P` toggles it, Escape
+  // closes it — also from the place search — and focus returns here.
+  const { isOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('passes')
   const [editing, setEditing] = useState(false)
   const observer = usePassStore((state) => state.observer)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
 
+  // Every open starts on the pass list, however the panel was opened.
   useEffect(() => {
-    if (!isOpen) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setIsOpen(false)
-    }
-    // Scoped like the settings popover: Escape closes this panel only when
-    // focus is inside it (or nowhere).
-    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      const activeElement = document.activeElement
-      const focusInside = activeElement !== null && rootRef.current?.contains(activeElement)
-      if (!focusInside && activeElement !== document.body) return
-      event.preventDefault()
-      setIsOpen(false)
-      if (focusInside) triggerRef.current?.focus()
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    if (!isOpen) setEditing(false)
   }, [isOpen])
 
   const picking = editing || observer === null
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
       <button
         ref={triggerRef}
         type="button"
         aria-label="Visible passes"
         aria-expanded={isOpen}
-        onClick={() => { setIsOpen((open) => !open); setEditing(false) }}
+        aria-keyshortcuts="P"
+        data-overlay=""
+        onClick={onTriggerClick}
         className="hud-label hud-btn-text"
         style={{ color: isOpen ? 'var(--hud-hi)' : undefined }}
       >
@@ -292,7 +277,13 @@ export function PassesPanel(): JSX.Element {
       </button>
 
       {isOpen && (
-        <div role="dialog" aria-label="Visible passes" className="hud-settings-popover hud-passes-popover hud-text">
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label="Visible passes"
+          className="hud-settings-popover hud-passes-popover hud-text"
+          data-overlay=""
+        >
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
             Visible passes
           </span>
@@ -317,7 +308,7 @@ export function PassesPanel(): JSX.Element {
           {observer && !picking && (
             <>
               <span className="hud-label" style={{ marginTop: 12, color: 'var(--hud-mid)' }}>Next 48 hours</span>
-              <PassList onWatched={() => setIsOpen(false)} />
+              <PassList onWatched={() => closeOverlay()} />
             </>
           )}
 
