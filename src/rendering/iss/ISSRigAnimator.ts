@@ -44,6 +44,11 @@ export interface RigFrame {
   wallDeltaSec: number
   /** performance.now() of this frame, for the tier hand-off. */
   nowWallMs: number
+  /** Module explorer's exploded view: every joint glides to its authored
+   *  angle (0) at the wall-clock cap and holds there. */
+  parked?: boolean
+  /** Reduced motion: park and rejoin jump instead of gliding. */
+  snap?: boolean
 }
 
 interface JointRuntime {
@@ -54,6 +59,11 @@ interface JointRuntime {
   /** Simulation epoch of the last slew integration (epoch deltas, not
    * render tick deltas — the clock can repeat one tick across frames). */
   lastEpochMs: number | null
+  /** Leaving the park: the SARJ glides back onto its target before it
+   *  follows it exactly again. */
+  rejoining: boolean
+  /** SARJ target last frame, for its rate while rejoining. */
+  lastTarget: number | null
 }
 
 const DEG2RAD = Math.PI / 180
@@ -95,7 +105,9 @@ export class RigAnimator {
     for (const def of config.joints) {
       const result = resolveJoint(root, def)
       if (result.ok) {
-        this.joints.push({ joint: result.joint, applied: 0, initialized: false, lastEpochMs: null })
+        this.joints.push({
+          joint: result.joint, applied: 0, initialized: false, lastEpochMs: null, rejoining: false, lastTarget: null,
+        })
       } else {
         this.failures.push(`${result.nodeName}: ${result.reason}`)
       }
@@ -109,7 +121,7 @@ export class RigAnimator {
     for (const state of this.joints) state.initialized = false
   }
 
-  step({ sunWorld, epochMs, wallDeltaSec, nowWallMs }: RigFrame): void {
+  step({ sunWorld, epochMs, wallDeltaSec, nowWallMs, parked = false, snap = false }: RigFrame): void {
     if (this.failures.length > 0) return
     applyOscillators(this.oscillators, epochMs / 1000)
     if (this.joints.length === 0) return
@@ -140,6 +152,20 @@ export class RigAnimator {
           state.lastEpochMs = handoff.lastEpochMs
           state.initialized = true
         }
+      }
+
+      if (parked) {
+        // Exploded view (module explorer): park on the authored pose. The
+        // cap is the BGA/TRRJ one, applied to the SARJs too, so a parked
+        // wing set unwinds as a glide rather than a spin.
+        state.applied = snap || !state.initialized ? 0 : advanceToward(state.applied, 0, wallCapRad)
+        state.initialized = true
+        state.lastEpochMs = epochMs
+        state.rejoining = true
+        state.lastTarget = null
+        applyJointAngle(joint, state.applied, this._deltaQuat)
+        this.publish(state, nowWallMs)
+        continue
       }
 
       if (joint.def.role === 'bga') {
@@ -178,11 +204,19 @@ export class RigAnimator {
           // the assembly across up to half a revolution for nothing.
           state.applied = wrapPi(target)
           state.initialized = true
+        } else if (state.rejoining && !snap) {
+          // Back from the park: close on the moving target at the cap plus
+          // the target's own rate, so it converges even at 300×.
+          const targetStep = state.lastTarget === null ? 0 : Math.abs(wrapPi(target - state.lastTarget))
+          state.applied = advanceToward(state.applied, target, wallCapRad + targetStep)
+          if (Math.abs(wrapPi(target - state.applied)) < 1e-6) state.rejoining = false
         } else {
           // Shortest-path unwrap keeps the sweep continuous across ±π while
           // the applied value stays wrapped to [−π,π).
           state.applied = wrapPi(state.applied + wrapPi(target - state.applied))
+          state.rejoining = false
         }
+        state.lastTarget = target
         applyJointAngle(joint, state.applied, this._deltaQuat)
         this.publish(state, nowWallMs)
         continue

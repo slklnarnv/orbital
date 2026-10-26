@@ -13,6 +13,7 @@ import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
 import { CameraCluster } from '@/ui/clusters/CameraCluster'
 import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
 import { OrbitTape } from '@/ui/clusters/OrbitTape'
+import { ModuleExplorerPanel } from '@/ui/clusters/ModuleExplorerPanel'
 
 /**
  * Pure JavaScript utility to check if WebGL is available in the current browser session.
@@ -69,6 +70,8 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         </div>
         <CameraCluster />
       </main>
+
+      <ModuleExplorerPanel />
     </>
   )
 })

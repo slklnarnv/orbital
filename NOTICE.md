@@ -15,6 +15,7 @@ in [`public/textures/README.md`](public/textures/README.md).
 | Place names (countries, oceans, seas) | `src/data/place-index.json`, built by `scripts/build-place-index.mjs` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:50m admin-0 countries and marine polygons | Public domain |
 | City search (observer for visible passes) | `src/data/city-index.json`, built by `scripts/build-city-index.mjs` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:10m populated places | Public domain |
 | Weather and timezone | fetched at runtime | [Open-Meteo](https://open-meteo.com/) | CC BY 4.0 (data), keyless |
+| ISS module facts (launch dates, agencies, masses) | `src/data/issModules.ts` | NASA [Station Assembly Elements](https://www.nasa.gov/international-space-station/international-space-station-assembly-elements/) and the element pages it links, read 2026-10-26; the purpose lines are our own wording | Facts; NASA material, generally not copyrighted |
 
 ## 3D models
 

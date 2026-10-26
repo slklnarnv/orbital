@@ -6,6 +6,35 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## 017 X1 module explorer (2026-10-26)
+
+- **Module map.** Derived at runtime, no asset change: a batch's module is
+  its `<module>.batch.<material>` prefix (from `userData.name`; GLTFLoader
+  strips the dots from `name`), else its nearest catalogued ancestor
+  (camera batches → Kibo, the mobile servicing system). Both IGOAL assets
+  map all 176/217 batches onto the 45 catalogue entries
+  (`ModuleExplorer.test.ts`). Rotating parts are their own entries (array
+  wing pairs, the two radiators) apart from their truss.
+- **Explode.** The 39 hub children move along (centroid − station
+  centroid) × 0.6 in the hub frame; only translations of hub children are
+  written, so joint frames and pivots are untouched. Exploded, the farthest
+  accessor-box corner stays inside 70 × 1.6 km (tested on both assets);
+  the camera floor, the eye push-out and the shadow box (quarter steps,
+  four redraws per explode) grow by the same factor. Joints park at 0 under
+  the 12°/s cap and rejoin with the cap plus the target's own rate, so the
+  SARJs converge at 300× too (`RigFrame.parked/snap`).
+- **Highlight.** Material-reference swaps on the clone to cached emissive
+  copies (same program, no compile, geometry unchanged, so the cached
+  shadow stays valid); the glint blue, since a white tint vanished on the
+  daylit modules; others dim while one is selected.
+- **Camera.** `CameraController` tracks station + `FocusTween` point (read
+  from the current explode pose through local transforms, the station's
+  current attitude) before its `update(0)`; the eye is pushed out to
+  clearance(explode) + |focus offset| each frame. Not a flight, so no
+  takeover sync is needed.
+- **Captured** in headless Edge on the owner's GPU (dev build): hover,
+  card, exploding, exploded, focused, assembled, "not available" at 3,250 km.
+
 ## Roadmap 017: display, visuals and polish (2026-10-26)
 
 - Viewport audit (nine sizes, 360×640 to 3440×1440, overview and Follow):

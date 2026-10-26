@@ -183,6 +183,8 @@ landed through its own PR.
   altitude bare gauges; bottom-center = UTC clock (Zulu suffix) over the orbit
   tape; bottom-right = ground cluster alone; full-width orbit tape along the
   bottom edge.
+  Left edge, vertically centred (`.hud-explorer`): the module explorer,
+  shown only while tracking the station (017 X1).
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
@@ -232,6 +234,16 @@ landed through its own PR.
 
 ### Camera system facts (harder to get wrong)
 
+- **Module explorer focus (017 X1)**: while tracking, the target is the
+  station centre plus `FocusTween.current` (station-local), read from the
+  focused module's anchor mesh through its CURRENT local transforms
+  (`pointInAncestor`; `matrixWorld` is a frame old) and the station's
+  current attitude, before the tracking `update(0)`. The eye is pushed out
+  to `explorerMinDistanceKm(explode, |focus|)` each frame (an orbit of that
+  radius about the target encloses the grown clearance sphere) and
+  `AppCameraControls` raises `minDistance` to the same floor. Mode
+  decisions still use the station centre. The explode is applied at
+  priority −2 so the camera reads this frame's pose.
 - `ISSGroup` advances the station pose at `useFrame` priority **−2**
   (`src/rendering/framePriority.ts`), before everything else: R3F runs equal
   priorities in subscription order, children first, so a child of `ISSGroup`

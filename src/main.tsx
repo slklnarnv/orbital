@@ -163,6 +163,9 @@ if (import.meta.env.DEV) {
   import('./core/clock/SimulationClock').then((m) => {
     ;(window as unknown as Record<string, unknown>).__orbitalClock = m.simulationClock
   })
+  import('./stores/explorerStore').then((m) => {
+    ;(window as unknown as Record<string, unknown>).__orbitalExplorer = m.useExplorerStore
+  })
 }
 
 // NOTE: React.StrictMode is intentionally NOT used here.

@@ -14,6 +14,8 @@ import { useCameraStore } from '@/stores/cameraStore'
 import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
 import CameraControlsImpl from 'camera-controls'
 import { DprGovernor } from './DprGovernor'
+import { useExplorerStore } from '@/stores/explorerStore'
+import { explorerMinDistanceKm } from '../iss/moduleExplorer'
 
 /**
  * F-02 FIX: Error boundary that catches asset-load failures inside the 3D scene.
@@ -49,6 +51,11 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const mode = useCameraStore((state) => state.mode)
   const transition = useCameraStore((state) => state.transition)
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
+  // Module explorer: an exploded station or a focused module raises the
+  // zoom floor (CameraController pushes the eye out to it while it grows).
+  const explorerFloor = useExplorerStore((state) => explorerMinDistanceKm(
+    state.exploded ? 1 : 0, state.focused ? state.focusOffsetKm : 0,
+  ))
   const mouseButtons = useMemo(() => ({
     left: isTransitioning ? CameraControlsImpl.ACTION.ROTATE : CameraControlsImpl.ACTION.NONE,
     middle: CameraControlsImpl.ACTION.DOLLY,
@@ -70,7 +77,7 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const activeTargetMode = (isTransitioning && transition) ? transition.toMode : mode
   const minDistance = isTransitioning ? 5
     : activeTargetMode === 'FOLLOW' || activeTargetMode === 'INSPECT' || activeTargetMode === 'APPROACH'
-      ? CAMERA_ZOOM_RANGES.INSPECT.minDistance
+      ? Math.max(CAMERA_ZOOM_RANGES.INSPECT.minDistance, explorerFloor)
       : CAMERA_ZOOM_RANGES.FREE.minDistance
 
   // Store-2 FIX: Hoist ref callback with useCallback so it is not recreated every render.
