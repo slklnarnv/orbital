@@ -26,9 +26,14 @@
   (`--allow-busy-gpu` to measure anyway, exit 3). The CPU half exists
   because sibling agents' SwiftShader browsers (~85% of 16 cores) stalled
   frames for 200 ms while the GPU counters read idle.
-- **Baseline pending**: refused all day on 2026-10-26 (a game at ~90% GPU,
-  then sibling sessions' browsers). Trial runs on a busy machine are not
-  recorded.
+- **Baseline** (`docs/bench/baseline-2026-10-26.json`; recorded once the
+  guard found the machine idle, after refusing a game at ~90% GPU and
+  sibling sessions' browsers earlier that day). Radeon 780M, 1920×1080
+  buffer: 59.9 fps, p99 ≤ 17.7 ms in all ten rows. GPU mean (Bloom / no
+  Bloom): overview 9.2 / 12.5 ms, Follow 11.4 / 16.2, Inspect 15.3 / 16.1,
+  Inspect scrub 16.0 / 16.2 (p99 20–21). Tracked GPU memory 526 MiB at
+  overview, 1,081 MiB in Inspect; six 4K maps are 256 MiB. Table and
+  reading notes in `docs/bench/README.md`.
 - Found: wheel zoom while tracking with the clock running moves ~1% per
   tick (the station-frame carry's per-frame `setLookAt(…, false)` cancels
   camera-controls' smoothed dolly); the bench pauses the clock while it

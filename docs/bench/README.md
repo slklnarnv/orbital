@@ -95,15 +95,44 @@ first; other agents' headless browsers and builds count too.
 
 ## Baselines
 
-**Pending.** The harness landed on 2026-10-26 while up to eight other agent
-sessions were running headless browsers on the same machine; the guard
-refused every attempt (other processes at 70–85% of all CPU cores, and a
-game at ~90% GPU earlier in the day). Record the baseline on an idle
-machine with:
+### 2026-10-26 — `baseline-2026-10-26.json` (4K Earth, PR #44)
 
-```bash
-npm run bench -- --label "A.2 baseline" --out docs/bench/baseline-<date>.json
-```
+AMD Ryzen 7 8840HS, Radeon 780M (integrated, ANGLE D3D11), 28 GiB, Edge 156;
+1280×720 at DPR 1.5 (1920×1080 buffer), 8 s per row, no contention in any
+window (other processes ≤ 1.5% CPU, no other GPU user).
 
-then summarise it here (fps, p99, frames over 20 ms and GPU ms per scenario,
-the top passes, tracked GPU memory) and in `plans/PROGRESS.md`.
+| Scenario | fps | p90 / p99 ms | > 20 ms | GPU ms mean / p99 | draws | tracked GPU MiB |
+|---|---|---|---|---|---|---|
+| overview, Bloom | 59.9 | 16.8 / 17.7 | 0 | 9.2 / 11.2 | 28 | 526 |
+| overview, no Bloom | 59.9 | 16.8 / 17.2 | 0 | 12.5 / 18.1 | 13 | 338 |
+| Follow, Bloom | 59.9 | 16.8 / 16.9 | 0 | 11.4 / 14.1 | 198 | 640 |
+| Follow, no Bloom | 59.9 | 17.1 / 17.6 | 0 | 16.2 / 18.4 | 183 | 452 |
+| Follow scrub, Bloom | 59.3 | 16.8 / 17.0 | 1 (100 ms) | 11.1 / 13.9 | 198 | 640 |
+| Follow scrub, no Bloom | 59.9 | 16.8 / 16.9 | 0 | 15.9 / 19.0 | 183 | 452 |
+| Inspect, Bloom | 59.9 | 16.8 / 16.9 | 0 | 15.3 / 19.1 | 238 | 1,081 |
+| Inspect, no Bloom | 59.9 | 16.8 / 17.1 | 0 | 16.1 / 18.6 | 223 | 893 |
+| Inspect scrub, Bloom | 59.9 | 16.8 / 17.0 | 0 | 16.0 / 20.0 | 239 | 1,081 |
+| Inspect scrub, no Bloom | 59.9 | 16.8 / 17.2 | 0 | 16.2 / 21.0 | 224 | 893 |
+
+Read with care:
+
+- Every row holds 60 fps; the 2026-10-26 Inspect-scrub reading of 44.5 fps
+  was the busy GPU, not the app.
+- GPU headroom is thin at close range: Inspect and both scrubs average
+  15–16 GPU ms against a 16.7 ms frame, with p99 at 19–21 ms. Any new
+  per-pixel cost there will drop frames on this GPU.
+- With Bloom, the scene pass is the cost (overview 3.8 ms, Follow 6.6,
+  Inspect 9.7 of 15.3); the composite, MSAA resolve and bloom chain add
+  ~3.5 ms together. During a scrub the station shadow (`fb18 2048x2048`)
+  redraws in ~28% of frames at 0.5–1.1 ms each.
+- **Bloom off measures more GPU time than Bloom on** (overview 12.5 vs 9.2
+  ms, Follow 16.2 vs 11.4) although it draws less. With Bloom off
+  everything renders straight to the canvas, whose single segment also
+  carries the default framebuffer's work (its MSAA resolve and the hand-off
+  to the browser compositor). Unexplained beyond that; worth a look before
+  any Bloom-off optimisation.
+- Texture memory: six 4K maps (day, night, starmap as sRGB; specular and
+  the cloud maps as RGBA8) at 42.7 MiB each with mips, 256 MiB, are most
+  of the 330 MiB at overview. The specular mask is single-channel data
+  stored as RGBA8 (a C.2 target). Inspect adds the full model: textures 593
+  MiB, buffers 280 MiB.
