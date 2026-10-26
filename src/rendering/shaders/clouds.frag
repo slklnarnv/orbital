@@ -1,12 +1,16 @@
 precision highp float;
 
 uniform sampler2D cloudMap;
+uniform vec2 cloudTexelSize;
 uniform vec3 sunDirection;
 uniform float opacity;
 
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
+varying vec3 vCloudDir;
+
+#include "./cloudDensity.glsl"
 
 void main() {
   // ── Cloud Density Sampling ───────────────────────────────────────────────────
@@ -14,7 +18,11 @@ void main() {
   // The texture is configured as NoColorSpace in CloudLayer.tsx — the GPU delivers
   // linear float values, not gamma-corrected sRGB. This preserves the full
   // continuous tonal range (0.0–1.0) of the density field without crushing midtones.
-  float cloudDensity = texture2D(cloudMap, vUv).r;
+  // cloudDensity.glsl reconstructs magnified texels bicubically and adds the
+  // close-range detail term; the surface shadows read the same function.
+  float cloudDensity = cloudDensityAt(
+    cloudMap, vUv, 1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, CLOUD_DETAIL_MAX_OCTAVES
+  );
 
   // Early discard of fully transparent pixels is NOT used here — it would
   // break hardware MSAA antialiasing along cloud edges. Alpha blending handles
