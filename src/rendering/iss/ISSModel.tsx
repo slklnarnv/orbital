@@ -70,17 +70,24 @@ import { KTX2_TEXTURE_STALL_MS, guardLoadStall } from './loadStallGuard'
 import { BASIS_TRANSCODER_PATH, versionTranscoderUrl } from './basisTranscoderUrl'
 import { sharedJointStates } from './ISSRigAnimator'
 import {
+  SHADOW_HALF_EXTENT,
   SUN_LIGHT_NAME,
   ShadowRefreshScheduler,
   aimSunLightAt,
   configureStationShadow,
+  explodedShadowHalfExtent,
+  setStationShadowExtent,
 } from './stationShadow'
+import { ModuleExplorerDriver, ModuleExplorerLayer } from './ModuleExplorerLayer'
+import { explorerRuntime } from './explorerRuntime'
+import { EXPLODE_FACTOR } from './moduleExplorer'
 import {
   FALLBACK_MODEL_URL,
   HIGH_MODEL_URL,
   LEGACY_MODEL_URL,
   LOCATE_MODEL_URL,
 } from './modelUrls'
+import { prefersReducedMotion } from '@/utils/reducedMotion'
 import billboardVert from '../shaders/billboard.vert'
 import softGlowFrag from '../shaders/softGlow.frag'
 
@@ -563,6 +570,11 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
       <group ref={pivotGroupRef} position={spec.pivotOffset}>
         <primitive object={detailedScene} />
         <ISSAnimations rootRef={pivotGroupRef} quality={quality} active={visible} rigMetadata={rigMetadata} onError={() => onError(attempt)} />
+        {/* Module explorer (plan 017 X1): the IGOAL tiers only; legacy has
+            no module hierarchy to pick. */}
+        {quality !== 'legacy' && (
+          <ModuleExplorerLayer scene={detailedScene} renderScale={normalizationScale} active={visible} />
+        )}
       </group>
     </group>
   )
@@ -771,6 +783,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
   visibleDetailUrlRef.current = issDetail.status === 'ready' && showDetail
     ? candidateSpec?.url ?? null
     : committedShown ? committedSpec?.url ?? null : null
+  const visibleQuality = issDetail.status === 'ready' && showDetail
+    ? candidateQuality
+    : committedShown ? committedQuality : null
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null)
   const shadowScheduler = useMemo(() => new ShadowRefreshScheduler(), [])
   const lastShadowUrlRef = useRef<string | null>(null)
@@ -854,6 +869,12 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       }
       const visibleUrl = visibleDetailUrlRef.current
       if (wantShadow && visibleUrl) {
+        // An exploded station outgrows the ±70 km box (module explorer).
+        if (setStationShadowExtent(sunLight, explorerRuntime.progress > 0
+          ? explodedShadowHalfExtent(explorerRuntime.eased, EXPLODE_FACTOR)
+          : SHADOW_HALF_EXTENT)) {
+          shadowScheduler.invalidate()
+        }
         aimSunLightAt(sunLight, worldPos.current, _sunDirVec)
         if (visibleUrl !== lastShadowUrlRef.current) {
           lastShadowUrlRef.current = visibleUrl
@@ -864,6 +885,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         const angles = jointAnglesRef.current
         angles.length = 0
         for (const joint of sharedJointStates.values()) angles.push(joint.applied)
+        // The explode moves geometry like a joint does: 0.15° of "angle"
+        // per ~0.08% of the explode, so the map follows the animation.
+        angles.push(explorerRuntime.eased * Math.PI)
         const seeking = simulationClock.mode === 'PAUSED' && simTime.epochMs !== lastShadowEpochRef.current
         lastShadowEpochRef.current = simTime.epochMs
         if (shadowScheduler.shouldRefresh(performance.now(), _sunInStation.current, angles, seeking)) {
@@ -937,8 +961,9 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
       const halfFovRad = (state.camera as THREE.PerspectiveCamera).getEffectiveFOV() * Math.PI / 360
       const worldPerPx = (2 * Math.tan(halfFovRad) * distanceKm) / Math.max(1, state.size.height)
       // Gentle 0.4 Hz pulse on WALL time — sim time would strobe it at
-      // ~120 Hz under 300× acceleration.
-      const pulse = 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
+      // ~120 Hz under 300× acceleration. Held still under reduced motion: it
+      // is decoration, and the glint marks the station without it.
+      const pulse = prefersReducedMotion() ? 1.0 : 1.0 + 0.12 * Math.sin(state.clock.elapsedTime * 2.5)
       auraRef.current.scale.setScalar((GLINT_SCREEN_PX * worldPerPx * pulse) / 12.0)
 
       glintUniforms.uOpacity.value = glintOpacity
@@ -949,6 +974,8 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
 
   return (
     <group ref={groupRef}>
+      <ModuleExplorerDriver igoalVisible={visibleQuality === 'locate' || visibleQuality === 'high'} />
+
       {/* ─── Level of Detail 0: Selected Near-Range Detailed Model ─── */}
       {/* The requested candidate. It mounts with its own attempt identity and
           shows only once ITS preparation commits; the committed model below

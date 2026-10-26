@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { isRenderScale, type RenderScale } from '@/rendering/scene/renderScale'
 
 /** Which detailed near-range ISS model the renderer loads.
  *  - 'high':   IGOAL-derived model (public/models/iss_igoal.glb) — full part
@@ -33,18 +34,22 @@ interface SettingsStore {
   /** Station self-shadowing from the sun (detail model only; the shadow map
    *  is cached and redrawn only when the sun angle or a joint moves). */
   shadows: boolean
+  /** Pixel ratio: 'auto' lets the DprGovernor adapt; a number pins it at
+   *  that fraction of the device ceiling (renderScale.ts). */
+  renderScale: RenderScale
   setIssModelQuality: (quality: IssModelQuality) => void
   setPostprocessing: (on: boolean) => void
   setOrbitLineStyle: (style: OrbitLineStyle) => void
   setLensFlare: (on: boolean) => void
   setGroundTrack: (on: boolean) => void
   setShadows: (on: boolean) => void
+  setRenderScale: (scale: RenderScale) => void
 }
 
 const MODEL_QUALITIES: readonly IssModelQuality[] = ['high', 'legacy']
 const ORBIT_LINE_STYLES: readonly OrbitLineStyle[] = ['continuous', 'dashed']
 
-type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare' | 'groundTrack' | 'shadows'>>
+type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare' | 'groundTrack' | 'shadows' | 'renderScale'>>
 
 /** Keeps only known, well-typed persisted settings (exported for tests). */
 export function sanitizePersistedSettings(persisted: unknown): PersistedSettings {
@@ -61,6 +66,7 @@ export function sanitizePersistedSettings(persisted: unknown): PersistedSettings
   if (typeof raw.lensFlare === 'boolean') out.lensFlare = raw.lensFlare
   if (typeof raw.groundTrack === 'boolean') out.groundTrack = raw.groundTrack
   if (typeof raw.shadows === 'boolean') out.shadows = raw.shadows
+  if (isRenderScale(raw.renderScale)) out.renderScale = raw.renderScale
   return out
 }
 
@@ -74,6 +80,7 @@ export const useSettingsStore = create<SettingsStore>()(
       lensFlare: false,
       groundTrack: false,
       shadows: true,
+      renderScale: 'auto',
       setIssModelQuality: (issModelQuality) => set((state) => ({
         issModelQuality,
         selectionNonce: state.selectionNonce + 1,
@@ -83,6 +90,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setLensFlare: (lensFlare) => set({ lensFlare }),
       setGroundTrack: (groundTrack) => set({ groundTrack }),
       setShadows: (shadows) => set({ shadows }),
+      setRenderScale: (renderScale) => set({ renderScale }),
     }),
     {
       name: 'orbital-settings',
@@ -95,6 +103,7 @@ export const useSettingsStore = create<SettingsStore>()(
         lensFlare: state.lensFlare,
         groundTrack: state.groundTrack,
         shadows: state.shadows,
+        renderScale: state.renderScale,
       }),
       // localStorage is user-editable and outlives schema changes. Zustand's
       // default merge spreads whatever is stored over the defaults, so a

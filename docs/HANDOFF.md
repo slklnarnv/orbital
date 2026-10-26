@@ -51,7 +51,7 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
   "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
   `orbital-settings` localStorage key. The loading overlay swallows pointer
-  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  events until the `progressbar` named "Loading" is gone, and the rAF loop defeats actionability
   waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
@@ -112,8 +112,9 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
 - `__BUILD_ID__` → `?v=` on the model/texture URLs; `/models` and `/textures`
   are `immutable`. **`/draco` is NOT** — `useGLTF.setDecoderPath` builds its
   own URLs with no `?v=`, so `immutable` there would pin a stale decoder.
-- `H` hides the HUD (`src/hooks/useHudVisibility.ts`, `.hud-hidden` on
-  `<html>`, `visibility` so layout is untouched). Not persisted.
+- `H` hides the HUD (`toggleHud` in `src/ui/shortcuts/useShortcuts.ts`,
+  `.hud-hidden` on `<html>`, `visibility` so layout is untouched). Not
+  persisted. Since 017 A1 every global key lives in `shortcutRegistry.ts`.
 - Safe-area insets on every anchored cluster + `viewport-fit=cover`
   (without it `env()` is 0 on iOS).
 - OG/Twitter metadata, `robots.txt`, `sitemap.xml`, generated `og-image.png`;
@@ -184,12 +185,55 @@ landed through its own PR.
   altitude bare gauges; bottom-center = UTC clock (Zulu suffix) over the orbit
   tape; bottom-right = ground cluster alone; full-width orbit tape along the
   bottom edge.
+  Left edge, vertically centred (`.hud-explorer`): the module explorer,
+  shown only while tracking the station (017 X1).
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
+- **Overlays** (017 A1/P): every popover and panel goes through
+  `src/ui/overlay/` — one open at a time, Escape closes, focus returns to the
+  trigger; new panels use `HudPanel` and `useOverlay`, never their own
+  outside-click/Escape effect. Text links are warm white with a hairline
+  underline (`.hud-link`), never a link colour.
+- **Contrast**: `--hud-lo` is 50% white (4.7:1 on `--space`, AA);
+  `HudContrast.test.ts` fails if a token drops below 4.5:1.
+- **Identity and loading**: the mark is an orbit ellipse that brightens
+  toward a station glint (`scripts/build-icons.mjs`, geometry mirrored in
+  `src/ui/loading/bootMark.ts`; `bootMarkSync.test.ts` guards the copies in
+  `index.html` and `src/index.css`). The loading screen (`.boot-*`) is
+  painted first by a static copy in `index.html`, then `LoadingScreen.tsx`
+  takes over. Its stage counts come from wrapping `DefaultLoadingManager`'s
+  `itemStart/itemEnd/itemError` (`assetLoadTracker.ts`, first import in
+  `main.tsx` so the module-scope preloads are seen); the gate is every file
+  ended with both the Earth and station stages started.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
+- **Responsive frame (plan 017 R1–R6)**, breakpoints in `src/index.css`:
+  - `max-width: 639px` (and touch tablets in portrait up to 899 px): one
+    bottom composition — clock row, then gauges | ground row (globe beside
+    its lines; the weather line is dropped on phones);
+  - `max-height: 500px` (landscape phones): one top row, one bottom row
+    (gauge values · time + transport · place + coordinates) and a thin tape
+    whose hit area runs under the row (the row passes touches through except
+    on buttons). Budget: the HUD stays ≤ 30% of the height;
+  - `pointer: coarse`: every control ≥ 44×44. Grow hit areas with padding
+    plus an equal negative margin, never with bigger glyphs, and widen gaps
+    where two hit areas would meet. Inputs are 16 px (iOS focus zoom);
+  - QHD and up: whole clusters `zoom: var(--hud-zoom)` (steps 1.15–1.9).
+    Under `zoom`, absolute lengths scale (vw-based ones included) and
+    percentages do not, so the ultrawide `--hud-gutter` is divided by the
+    zoom;
+  - type floor: nothing below 9 px (`--hud-fs-micro`, `--hud-fs-place`). A
+    line that does not fit at 9 px is hidden, not shrunk.
+- **HUD-aware framing (R2)**: while tracking, `HudAwareFraming` shifts the
+  projection (`camera.setViewOffset`) so the station centres in the band the
+  HUD leaves free. It measures cluster boxes (popovers excluded, the tape by
+  its line), so a new HUD cluster joins `HUD_SELECTORS` there. Anything that
+  projects to the screen by hand from fov and aspect must add the offset
+  (`viewOffsetNdc` in `SunFlare.ts`).
+- **Viewport audit**: `tests/e2e/viewport.spec.ts` asserts the above at nine
+  sizes; run it after any HUD layout change.
 
 ### Key files
 
@@ -205,7 +249,11 @@ landed through its own PR.
 | `src/ui/clusters/GroundTrackGlobe.tsx` | Orthographic globe + passing-over lines |
 | `src/ui/common/PassesPanel.tsx` | Visible-pass popover (observer search, pass list, Watch); prediction in `src/core/orbital/PassPredictor.ts` |
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
+| `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
+| `src/interaction/camera/HudAwareFraming.tsx` + `hudFraming.ts` | R2 projection shift (DOM measure + pure band math) |
+| `src/rendering/scene/renderScale.ts` | DPR ceiling and the pinned render-scale override (`AdaptiveDpr` in SceneRoot) |
+| `tests/e2e/viewport.spec.ts` | Viewport audit (layout, 9 px floor, 44 px targets, station framing under `E2E_DEV=1`) |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |
 | `src/stores/geoStore.ts` | Geo presentation state (written by the service only) |
 
@@ -233,6 +281,16 @@ landed through its own PR.
 
 ### Camera system facts (harder to get wrong)
 
+- **Module explorer focus (017 X1)**: while tracking, the target is the
+  station centre plus `FocusTween.current` (station-local), read from the
+  focused module's anchor mesh through its CURRENT local transforms
+  (`pointInAncestor`; `matrixWorld` is a frame old) and the station's
+  current attitude, before the tracking `update(0)`. The eye is pushed out
+  to `explorerMinDistanceKm(explode, |focus|)` each frame (an orbit of that
+  radius about the target encloses the grown clearance sphere) and
+  `AppCameraControls` raises `minDistance` to the same floor. Mode
+  decisions still use the station centre. The explode is applied at
+  priority −2 so the camera reads this frame's pose.
 - `ISSGroup` advances the station pose at `useFrame` priority **−2**
   (`src/rendering/framePriority.ts`), before everything else: R3F runs equal
   priorities in subscription order, children first, so a child of `ISSGroup`

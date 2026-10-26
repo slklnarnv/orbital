@@ -24,13 +24,59 @@
     <meta name="twitter:title" content="Orbital — ISS Visualization Platform" />
     <meta name="twitter:description" content="Track the International Space Station live: SGP4 propagation of public TLEs, rendered in a kilometre-scale Earth scene." />
     <meta name="twitter:image" content="https://orbitaliss.vercel.app/og-image.png" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="shortcut icon" href="/favicon.ico" />
+    <!-- Icon set from scripts/build-icons.mjs (npm run build:icons). The .ico
+         comes first with sizes="32x32" so browsers that understand SVG pick
+         the vector one. -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#020409" />
+    <meta name="color-scheme" content="dark" />
     <link rel="preload" href="/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/chivo-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Space black from the first paint; the loading shell stays hidden until
+         src/index.css applies (it sets .boot visible), so it never flashes
+         unstyled while the dev server injects CSS from JS. -->
+    <style>html, body { background: #020409; } .boot { visibility: hidden; }</style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- First-paint copy of the loading screen (src/ui/loading/LoadingScreen.tsx
+           renders the live one with the same classes and replaces this on
+           mount). Paths come from src/ui/loading/bootMark.ts; a unit test keeps
+           them in sync. -->
+      <div class="boot" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Data link connecting, Earth waiting, station waiting">
+        <div class="boot-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <path class="boot-orbit" d="M49.43 30.31A23 9.5 -24 0 0 10.57 35.69A23 9.5 -24 0 0 49.43 30.31Z" />
+            <path class="boot-trail" d="M49.43 30.31A23 9.5 -24 0 0 10.57 35.69A23 9.5 -24 0 0 49.43 30.31Z" pathLength="100" />
+          </svg>
+          <div class="boot-glint">
+            <svg viewBox="-10 -10 20 20">
+              <defs>
+                <radialGradient id="boot-glint-halo">
+                  <stop offset="0" stop-color="#f1ede4" stop-opacity="0.36" />
+                  <stop offset="1" stop-color="#f1ede4" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+              <circle r="9.6" fill="url(#boot-glint-halo)" />
+              <path d="M0 -10L1.2 -1.2L10 0L1.2 1.2L0 10L-1.2 1.2L-10 0L-1.2 -1.2Z" fill="#f1ede4" />
+              <circle r="3.2" fill="#f1ede4" />
+            </svg>
+          </div>
+        </div>
+        <dl class="boot-stages">
+          <dt>Data link</dt>
+          <dd class="boot-pending">Connecting</dd>
+          <dt>Earth</dt>
+          <dd class="boot-pending">Waiting</dd>
+          <dt>Station</dt>
+          <dd class="boot-pending">Waiting</dd>
+        </dl>
+        <div class="boot-bar" aria-hidden="true"><div class="boot-bar-fill"></div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -10,6 +10,16 @@ import { defineConfig, devices } from '@playwright/test'
 //
 // One worker: the app is heavy under software WebGL, and parallel pages
 // starve each other's render loops and make waits flaky.
+//
+// E2E_DEV=1 runs against the dev server instead. It exposes the DEV-only
+// scene hooks (`window.__orbitalControls`, `__orbitalScene`) that the
+// viewport spec's station-framing check needs; without them that check skips.
+// E2E_PORT moves the server off the default port: locally the server is
+// reused when one is already listening, so a second checkout's preview on
+// 4173 would otherwise be tested in place of this one.
+const dev = process.env.E2E_DEV === '1'
+const port = Number(process.env.E2E_PORT) || (dev ? 4174 : 4173)
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 180_000,
@@ -18,7 +28,7 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: `http://localhost:${port}`,
     viewport: { width: 1280, height: 800 },
     launchOptions: {
       args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
@@ -26,8 +36,10 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } }],
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173 --strictPort',
-    url: 'http://localhost:4173',
+    command: dev
+      ? `npx vite --port ${port} --strictPort`
+      : `npm run build && npx vite preview --port ${port} --strictPort`,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
   },

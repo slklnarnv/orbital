@@ -5,10 +5,12 @@ import { formatJulianDate, formatGmst } from '@/utils/formatters'
 import { telemetryModeVisual } from '../common/telemetryModeVisual'
 import { SettingsGear } from '../common/SettingsGear'
 import { PassesPanel } from '../common/PassesPanel'
+import { AboutPanel } from './AboutPanel'
 
 /**
  * TopBar — two floating corner clusters, no bar between them.
- * Left: identity and the data-link state. Right: the orbital-elements line
+ * Left: identity (the wordmark and its About panel) and the data-link
+ * state. Right: the orbital-elements line
  * (inclination, Julian date, GMST) in fine mono, then the visible-passes
  * and render-settings controls.
  */
@@ -40,6 +42,8 @@ export function TopBar(): JSX.Element {
         >
           ORBITAL
         </span>
+
+        <AboutPanel />
 
         <span aria-hidden="true" style={{ width: 1, height: 12, background: 'var(--hud-line)' }} />
 
