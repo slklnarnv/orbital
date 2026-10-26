@@ -18,6 +18,12 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
 
+### Changed
+
+- Clouds stay smooth up close: no more texel blocks at 800 km or staircase
+  edges at 300 km, with fine cloud detail fading in near the deck and
+  matching cloud shadows ([#37](https://github.com/slklnarnv/orbital/pull/37)).
+
 ## 2026-10-26
 
 ### Added

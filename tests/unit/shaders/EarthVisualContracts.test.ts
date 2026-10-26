@@ -38,6 +38,25 @@ describe('cloud-shell separation contract', () => {
   })
 })
 
+describe('shared cloud field contract', () => {
+  // 017 V1: the shell and the shadows it casts must reconstruct and detail the
+  // density identically, or close-range shadows drift off their clouds.
+  it('reads cloud density for the shell and its shadows through one function', () => {
+    for (const shader of ['src/rendering/shaders/clouds.frag', 'src/rendering/shaders/earthSurface.frag']) {
+      const source = read(shader)
+      expect(source).toContain('#include "./cloudDensity.glsl"')
+      expect(source).toContain('cloudDensityAt(')
+      expect(source).not.toMatch(/texture2D\(cloudMap/)
+    }
+  })
+
+  it('reconstructs magnified texels bicubically and fades detail by altitude', () => {
+    const chunk = read('src/rendering/shaders/cloudDensity.glsl')
+    expect(chunk).toContain('sampleCloudMapBicubic')
+    expect(chunk).toContain('cloudDetailWeight')
+  })
+})
+
 describe('low-sun warmth consistency contract', () => {
   // The 2026-09-28 terminator rework replaced the three painted sunset bands
   // with one physical rule — the sunlight itself reddens at grazing incidence.
