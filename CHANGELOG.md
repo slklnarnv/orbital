@@ -17,7 +17,7 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 - Module explorer: in Inspect and close Follow, point at the station to
   identify a module, click it for a card with its agency, launch year, mass
   and purpose, explode the station into its parts, and focus the camera on
-  one module.
+  one module ([#41](https://github.com/slklnarnv/orbital/pull/41)).
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
