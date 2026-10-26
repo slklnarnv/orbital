@@ -1306,9 +1306,13 @@ body,
     height: 120px;
   }
 
+  /* Same row height as the top-right row, so 44 px touch targets in the
+     wordmark row (About) centre inside the viewport instead of poking 3 px
+     above it. */
   .hud-corner--tl {
     top: max(10px, env(safe-area-inset-top));
     left: max(14px, env(safe-area-inset-left));
+    height: 36px;
   }
 
   .hud-corner__meta,
