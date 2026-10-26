@@ -33,6 +33,38 @@
   pipelines (Earth, atmosphere, stars). Captures:
   `docs/images/sun-before-after.webp`. Owner sign-off against ISS
   photography is the remaining acceptance step.
+- **017 V1 close-range clouds landed (2026-10-26)**: the cloud shell and the
+  surface's cloud shadows now read one shared field,
+  `src/rendering/shaders/cloudDensity.glsl`. Magnified texels (more than one
+  pixel per texel, picked with `dFdx`/`dFdy`) are reconstructed with a cubic
+  B-spline in four bilinear taps, which removes the texel blocks at 800 km
+  and the staircase at 300 km; below ~3,500 km camera altitude a zero-mean,
+  multiplicative 3D value-noise fBm (four octaves from 9 km, each faded out
+  below ~8 px so it never shimmers) breaks up thin and mid density while
+  dense cores and the large-scale field stay the real map. The shadow takes
+  the same function with two octaves, rotated into the deck's frame, and
+  lost its `fract()` seam. Captured at 800 km, 300 km and overview over the
+  day side: no texel edges at 300 km, overview unchanged. Per-pass GPU timer
+  queries on the integrated GPU (shared with other sessions, so provisional):
+  cloud pass 0.69 → 0.71 ms at 300 km, 0.80 → 0.75 ms at 800 km, overview
+  unchanged at ~0.48 ms; surface pass unchanged (~0.65–0.70 ms).
+  Still open: V1.3, a higher-resolution source (with V2 / D.8).
+- **017 V4 dashed orbit in the shader (2026-10-26)**: the dash is now
+  computed in the line's fragment shader (`src/rendering/shaders/orbitDash.glsl`,
+  material in `src/rendering/iss/orbitLineMaterial.ts`), keyed on each
+  vertex's orbital phase (`src/core/orbital/OrbitPhase.ts`: revolutions of
+  the mean motion at the vertex's epoch) and sized with screen-space
+  derivatives: a power-of-two number of dashes per revolution chosen per
+  fragment, neighbouring levels crossfaded. The per-frame dash sizing,
+  `dashOffset` and dash-origin state are gone; `OrbitLine.tsx` went from
+  361 to 192 lines. Measured with frame captures (fixed camera on the
+  future arc): 0 px along-track shift after seeks of +61 s, +130 s and
+  −70 s, an orbit-tape scrub, 1× and 18 sim-minutes at 300×. Pitch is now
+  even along the whole arc: at Follow 250 km the old dash ran 16 → 7 px
+  from the near to the far end, the new one 11–13 px (8–16 px across all
+  overview and Follow captures; the octave crossfade sets that band).
+  Dashed/Continuous links no new program;
+  Bloom on and off both render it, and the pitch holds at DPR 2.
 - **C.5 changelog and Dependabot (2026-10-26)**: `CHANGELOG.md` (Keep a
   Changelog, sections named by the date a change reached `main`, since every
   merge deploys and there are no version tags; PRs add lines under
@@ -201,15 +233,15 @@ read). Its order, merged with the older items:
    framing centres the station under the HUD; ground lines at 7 px and tape
    labels at 8 px; controls down to 23×15 px on touch. Then commit the audit
    as a Playwright spec.
-2. **017 V1 — close-range clouds** (texel staircase at 300–800 km): smooth
-   and bicubic first, then altitude-faded procedural detail.
+2. **017 V1 — close-range clouds**: V1.1 (bicubic reconstruction) and V1.2
+   (altitude-faded detail) landed 2026-10-26; V1.3, a higher-resolution
+   cloud source, waits for V2 / D.8.
 3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
    panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
 4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
    the HUD; no apple-touch-icon or manifest).
-5. **017 V4, I2** — dashed orbit in the shader, staged loading screen.
-   V3 (the sun) is implemented and awaits the owner's side-by-side with ISS
-   photography at the limb.
+5. **017 I2** — staged loading screen. V3 (the sun) is implemented and
+   awaits the owner's side-by-side with ISS photography at the limb.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
@@ -588,7 +620,7 @@ level 0.
 
 Integration risks, all real:
 
-- Our surface shader owns the terminator, the 5-tap cloud shadow, the ocean
+- Our surface shader owns the terminator, the cloud shadow (`cloudDensity.glsl`), the ocean
   Fresnel and the city-light curve. Their `tile.frag` re-derives lighting and
   has none of the cloud-shadow taps; porting the tile path means porting
   those features or accepting a visible regression at the swap.

@@ -12,19 +12,26 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ## [Unreleased]
 
-### Changed
-
-- The sun reads as blinding from orbit: a round camera glare (bright core,
-  wide halo, faint six-point spikes) that fades and reddens as the sun sets
-  behind Earth's limb or hides behind the station, and a red-to-gold
-  sunrise band along the limb as it rises
-  ([#43](https://github.com/slklnarnv/orbital/pull/43)).
-
 ### Added
 
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
+
+### Changed
+
+- Clouds stay smooth up close: no more texel blocks at 800 km or staircase
+  edges at 300 km, with fine cloud detail fading in near the deck and
+  matching cloud shadows ([#37](https://github.com/slklnarnv/orbital/pull/37)).
+- The dashed orbit line keeps an even dash spacing along the whole arc
+  (the far end no longer shrinks to dots) and stays fixed to the orbit at
+  any time rate or while scrubbing
+  ([#38](https://github.com/slklnarnv/orbital/pull/38)).
+- The sun reads as blinding from orbit: a round camera glare (bright core,
+  wide halo, faint six-point spikes) that fades and reddens as the sun sets
+  behind Earth's limb or hides behind the station, and a red-to-gold
+  sunrise band along the limb as it rises
+  ([#43](https://github.com/slklnarnv/orbital/pull/43)).
 
 ## 2026-10-26
 

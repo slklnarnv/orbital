@@ -127,12 +127,13 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
   (`OrbitalEngine.periodMinutes`) with the step rounded, not truncated:
   214 km → 11–16 km, the residual being SGP4's own non-closure.
 - The dash pattern slid ~1.8 pitches every refresh because `LineMaterial`
-  keys it on `instanceDistance` measured from the arc's trailing edge, which
-  moves ~460 km per refresh. `dashOffset` now carries that edge's absolute
-  position from the clock. **Do not modulo it by the pitch** — the pitch
-  changes every frame with the camera and the remainder slides by
-  `(phase/pitch)·Δpitch` (~17 km for a 0.3 km change; this was the first
-  implementation and the browser check caught it).
+  keyed it on `instanceDistance` measured from the arc's trailing edge, which
+  moves ~460 km per refresh. #15 fixed it with an absolute `dashOffset` from
+  the clock. 017 V4 (2026-10-26) replaced that: the dash is computed in the
+  shader from each vertex's orbital phase (a function of its epoch, so a
+  point on the ring keeps its phase in every arc) and sized with screen-space
+  derivatives in power-of-two levels — no offset, origin or per-frame sizing
+  (`OrbitPhase.ts`, `orbitLineMaterial.ts`, `shaders/orbitDash.glsl`).
 
 **Merge order mattered: #15 was stacked on #14.** `fix/orbit-line-dashes` was
 branched from `feat/tier0-gains`, so its diff against `main` carried all 25
