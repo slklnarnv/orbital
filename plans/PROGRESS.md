@@ -38,6 +38,71 @@
 - Tests: `hudFraming.test.ts`, `renderScale.test.ts`, `viewOffsetNdc`
   (matches three's projection), `renderScale` in `settingsStore.test.ts`.
 
+## 017 A1–A4 + P: keyboard, screen readers, About (2026-10-26)
+
+- **Shortcuts.** `src/ui/shortcuts/shortcutRegistry.ts` (pure, unit-tested)
+  + `useShortcuts` (the one global keydown handler; `useHudVisibility` and
+  the Space effect in `TimeControls` folded in). Keys: Space, 1–4, 0, L, R,
+  H, P, G, ?, Esc. Rules: never while typing (Escape excepted), never with
+  Ctrl/Cmd/Alt, Space yields to activatable controls, repeats swallowed,
+  the help overlay is modal (only ? and Esc). Letters match `key`; `code`
+  only when the layout typed no ASCII character (Dvorak-safe, Cyrillic
+  works). `findConflicts` also guards the keys controls own (tape arrows,
+  radio arrows, Enter, Tab).
+- **Overlay system.** `src/ui/overlay/` — `overlay.ts` store (one open at a
+  time, `switchOverlay` chains About → help and returns focus to About),
+  `useOverlay` (trigger registration, keyboard-open focus-in, outside
+  pointerdown closes without stealing focus), `HudPanel` (titled dialog,
+  Tab trap when modal). Settings, Passes and Set time moved onto it; their
+  three copies of the outside-click/Escape effect are gone.
+- **Screen readers.** Skip link → `#hud-main`; canvas wrapper `role="img"`
+  described by `#scene-summary` (`sceneSummary.ts`, whole minutes); polite
+  `SceneAnnouncer` (camera mode after 1.2 s settle, sunlit flips, silent when
+  accelerated). The camera status label lost `role="status"` (it announced
+  every Locked/Free flip); the smoke spec selects `.hud-camera__status`.
+- **Contrast/motion.** `--hud-lo` 0.38 → 0.5 (3.1 → 4.7:1 on `--space`;
+  `HudContrast.test.ts`). Measured in Edge, worst background pixel under each
+  `--hud-lo` line: overview 4.4–4.7:1 except the tape period over the orbit
+  ring (2.1:1); Follow at the limb 1.6–4.7:1. `prefersReducedMotion()`
+  (`src/utils/reducedMotion.ts`) now gates the glint pulse and the flare's
+  ghosts as well as flights.
+- **About.** `src/ui/layout/AboutPanel.tsx`, beside the wordmark: measured vs
+  illustrative, credits (keep in step with `NOTICE.md`), `__BUILD_ID__`, a
+  button into the shortcut overlay.
+- **Verified.** Unit: `shortcutRegistry`, `overlayStore`, `sceneSummary`,
+  `HudContrast`. Playwright (Edge, real GPU): smoke specs green, 6 new.
+
+## 017 I1 icon + manifest, I2 loading screen (2026-10-26)
+
+- **Icon.** One parametric mark (orbit ellipse, gradient toward a glint;
+  `--hud-hi` on `--space`) drawn by `scripts/build-icons.mjs`
+  (`npm run build:icons`, sharp): `favicon.svg` (size-optimised, no sparkle
+  rays), `favicon.ico` (16/32/48 PNG frames), `apple-touch-icon.png` (180,
+  full bleed), `icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
+  (mark scaled 0.82 to sit inside the 80% safe zone). `favicon.png` removed.
+  `index.html`: icon links, manifest, `theme-color` #020409,
+  `color-scheme: dark`. `vercel.json`: 1-day cache for icons, manifest
+  served as `application/manifest+json`; CSP unchanged (same-origin).
+- **Loading screen.** Stages: data link (bootstrap promise settled →
+  `telemetryModeVisual` label and dot), Earth (`/textures/`, incl. the star
+  map) and station (`/models/`, `/draco/`, `/basis/`, GLTF blob textures),
+  counted per distinct URL from `DefaultLoadingManager` item hooks. The gate
+  is assets only (the link never blocks: the bundled TLE propagates
+  meanwhile). Static first-paint copy in `index.html`; the React screen
+  carries the shell's animation clock over (`bootShell.ts`). Reduced motion:
+  glint parked at the icon position, no fade.
+- **Measured** (local production builds of `main` and this branch, headless
+  Edge, 12 Mbps / 80 ms, cache off, one run each): first contentful paint
+  840 → 520 ms (388 ms with reduced motion); the old build was blank at
+  0.3 s, the new one shows the stages. Assets still settle in ~5–7 s on that
+  link (unchanged; same files).
+- **Tests.** `tests/unit/ui/bootProgress.test.ts` (classification, repeat
+  starts, growing totals, failures, the gate), `bootMarkSync.test.ts`
+  (index.html, CSS offset-path and the icon script share one geometry); e2e
+  waits on the `progressbar` named "Loading".
+- **Open.** `og-image.png` still shows the old wordmark treatment; refresh it
+  with the name decision (I3).
+
 ## 017 V1 close-range clouds (2026-10-26)
 
 - **Cause.** `clouds.frag` uses map density directly as alpha (no coverage

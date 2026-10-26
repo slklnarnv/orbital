@@ -14,8 +14,19 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = path.resolve(__dirname, '../../..')
 
-/** Absolute URLs in src/ that are identifiers, not network requests. */
-const NOT_FETCHED = new Set(['http://www.w3.org/2000/svg'])
+/**
+ * Absolute URLs in src/ that are not network requests: identifiers, and the
+ * About panel's credit links (navigations, which connect-src does not
+ * govern). Exact URLs, so a fetch to one of these hosts still fails here.
+ */
+const NOT_FETCHED = new Set([
+  'http://www.w3.org/2000/svg',
+  'https://github.com/slklnarnv/orbital',
+  'https://celestrak.org/',
+  'https://wheretheiss.at/',
+  'https://www.naturalearthdata.com/',
+  'https://open-meteo.com/',
+])
 
 /**
  * Hosts a fetched host redirects to. None today (checked with curl,

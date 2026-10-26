@@ -51,7 +51,7 @@ Read this block first. Results: `plans/PROGRESS.md`; index: `plans/README.md`.
   `aria-label` "Pause time" / "Resume time" / "Render settings" (dialog with an
   "Orbit line style" radiogroup); `html.hud-hidden` after `H`; settings in the
   `orbital-settings` localStorage key. The loading overlay swallows pointer
-  events until "Loading NN%" is gone, and the rAF loop defeats actionability
+  events until the `progressbar` named "Loading" is gone, and the rAF loop defeats actionability
   waits: click by coordinates.
 ## Session log — 2026-10-23 (Locate LOD + two-tier detail)
 
@@ -112,8 +112,9 @@ comparison in `docs/NEXT_STEPS.md`, none touching simulation truth:
 - `__BUILD_ID__` → `?v=` on the model/texture URLs; `/models` and `/textures`
   are `immutable`. **`/draco` is NOT** — `useGLTF.setDecoderPath` builds its
   own URLs with no `?v=`, so `immutable` there would pin a stale decoder.
-- `H` hides the HUD (`src/hooks/useHudVisibility.ts`, `.hud-hidden` on
-  `<html>`, `visibility` so layout is untouched). Not persisted.
+- `H` hides the HUD (`toggleHud` in `src/ui/shortcuts/useShortcuts.ts`,
+  `.hud-hidden` on `<html>`, `visibility` so layout is untouched). Not
+  persisted. Since 017 A1 every global key lives in `shortcutRegistry.ts`.
 - Safe-area insets on every anchored cluster + `viewport-fit=cover`
   (without it `env()` is 0 on iOS).
 - OG/Twitter metadata, `robots.txt`, `sitemap.xml`, generated `og-image.png`;
@@ -187,6 +188,22 @@ landed through its own PR.
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
+- **Overlays** (017 A1/P): every popover and panel goes through
+  `src/ui/overlay/` — one open at a time, Escape closes, focus returns to the
+  trigger; new panels use `HudPanel` and `useOverlay`, never their own
+  outside-click/Escape effect. Text links are warm white with a hairline
+  underline (`.hud-link`), never a link colour.
+- **Contrast**: `--hud-lo` is 50% white (4.7:1 on `--space`, AA);
+  `HudContrast.test.ts` fails if a token drops below 4.5:1.
+- **Identity and loading**: the mark is an orbit ellipse that brightens
+  toward a station glint (`scripts/build-icons.mjs`, geometry mirrored in
+  `src/ui/loading/bootMark.ts`; `bootMarkSync.test.ts` guards the copies in
+  `index.html` and `src/index.css`). The loading screen (`.boot-*`) is
+  painted first by a static copy in `index.html`, then `LoadingScreen.tsx`
+  takes over. Its stage counts come from wrapping `DefaultLoadingManager`'s
+  `itemStart/itemEnd/itemError` (`assetLoadTracker.ts`, first import in
+  `main.tsx` so the module-scope preloads are seen); the gate is every file
+  ended with both the Earth and station stages started.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
@@ -230,6 +247,7 @@ landed through its own PR.
 | `src/ui/clusters/GroundTrackGlobe.tsx` | Orthographic globe + passing-over lines |
 | `src/ui/common/PassesPanel.tsx` | Visible-pass popover (observer search, pass list, Watch); prediction in `src/core/orbital/PassPredictor.ts` |
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
+| `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
 | `src/interaction/camera/HudAwareFraming.tsx` + `hudFraming.ts` | R2 projection shift (DOM measure + pure band math) |
 | `src/rendering/scene/renderScale.ts` | DPR ceiling and the pinned render-scale override (`AdaptiveDpr` in SceneRoot) |

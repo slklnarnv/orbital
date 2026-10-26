@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react'
-import { useProgress } from '@react-three/drei'
 import { initTelemetryStoreListeners } from '@/stores/telemetryStore'
+import { markLinkSettled } from '@/stores/bootStore'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { simulationRuntime } from '@/core/runtime/runtimeInstance'
 import { SceneRoot } from '@/rendering/scene/SceneRoot'
 import { scheduleLocatePrefetch } from '@/rendering/iss/prefetchDetail'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
-import { useHudVisibility } from '@/hooks/useHudVisibility'
+import { useShortcuts } from '@/ui/shortcuts/useShortcuts'
+import { ShortcutHelp } from '@/ui/overlay/ShortcutHelp'
+import { SceneAnnouncer, SceneSummary, SCENE_SUMMARY_ID } from '@/ui/a11y/SceneAnnouncer'
 import { TopBar } from '@/ui/layout/TopBar'
 import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
 import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
 import { CameraCluster } from '@/ui/clusters/CameraCluster'
 import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
 import { OrbitTape } from '@/ui/clusters/OrbitTape'
+import { LoadingScreen } from '@/ui/loading/LoadingScreen'
 
 /**
  * Pure JavaScript utility to check if WebGL is available in the current browser session.
@@ -48,19 +51,37 @@ function checkWebGLSupport(): boolean {
  * cluster subscribes to its own slice of the 1 Hz throttled stores, so
  * high-frequency updates stay confined to their dedicated components and the
  * container never re-renders.
+ *
+ * Keyboard and screen-reader layer (roadmap 017 A): one global shortcut
+ * handler, a skip link past the top bar, the canvas described in words and a
+ * polite live region for mode and daylight changes.
  */
 const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
-  useHudVisibility()
+  useShortcuts()
 
   return (
     <>
+      <a
+        href="#hud-main"
+        className="hud-skip-link"
+        onClick={(event) => {
+          // Focus without rewriting the URL's hash.
+          event.preventDefault()
+          document.getElementById('hud-main')?.focus()
+        }}
+      >
+        Skip to time and camera controls
+      </a>
+      <SceneSummary />
+      <SceneAnnouncer />
+
       {/* Edge scrims: legibility gradients, never interactive */}
       <div aria-hidden="true" className="hud-scrim hud-scrim--top" />
       <div aria-hidden="true" className="hud-scrim hud-scrim--bottom" />
 
       <TopBar />
 
-      <main aria-label="Mission telemetry and camera controls" className="hud-frame select-none">
+      <main id="hud-main" tabIndex={-1} aria-label="Mission telemetry and camera controls" className="hud-frame select-none">
         <OrbitTape />
         <GaugesCluster />
         <MissionClockCluster />
@@ -69,6 +90,8 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         </div>
         <CameraCluster />
       </main>
+
+      <ShortcutHelp />
     </>
   )
 })
@@ -147,114 +170,6 @@ function WebGLDiagnosticScreen(): JSX.Element {
         <div className="hud-fine flex justify-between items-center" style={{ opacity: 0.7 }}>
           <span>Client Environment: {navigator.platform || navigator.userAgent.split(' ')[0]} — WebGL Unavailable</span>
           <span>Error Code: E_CONTEXT_ALLOCATION_FAIL</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Minimalist, high-fidelity loading screen with a rotating tilted Earth logo
- * and clear progress percentage.
- */
-function LoadingScreen(): JSX.Element | null {
-  const { active, progress } = useProgress()
-  const [mounted, setMounted] = useState(true)
-  const [fadeOut, setFadeOut] = useState(false)
-  const [hasLoaded, setHasLoaded] = useState(false)
-
-  // Freeze the displayed progress at 100% once we start the fade-out sequence
-  // to prevent the visual "double load" glitch (0->100->0->100).
-  const displayProgress = hasLoaded ? 100 : progress
-
-  const statusMessage = `Loading ${Math.round(displayProgress)}%`
-
-  useEffect(() => {
-    // If we have already started the exit sequence, ignore further useProgress updates.
-    // This prevents the loading screen from returning once it starts fading out.
-    if (hasLoaded) return
-
-    // Wait until downloads complete (progress >= 100 & !active)
-    if (progress >= 100 && !active) {
-      setHasLoaded(true)
-
-      // We purposefully DO NOT return a cleanup function (clearTimeout) here.
-      // If we did, the re-render caused by setHasLoaded(true) would execute the
-      // cleanup function, cancelling the timers and permanently freezing the
-      // loading screen at 100%.
-      setTimeout(() => {
-        setFadeOut(true)
-
-        setTimeout(() => {
-          setMounted(false)
-        }, 800)
-      }, 400)
-    }
-  }, [progress, active, hasLoaded])
-
-  if (!mounted) return null
-
-  return (
-    <div
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[var(--space)] select-none transition-opacity duration-800 ease-in-out ${fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        }`}
-    >
-      <div className="flex flex-col items-center justify-center">
-        {/* Rotating Minimalist Earth wireframe logo (tilted at 23.5 degrees) */}
-        <div
-          className="relative w-28 h-28 flex items-center justify-center pointer-events-none animate-pulse-subtle"
-          style={{ transform: 'rotate(23.5deg)' }}
-        >
-          <svg
-            className="w-full h-full text-[var(--hud-hi)] animate-spin-earth"
-            viewBox="0 0 100 100"
-            fill="none"
-          >
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="opacity-90"
-              style={{ filter: 'drop-shadow(0 0 6px rgba(244, 247, 251, 0.35))' }}
-            />
-
-            {/* Latitude Grid lines */}
-            <ellipse cx="50" cy="50" rx="46" ry="16" stroke="currentColor" strokeWidth="1" className="opacity-40" />
-            <ellipse cx="50" cy="50" rx="46" ry="32" stroke="currentColor" strokeWidth="1" className="opacity-20" />
-            <line x1="4" y1="50" x2="96" y2="50" stroke="currentColor" strokeWidth="1" className="opacity-50" />
-
-            {/* Longitude Grid lines */}
-            <ellipse cx="50" cy="50" rx="16" ry="46" stroke="currentColor" strokeWidth="1" className="opacity-60" />
-            <ellipse cx="50" cy="50" rx="32" ry="46" stroke="currentColor" strokeWidth="1" className="opacity-30" />
-            <line x1="50" y1="4" x2="50" y2="96" stroke="currentColor" strokeWidth="1" className="opacity-50" />
-          </svg>
-        </div>
-
-        {/* Minimal loading text with percentage/status indicator */}
-        <span
-          className="uppercase"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            letterSpacing: '0.25em',
-            color: 'var(--hud-mid)',
-            marginTop: 24,
-          }}
-        >
-          {statusMessage}
-        </span>
-
-        {/* Clean, minimalist progress line */}
-        <div
-          className="w-48 overflow-hidden"
-          style={{ height: 2, background: 'rgba(244, 247, 251, 0.12)', marginTop: 12 }}
-        >
-          <div
-            className="h-full transition-all duration-300 ease-out"
-            style={{ width: `${displayProgress}%`, background: 'var(--hud-hi)' }}
-          />
         </div>
       </div>
     </div>
@@ -399,7 +314,8 @@ export default function App(): JSX.Element {
     // 2. Start telemetry lifecycle and the application-owned simulation scheduler.
     // The runtime can begin immediately because ISSEntity installs a fallback TLE
     // synchronously; live/cached data replaces it when bootstrap completes.
-    void telemetryManager.start()
+    // The loading screen's data-link stage reads the outcome once it settles.
+    void telemetryManager.start().finally(markLinkSettled)
     simulationRuntime.start()
 
     // 3. Ground-point enrichment (place, local time, weather) on its own
@@ -480,14 +396,19 @@ export default function App(): JSX.Element {
   return (
     <div className="w-full h-full relative overflow-hidden bg-[var(--space)] text-[var(--hud-hi)] select-none">
       {/* Layer 3: High-Performance 3D R3F Viewport - Stable (Never Re-renders!) */}
-      <div className="absolute inset-0 z-0 w-full h-full">
+      <div
+        className="absolute inset-0 z-0 w-full h-full"
+        role="img"
+        aria-label="Live 3D view of Earth and the International Space Station"
+        aria-describedby={SCENE_SUMMARY_ID}
+      >
         <SceneRoot />
       </div>
 
       {/* Layer 5: Broadcast HUD — Reactive Overlay */}
       <HudOverlay />
 
-      {/* Layer 6: Cinematic Loading Screen */}
+      {/* Layer 6: Loading screen (staged: data link, Earth, station) */}
       <LoadingScreen />
 
       {/* WebGL Recovery Overlays */}

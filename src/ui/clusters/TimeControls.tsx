@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useSimulationStore } from '@/stores/simulationStore'
 import { useOrbitalState } from '@/hooks/useOrbitalState'
 import { periodMsOf } from '@/utils/orbitalTime'
+import { TIME_RATE_PRESETS } from '@/utils/constants'
+import { closeOverlay } from '../overlay/overlay'
+import { useOverlay } from '../overlay/useOverlay'
 
 /**
  * TimeControls — the transport row under the mission clock: pause/play,
@@ -18,8 +21,6 @@ import { periodMsOf } from '@/utils/orbitalTime'
  * Color discipline: no signal colors here — time state is not data-link
  * state. Active controls brighten to --hud-hi with an underline.
  */
-
-const SPEED_PRESETS = [1, 10, 60, 300]
 
 /** Seek nudges applied relative to the current epoch. */
 const NUDGES: Array<{ label: string; ms: (orbitMs: number) => number }> = [
@@ -53,87 +54,27 @@ export function TimeControls(): JSX.Element {
   const timeScale = useSimulationStore((state) => state.timeScale)
   const { orbitalPeriod } = useOrbitalState()
 
-  const [seekOpen, setSeekOpen] = useState(false)
+  // Shared overlay system (ui/overlay/overlay.ts): Escape closes the seek
+  // popover and focus returns to Set time. Space (pause) lives in the
+  // shortcut registry with the other global keys.
+  const { isOpen: seekOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('seek')
   const [inputValue, setInputValue] = useState(() =>
     epochToUtcInputValue(simulationClock.now().epochMs),
   )
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
 
-  // Seek popover dismissal — same contract as the settings popover:
-  // outside pointerdown or Escape closes it.
+  // Each open starts from the current epoch.
   useEffect(() => {
-    if (!seekOpen) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setSeekOpen(false)
-    }
-    // Scoped Escape: only when focus is inside this cluster (or nowhere).
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      const active = document.activeElement
-      const focusInside = active !== null && rootRef.current?.contains(active)
-      if (!focusInside && active !== document.body) return
-      event.preventDefault()
-      setSeekOpen(false)
-      if (focusInside) triggerRef.current?.focus()
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
+    if (seekOpen) setInputValue(epochToUtcInputValue(simulationClock.now().epochMs))
   }, [seekOpen])
-
-  // Space toggles pause. Hijacked globally (with preventDefault, so it also
-  // stops page scroll) except while typing, and except on controls that Space
-  // natively activates — without that carve-out, Space on a focused button
-  // (the gear, a rate preset, Live) would pause the clock instead of pressing
-  // the button, breaking keyboard activation for every other control in the HUD.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.code !== 'Space') return
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
-      // Held Space auto-repeats keydown; one press is one toggle.
-      if (event.repeat) {
-        event.preventDefault()
-        return
-      }
-      const target = event.target as HTMLElement | null
-      // Inputs and contentEditable keep their spaces; buttons, links and
-      // summaries keep their native Space activation.
-      if (
-        target !== null &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.tagName === 'BUTTON' ||
-          target.tagName === 'A' ||
-          target.tagName === 'SUMMARY' ||
-          target.isContentEditable)
-      ) {
-        return
-      }
-      event.preventDefault()
-      useSimulationStore.getState().togglePause()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
 
   const paused = mode === 'PAUSED'
   const parsedValue = parseUtcInputValue(inputValue)
   const orbitMs = periodMsOf(orbitalPeriod)
 
-  const openSeek = (): void => {
-    setInputValue(epochToUtcInputValue(simulationClock.now().epochMs))
-    setSeekOpen(true)
-  }
-
   const applySeek = (epochMs: number, close: boolean): void => {
     useSimulationStore.getState().seek(epochMs)
     if (close) {
-      setSeekOpen(false)
+      closeOverlay()
     } else {
       setInputValue(epochToUtcInputValue(simulationClock.now().epochMs))
     }
@@ -143,11 +84,12 @@ export function TimeControls(): JSX.Element {
     `hud-transport__btn${active ? ' hud-transport__btn--active' : ''}`
 
   return (
-    <div ref={rootRef} className="hud-transport">
+    <div className="hud-transport">
       <button
         type="button"
         className={`${transportButton(paused)} hud-transport__icon`}
         aria-label={paused ? 'Resume time' : 'Pause time'}
+        aria-keyshortcuts="Space"
         onClick={() => useSimulationStore.getState().togglePause()}
       >
         {paused ? (
@@ -162,7 +104,7 @@ export function TimeControls(): JSX.Element {
         )}
       </button>
 
-      {SPEED_PRESETS.map((rate) => {
+      {TIME_RATE_PRESETS.map((rate, i) => {
         const active = mode === 'ACCELERATED' && timeScale === rate
         return (
           <button
@@ -171,6 +113,7 @@ export function TimeControls(): JSX.Element {
             className={transportButton(active)}
             aria-pressed={active}
             aria-label={`Time rate ${rate}×`}
+            aria-keyshortcuts={String(i + 1)}
             onClick={() => useSimulationStore.getState().setRate(rate)}
           >
             {rate}×
@@ -183,6 +126,7 @@ export function TimeControls(): JSX.Element {
         className={transportButton(mode === 'REALTIME')}
         aria-pressed={mode === 'REALTIME'}
         aria-label="Live — return to wall-clock time"
+        aria-keyshortcuts="0"
         onClick={() => useSimulationStore.getState().setMode('REALTIME')}
       >
         Live
@@ -194,13 +138,20 @@ export function TimeControls(): JSX.Element {
         className={transportButton(false)}
         aria-expanded={seekOpen}
         aria-label="Set simulation time"
-        onClick={() => (seekOpen ? setSeekOpen(false) : openSeek())}
+        data-overlay=""
+        onClick={onTriggerClick}
       >
         Set time
       </button>
 
       {seekOpen && (
-        <div role="dialog" aria-label="Set simulation time" className="hud-transport-popover hud-text">
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label="Set simulation time"
+          className="hud-transport-popover hud-text"
+          data-overlay=""
+        >
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
             Set time · UTC
           </span>

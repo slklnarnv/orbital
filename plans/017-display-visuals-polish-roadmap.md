@@ -162,7 +162,11 @@ the owner's call; options: keep it and lead with a descriptor in titles and
 the share card ("Orbital — the ISS, live"), or pick a distinctive name before
 wider sharing. No change is made without a decision.
 
-## A — Accessibility and keyboard (C.4)
+## A — Accessibility and keyboard (C.4) — LANDED 2026-10-26
+
+A1–A4 landed together with P; what was built and measured is in
+`plans/PROGRESS.md` ("017 A1–A4 + P"). Open from A4: legibility over the
+bright limb in Follow (worst pixel ~1.6:1), a design call.
 
 **A1. Shortcuts with a help overlay.** Today only `Space` (pause) and `H`
 (HUD) exist, plus arrows on the tape and in radio groups. Add one registry and
@@ -181,7 +185,7 @@ sunset in 26 minutes").
 background and the bright limb; extend the reduced-motion handling beyond
 flights (glint pulse, flare).
 
-## P — Info / about panel (B.7, "what's real")
+## P — Info / about panel (B.7, "what's real") — LANDED 2026-10-26
 
 An "About" text control next to the wordmark opens a panel: what is measured
 (position, TLE age, Sun, terminator, eclipse) versus illustrative (attitude

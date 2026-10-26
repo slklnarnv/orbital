@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { EARTH_RADIUS_KM, SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import type { Vec3 } from '@/utils/math'
+import { prefersReducedMotion } from '@/utils/reducedMotion'
 
 /**
  * SunFlare — the screen-space lens flare, as a composer pass.
@@ -26,6 +27,10 @@ import type { Vec3 } from '@/utils/math'
  *     edge),
  *   - and the shader itself blanks the flare inside the planet's disc, so it
  *     can never paint over the Earth.
+ *
+ * Reduced motion keeps the halo (it sits still on the sun) and drops the
+ * ghosts: mirrored through the frame centre, they sweep across the screen
+ * against every camera move — parallax motion the preference asks to avoid.
  */
 
 /** Angular softness of the Earth's limb, radians (~1.1°) */
@@ -87,6 +92,8 @@ const SunFlareShader = {
     uEarthRadius: { value: 0 },
     uAspect: { value: 1 },
     uStrength: { value: 0 },
+    /** 1 draws the iris ghosts; 0 under reduced motion. */
+    uGhosts: { value: 1 },
     uHaloColor: { value: new THREE.Color('#ffc27a') },
     uGhostColor: { value: new THREE.Color('#9fc4ff') },
   },
@@ -104,6 +111,7 @@ const SunFlareShader = {
     uniform float uEarthRadius;
     uniform float uAspect;
     uniform float uStrength;
+    uniform float uGhosts;
     uniform vec3 uHaloColor;
     uniform vec3 uGhostColor;
     varying vec2 vUv;
@@ -147,7 +155,7 @@ const SunFlareShader = {
 
       // Ghosts are strongest with the sun near the frame centre, as the
       // lens elements line up; the halo stays put.
-      float central = 1.0 - smoothstep(0.2, 1.4, length(uSunNdc));
+      float central = (1.0 - smoothstep(0.2, 1.4, length(uSunNdc))) * uGhosts;
 
       vec3 flare = uHaloColor * (halo + ghostWarm * central) + uGhostColor * (ghostCool * central);
       gl_FragColor = vec4(base.rgb + flare * (uStrength * earthMask), base.a);
@@ -227,5 +235,6 @@ export class SunFlare {
     u.uEarthRadius.value = earthMaskRadius(_camSpace.z, angEarth, tanHalf)
     u.uAspect.value = camera.aspect
     u.uStrength.value = occl * frameFade
+    u.uGhosts.value = prefersReducedMotion() ? 0 : 1
   }
 }

@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import {
   useSettingsStore,
   type IssModelQuality,
@@ -7,6 +6,7 @@ import {
 import { useLoadingStore } from '@/stores/loadingStore'
 import { RENDER_SCALES, type RenderScale } from '@/rendering/scene/renderScale'
 import { handleRadioGroupKeyDown, radioTabIndex } from './radioGroup'
+import { useOverlay } from '../overlay/useOverlay'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
   { value: 'high', label: 'High fidelity', hint: 'IGOAL · animated' },
@@ -34,9 +34,9 @@ const RENDER_SCALE_VALUES = RENDER_SCALE_OPTIONS.map((option) => option.value)
  * render scale.
  */
 export function SettingsGear(): JSX.Element {
-  const [isOpen, setIsOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Shared overlay system: one panel open at a time, Escape and `G` close
+  // it, focus returns to the gear (see ui/overlay/overlay.ts).
+  const { isOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('settings')
   const issModelQuality = useSettingsStore((state) => state.issModelQuality)
   const setIssModelQuality = useSettingsStore((state) => state.setIssModelQuality)
   const postprocessing = useSettingsStore((state) => state.postprocessing)
@@ -55,39 +55,17 @@ export function SettingsGear(): JSX.Element {
   const issDetail = useLoadingStore((state) => state.issDetail)
   const isLoadingModel = issDetail.status === 'loading' || issDetail.status === 'preparing'
 
-  useEffect(() => {
-    if (!isOpen) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setIsOpen(false)
-    }
-    // Escape is scoped: it closes this popover only when focus is inside it
-    // (or nowhere), so one keypress never dismisses an unrelated popover.
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      const active = document.activeElement
-      const focusInside = active !== null && rootRef.current?.contains(active)
-      if (!focusInside && active !== document.body) return
-      event.preventDefault()
-      setIsOpen(false)
-      if (focusInside) triggerRef.current?.focus()
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [isOpen])
-
   return (
-    <div ref={rootRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
       <button
         ref={triggerRef}
         id="btn-settings"
         type="button"
         aria-label="Render settings"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
+        aria-keyshortcuts="G"
+        data-overlay=""
+        onClick={onTriggerClick}
         className="hud-btn-gear"
         style={{ color: isOpen ? 'var(--hud-hi)' : 'var(--hud-mid)' }}
       >
@@ -104,9 +82,11 @@ export function SettingsGear(): JSX.Element {
 
       {isOpen && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-label="Render settings"
           className="hud-settings-popover hud-text"
+          data-overlay=""
         >
           <span className="hud-fine" style={{ color: 'var(--hud-lo)', letterSpacing: '0.18em' }}>
             Render settings
