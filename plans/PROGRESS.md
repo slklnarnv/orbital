@@ -8,20 +8,6 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Cloud rim past the terminator (2026-10-28)
-
-- Cloud tops (~10 km) keep the sun ~3.5 deg past the ground's terminator.
-  `clouds.frag` now adds that light where the day shading has run out
-  (`rimW`): the transmittance at the height of the sunlight's path to a
-  10 km top (`sunPathHeight`), gain 0.75, also raising the deck's visibility
-  there. The sun-path functions moved to `sunPath.glsl`, shared with
-  `atmosphere.frag`. Day-side cloud shading is untouched (same window as the
-  terrain). Cost: one branch, a few ALU ops and four exp, only near the
-  terminator.
-- Not done: long offset cloud shadows at low sun (needs the sun direction in
-  the deck's rotating frame).
-- Test: `CloudRim.test.ts`.
-
 ## Atmosphere: twilight from the sun path (2026-10-28)
 
 - **Before**: the limb's twilight colour was a rose/gold window and its night

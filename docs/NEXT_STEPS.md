@@ -20,9 +20,7 @@
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
   City lights up close resolve into points of light inside a soft glow
   (`earthSurface.frag`), kept under the bloom threshold. The limb's twilight
-  colour and shadow edge follow the sunlight path (`atmosphere.frag`), and
-  cloud tops past the terminator keep its reddened light (`clouds.frag`;
-  both share `sunPath.glsl`).
+  colour and shadow edge follow the sunlight path (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial).
   Bloom and the lens flare are optional; Bloom off is the direct pipeline.
@@ -52,10 +50,9 @@
      precomputed-scattering model was weighed and not taken: ~100+
      exponentials per pixel over most of the frame does not fit the iGPU
      budget; revisit only with a measured reason.
-   - ~~*Cloud rim*~~: landed 2026-10-28 (tops lit past the terminator by
-     the shared sun-path model). Still open: long cloud shadows at low sun
-     (they need the sun direction in the rotating deck frame to offset the
-     shadow tap) and same-day cloud imagery (NASA GIBS, D.8).
+   - *Clouds*: soft cloud shadows on the ground at low sun, and a bright cloud
+     rim near the terminator where tops catch light after the ground goes
+     dark. Same-day cloud imagery (NASA GIBS, D.8) instead of the composite.
    - *Surface up close*: detail under the station at Follow/Inspect (it softens
      in close shots), and an ocean glint that follows wave roughness and wind.
    - *Stars*: a real catalogue at true magnitude and colour plus the Milky
