@@ -7,7 +7,7 @@ import {
   type Rgb,
 } from '@/core/orbital/SunAppearance'
 import { EARTH_RADIUS_KM } from '@/utils/constants'
-import { DARK_SKY_EXPOSURE, GLARE_PEAK, SUN_CORE_KNEE, sunGlareState } from './sunGlareConfig'
+import { DARK_SKY_EXPOSURE, GLARE_PEAK, SUN_CORE_KNEE, projectGlareCenter, sunGlareState } from './sunGlareConfig'
 import glareVert from '../shaders/sunGlare.vert'
 import glareFrag from '../shaders/sunGlare.frag'
 
@@ -132,6 +132,9 @@ export class SunGlare {
   private readonly probe = new OcclusionProbe()
   private readonly flux: Rgb = { r: 1, g: 1, b: 1 }
   private foreground = 1
+  /** The overlay's anchor and colour for this frame; aimed at draw time. */
+  private readonly sunPoint = new THREE.Vector3()
+  private readonly overlayColor = new THREE.Vector3()
 
   constructor() {
     const material = new THREE.ShaderMaterial({
@@ -151,6 +154,13 @@ export class SunGlare {
     // After the sun billboard (2): the last thing in the transparent pass.
     this.overlay.renderOrder = 3
     this.overlay.visible = false
+    // Aim with the camera that draws the frame (see projectGlareCenter).
+    this.overlay.onBeforeRender = (_renderer, _scene, camera) => {
+      const o = this.overlayUniforms
+      if (projectGlareCenter(this.sunPoint, camera, o.uSunNdc.value)) o.uColor.value.copy(this.overlayColor)
+      else o.uColor.value.set(0, 0, 0)
+      if (camera instanceof THREE.PerspectiveCamera) o.uAspect.value = camera.aspect
+    }
   }
 
   get probeMesh(): THREE.Mesh {
@@ -193,19 +203,16 @@ export class SunGlare {
       probe.scale.setScalar(camera.position.distanceTo(sunPoint) * Math.tan(SUN_DISC_RADIUS_RAD * PROBE_RADIUS_FRACTION))
     }
 
+    // On-screen and colour are decided here; the overlay's screen position is
+    // set at draw time from the drawing camera (constructor), because a flight
+    // re-aims the camera after this callback. The culling test is therefore
+    // only a coarse one, widened by the glare's own extent.
     const o = this.overlayUniforms
     const peak = GLARE_PEAK * s
-    let show = inFront && peak * Math.max(f.r, f.g, f.b) > MIN_GLARE
-    if (show) {
-      _view.applyMatrix4(camera.projectionMatrix)
-      const extentX = GLARE_RADIUS_NDC / camera.aspect
-      show = Math.abs(_view.x) - extentX < 1 && Math.abs(_view.y) - GLARE_RADIUS_NDC < 1
-      o.uSunNdc.value.set(_view.x, _view.y)
-      o.uAspect.value = camera.aspect
-      o.uPixel.value = 2 / Math.max(1, bufferHeight)
-      o.uColor.value.set(f.r * peak, f.g * peak, f.b * peak)
-    }
-    this.overlay.visible = show
+    this.sunPoint.copy(sunPoint)
+    this.overlayColor.set(f.r * peak, f.g * peak, f.b * peak)
+    o.uPixel.value = 2 / Math.max(1, bufferHeight)
+    this.overlay.visible = peak * Math.max(f.r, f.g, f.b) > MIN_GLARE
   }
 
   dispose(): void {

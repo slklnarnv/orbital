@@ -1,3 +1,4 @@
+import { useHudStore } from '@/stores/hudStore'
 import React, { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import type * as THREE from 'three'
@@ -24,7 +25,7 @@ const HUD_SELECTORS = [
 const MEASURE_INTERVAL_MS = 1000
 
 function measureTargetShift(): number {
-  if (document.documentElement.classList.contains('hud-hidden')) return 0
+  if (useHudStore.getState().hidden) return 0
   const rects: ScreenRect[] = []
   for (const selector of HUD_SELECTORS) {
     const element = document.querySelector(selector)

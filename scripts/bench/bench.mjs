@@ -27,7 +27,11 @@
 // Usage: npm run bench -- [--scenarios overview,follow] [--duration 8]
 //        [--settle 3] [--width 1280 --height 720 --dpr 1.5] [--at <ISO|ms>]
 //        [--live] [--no-build] [--headed] [--label text] [--out file.json]
-//        [--allow-busy-gpu] [--port 4180]
+//        [--allow-busy-gpu] [--port 4180] [--earth-8k auto|on|off]
+//
+// --earth-8k: the deferred 8K Earth maps (plan 017 V2). `auto` leaves it to
+// the capability gate, `on`/`off` force it (window.__orbitalEarth8k). When
+// the maps stream, the swap itself is measured first as `earth-8k-swap`.
 // page.evaluate / waitForFunction callbacks run in the page:
 /* global window */
 import { spawn, execFileSync } from 'node:child_process'
@@ -64,6 +68,7 @@ const { values: args } = parseArgs({
     label: { type: 'string', default: '' },
     out: { type: 'string' },
     'allow-busy-gpu': { type: 'boolean', default: false },
+    'earth-8k': { type: 'string', default: 'auto' },
     port: { type: 'string', default: '4180' },
   },
 })
@@ -123,6 +128,10 @@ async function startPreview() {
 }
 
 async function stubNetwork(page) {
+  // The first-visit tour is a modal; a bench run is never a first visit.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem('orbital-tour-seen', '1') } catch { /* no storage */ }
+  })
   const fallback = JSON.parse(await readFile(path.join(root, 'src/data/fallback-tle.json'), 'utf8'))
   await page.route('**/api/tle', (route) => route.fulfill({
     status: 200,
@@ -184,6 +193,7 @@ async function pageState(page) {
       altitudeKm: Math.round(telemetry.altitude),
       simEpoch: new Date(window.__orbitalClock.now().epochMs).toISOString(),
       clockMode: window.__orbitalSimulation.getState().mode,
+      earthDetail: window.__orbitalEarthDetail?.status ?? null,
       cameraDistanceKm: controls ? Math.round(controls.distance) : null,
       pixelRatio: renderer.getPixelRatio(),
       drawingBuffer: `${canvas.width}x${canvas.height}`,
@@ -291,6 +301,21 @@ async function scrubTape(page, ms) {
   })
 }
 
+/** Frames over 20 ms, timed from the 8K load start, with the phase each fell in. */
+function slowFrames(stamps, detail) {
+  const out = []
+  for (let i = 1; i < stamps.length; i++) {
+    const ms = stamps[i] - stamps[i - 1]
+    if (ms <= 20) continue
+    const at = stamps[i - 1]
+    const phase = !detail.loadStartedAt || at < detail.loadStartedAt ? 'before'
+      : !detail.loadedAt || at < detail.loadedAt ? 'loading'
+        : !detail.swappedAt || at < detail.swappedAt ? 'uploading' : 'after-swap'
+    out.push({ atMs: Math.round(at - (detail.loadStartedAt ?? at)), ms: Math.round(ms * 10) / 10, phase })
+  }
+  return out
+}
+
 async function measure(page, drive) {
   await page.evaluate(() => window.__bench.start())
   const from = Date.now()
@@ -352,6 +377,7 @@ async function main() {
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
     await page.addInitScript({ path: path.join(root, 'scripts/bench/page-probe.js') })
+    await page.addInitScript((value) => { window.__orbitalEarth8k = value }, args['earth-8k'])
     await stubNetwork(page)
     await page.goto(baseUrl)
     await waitFor(page, () => !!window.__orbitalStores && !!window.__orbitalRenderer && !!window.__bench, undefined, 60_000)
@@ -367,6 +393,41 @@ async function main() {
       }
     })
     log(`GPU: ${gpu.renderer}; timer queries ${gpu.timerQueries ? 'on' : 'UNAVAILABLE (no per-pass GPU ms)'}`)
+
+    // The 8K Earth swap happens once, a few seconds after first paint: record
+    // every frame from now until it lands (or is skipped) plus 2 s.
+    let earthSwap = null
+    const earthStatus = await page.evaluate(() => window.__orbitalEarthDetail?.status ?? null)
+    if (['waiting', 'loading', 'uploading'].includes(earthStatus)) {
+      log('measuring the 8K Earth swap …')
+      const { from, to, raw, memory } = await measure(page, async () => {
+        await waitFor(page, () => ['ready', 'failed', 'skipped'].includes(window.__orbitalEarthDetail?.status), undefined, 120_000)
+        await sleep(2000)
+      })
+      const detail = await page.evaluate(() => ({ ...window.__orbitalEarthDetail }))
+      const contention = await monitor.window(from, to, own)
+      anyContended ||= contention.contended
+      earthSwap = {
+        id: 'earth-8k-swap',
+        detail: {
+          status: detail.status,
+          reason: detail.reason ?? null,
+          loadMs: detail.loadedAt && detail.loadStartedAt ? Math.round(detail.loadedAt - detail.loadStartedAt) : null,
+          uploadMs: detail.swappedAt && detail.loadedAt ? Math.round(detail.swappedAt - detail.loadedAt) : null,
+          uploadSpanMs: detail.uploadSpanMs ?? null,
+        },
+        frames: summariseFrames(raw.frameStamps),
+        // Where the slow frames fell, relative to the swap's phases (ms from the load start).
+        slowFrames: slowFrames(raw.frameStamps, detail),
+        gpu: summariseGpu(raw.gpuFrames),
+        memory: { trackedMiB: mib(memory.textureBytes + memory.renderbufferBytes + memory.bufferBytes + memory.drawingBufferBytes), texturesMiB: mib(memory.textureBytes) },
+        contention,
+      }
+      log(`earth-8k-swap: ${detail.status}; load ${earthSwap.detail.loadMs} ms, upload ${earthSwap.detail.uploadMs} ms; max frame ${earthSwap.frames.max} ms, >20ms ${earthSwap.frames.over20ms} ${JSON.stringify(earthSwap.slowFrames)}`)
+      if (contention.contended) loud([`earth-8k-swap: contended during measurement: ${describeContention(contention)}.`])
+    } else {
+      log(`8K Earth: ${earthStatus ?? 'unknown'}${earthStatus === 'skipped' ? ` (${await page.evaluate(() => window.__orbitalEarthDetail?.reason)})` : ''}`)
+    }
 
     let epochMs
     if (args.at) {
@@ -439,7 +500,9 @@ async function main() {
         settleS: settleMs / 1000,
         simulationEpochMs: epochMs ?? null,
         inspectDistanceKm: INSPECT_DISTANCE_KM,
+        earth8k: args['earth-8k'],
       },
+      earthSwap,
       preflight,
       pageErrors: errors,
       scenarios: results,

@@ -72,8 +72,11 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
   `.tmp-iss-build/`).
 - The lens flare, the sun glare overlay and the atmosphere's sunrise band
   aim at the sun billboard (`SUN_BILLBOARD_DISTANCE_KM`); keep them on the
-  same point. The sun (billboard + glare) stays under the bloom threshold
-  (`SunGlareBudget.test.ts`): UnrealBloom turns a compact HDR disc square.
+  same point, and the glare is aimed in `onBeforeRender` (flights set the
+  camera after the frame callbacks). The sun (billboard + glare) and every
+  station material (`highlightKnee.ts`) stay under the bloom threshold
+  (`SunGlareBudget.test.ts`, `HighlightKnee.test.ts`): UnrealBloom turns a
+  compact HDR source square.
 
 ## Docs (reading order)
 

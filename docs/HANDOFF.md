@@ -181,12 +181,19 @@ landed through its own PR.
 - **Geometry rule**: circles are only for physically-round things (the globe).
   Instruments use reticle corner-ticks (camera button) or bare typography.
 - **Frame map**: top-left = identity + link status; top-right = ephemeris line
-  + camera control (rule: *controls top, data bottom*); bottom-left = speed /
-  altitude bare gauges; bottom-center = UTC clock (Zulu suffix) over the orbit
-  tape; bottom-right = ground cluster alone; full-width orbit tape along the
-  bottom edge.
-  Left edge, vertically centred (`.hud-explorer`): the module explorer,
-  shown only while tracking the station (017 X1).
+  + the tool row (Passes, Modules, Settings: `.hud-tool`, a `ToolIcon` and a
+  label each) + camera control (rule: *controls top, data bottom*);
+  bottom-left = speed / altitude bare gauges; bottom-center = UTC clock (Zulu
+  suffix) over the orbit tape; bottom-right = ground cluster alone;
+  full-width orbit tape along the bottom edge.
+  Left edge, vertically centred (`.hud-explorer`): the module explorer card,
+  shown while open (017 X1). Modules opens it from anywhere: Locate first,
+  then it opens on arrival (`moduleExplorerControl.ts`).
+- **Tour** (`src/ui/tour/`): the first-visit guided tour, a modal overlay
+  (`'tour'`). Each step names a control by selector; a HUD control the tour
+  points at keeps its id (`#btn-passes`, `#btn-module-explorer`,
+  `#btn-settings`, `#btn-about`) or `TOUR_STEPS` changes with it. A missing
+  target centres the card instead of failing.
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
@@ -308,7 +315,10 @@ landed through its own PR.
   fixed in inertial space, so scrubbing the orbit tape or running 300×
   swung the view around the station as its Earth-facing frame turned. The
   re-base follows `syncRenderedPoseToControls`' order: read the pose, adopt
-  the up, set the pose.
+  the up, set the pose. It carries the rendered AND the end pose and keeps the
+  `_isUserControlling*` flags (`carryControls`, same pattern as `rotateOrbit`):
+  carrying only the rendered pose reset the end pose every running frame, so
+  a wheel dolly while tracking stalled after one frame of smoothing.
 - While the clock is paused, `ISSGroup` propagates at the clock's time every
   frame (`OrbitalRenderInterpolator.snapTo`) and snaps the attitude
   (`AttitudeFollower.snap`): every scrub, nudge, Set time and Watch moves the

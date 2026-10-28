@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { cloudRotationAtEpoch } from './CloudMotion'
+import { useEarthDetailUpgrade } from './useEarthDetailUpgrade'
 import { EARTH_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import vertexShader from '../shaders/earthSurface.vert'
 import fragmentShader from '../shaders/earthSurface.frag'
@@ -80,6 +81,10 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
       uniformsRef.current.cloudTexelSize.value.set(1 / cloudImage.width, 1 / cloudImage.height)
     }
   }, [earthTextures.day, earthTextures.night, earthTextures.specular, earthTextures.clouds, gl])
+
+  // After first paint, capable desktops swap in the 8K day and night maps
+  // (KTX2, streamed and uploaded without a hitch); everyone else keeps 4K.
+  useEarthDetailUpgrade(uniformsRef.current)
 
   useFrame(() => {
     const simTime = simulationClock.now()

@@ -7,6 +7,7 @@ import { useLoadingStore } from '@/stores/loadingStore'
 import { RENDER_SCALES, type RenderScale } from '@/rendering/scene/renderScale'
 import { handleRadioGroupKeyDown, radioTabIndex } from './radioGroup'
 import { useOverlay } from '../overlay/useOverlay'
+import { ToolIcon } from './ToolIcon'
 
 const MODEL_OPTIONS: Array<{ value: IssModelQuality; label: string; hint: string }> = [
   { value: 'high', label: 'High fidelity', hint: 'IGOAL · animated' },
@@ -28,8 +29,8 @@ const ORBIT_LINE_VALUES = ORBIT_LINE_OPTIONS.map((option) => option.value)
 const RENDER_SCALE_VALUES = RENDER_SCALE_OPTIONS.map((option) => option.value)
 
 /**
- * SettingsGear — discreet render-settings access, parked in the top-right
- * corner cluster. Deliberately minimal: a gear that opens a small popover
+ * SettingsGear — render-settings access, last in the top-right tool row:
+ * a gear and a "Settings" label that open a small popover
  * with the ISS model selection, the orbit line, a Visuals section and the
  * render scale.
  */
@@ -66,18 +67,11 @@ export function SettingsGear(): JSX.Element {
         aria-keyshortcuts="G"
         data-overlay=""
         onClick={onTriggerClick}
-        className="hud-btn-gear"
-        style={{ color: isOpen ? 'var(--hud-hi)' : 'var(--hud-mid)' }}
+        className="hud-label hud-btn-text hud-tool"
+        style={{ color: isOpen ? 'var(--hud-hi)' : undefined }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="2" />
-          <path
-            d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
+        <ToolIcon name="settings" />
+        <span className="hud-tool__label">Settings</span>
       </button>
 
       {isOpen && (

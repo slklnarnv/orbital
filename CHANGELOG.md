@@ -14,6 +14,12 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- A short guided tour on the first visit, which spotlights each control in
+  turn; replay it from About or the `?` overlay.
+- Passes, Modules and Settings now sit together top right with icons and
+  labels. Modules (or `M`) works from anywhere: it flies to the station and
+  opens the module explorer on arrival.
+
 - Module explorer: in Inspect and close Follow, point at the station to
   identify a module, click it for a card with its agency, launch year, mass
   and purpose, explode the station into its parts, and focus the camera on
@@ -32,6 +38,10 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 - This changelog, and weekly Dependabot updates for npm and GitHub Actions
   (minor and patch grouped; the planned React, three, Vite and satellite.js
   majors held back).
+- Sharper Earth up close on desktops: a few seconds after the first frame,
+  computers that can hold it swap in 8K day and night-lights maps (NASA Blue
+  Marble and Black Marble, about 22 MB more, streamed without a stutter);
+  phones, tablets and Save-Data connections keep the 4K maps.
 - The site can be installed as an app, with its own icon and a dark title
   bar ([#39](https://github.com/slklnarnv/orbital/pull/39)).
 
@@ -58,13 +68,20 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   wide halo, faint six-point spikes) that fades and reddens as the sun sets
   behind Earth's limb or hides behind the station, and a red-to-gold
   sunrise band along the limb as it rises
-  ([#43](https://github.com/slklnarnv/orbital/pull/43)).
-
-### Changed
-
+  ([#43](https://github.com/slklnarnv/orbital/pull/43)); since toned down to a
+  crisp white disc with thinner spikes and no amber haze.
 - The quietest HUD text is brighter (4.7:1 contrast on black, up from 3.1:1),
   and reduced motion now also stills the station glint and the lens flare's
   ghosts ([#40](https://github.com/slklnarnv/orbital/pull/40)).
+
+### Fixed
+
+- The sun's glare stays on the sun during Locate and Reset flights instead
+  of sliding across the screen.
+- Bright reflections on the station no longer bloom into a white square.
+- Hiding the HUD (`H`) also hides the orbit line and the 3D ground track.
+- Mouse-wheel and pinch zoom work again while following the station with
+  the clock running (each tick had moved only about 1%).
 
 ## 2026-10-26
 

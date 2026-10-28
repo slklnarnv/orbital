@@ -4,10 +4,11 @@ import { moduleById } from '@/rendering/iss/moduleExplorer'
 import { useExplorerStore } from '@/stores/explorerStore'
 
 /**
- * ModuleExplorerPanel — the module explorer's control and info card
- * (plan 017 X1), parked on the left edge while the camera tracks the
- * station. Picking happens in the scene (ModuleExplorerLayer); the module
- * list here is the keyboard path to the same selection.
+ * ModuleExplorerPanel — the module explorer's info card (plan 017 X1),
+ * parked on the left edge while it is open. Its control is Modules in the
+ * top-right tool row (ModulesButton). Picking happens in the scene
+ * (ModuleExplorerLayer); the module list here is the keyboard path to the
+ * same selection.
  */
 export function ModuleExplorerPanel(): JSX.Element | null {
   const availability = useExplorerStore((state) => state.availability)
@@ -19,23 +20,7 @@ export function ModuleExplorerPanel(): JSX.Element | null {
   const { setOpen, select, setFocused, setExploded } = useExplorerStore.getState()
   const sorted = useMemo(() => [...ISS_MODULES].sort((a, b) => a.name.localeCompare(b.name)), [])
 
-  if (availability === 'hidden') return null
-
-  if (!open) {
-    return (
-      <div className="hud-explorer hud-text">
-        <button
-          id="btn-module-explorer"
-          type="button"
-          className="hud-label hud-btn-earth"
-          aria-expanded={false}
-          onClick={() => setOpen(true)}
-        >
-          Modules
-        </button>
-      </div>
-    )
-  }
+  if (availability === 'hidden' || !open) return null
 
   const selected = moduleById(selectedId)
   const hovered = hoveredId !== selectedId ? moduleById(hoveredId) : null

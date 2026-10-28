@@ -58,13 +58,13 @@ uniform float uEarthRadius;   // km
 const float PHOTOSPHERE = 30.0;
 
 // Core: an exponential that keeps the input >= ~5 (i.e. near the ceiling)
-// out to ~0.37 deg beyond the limb (a blown-out core ~2x the disc), and a
-// Lorentzian shoulder that carries the warm glow to where the overlay's halo
-// takes over.
-const float CORE_GAIN = 21.0;
-const float CORE_EFOLD = 0.0045;   // rad (~0.26 deg)
-const float SHOULDER_GAIN = 0.6;
-const float SHOULDER_WIDTH = 0.008; // rad (~0.46 deg)
+// out to ~0.2 deg beyond the limb (a blown-out core ~1.6x the disc), and a
+// Lorentzian shoulder that carries the glow to where the overlay's halo takes
+// over. (A 2x core with a 0.6 shoulder read as a big soft ball: 2026-10-28.)
+const float CORE_GAIN = 14.0;
+const float CORE_EFOLD = 0.0030;   // rad (~0.17 deg)
+const float SHOULDER_GAIN = 0.32;
+const float SHOULDER_WIDTH = 0.006; // rad (~0.34 deg)
 
 // White noise for the dither. The usual `fract(sin(dot(gl_FragCoord, k)) * s)`
 // hash is NOT usable here: at screen coordinates of ~5e4 the product exceeds

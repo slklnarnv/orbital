@@ -4,6 +4,9 @@ import fallback from '../../src/data/fallback-tle.json' with { type: 'json' }
 export interface StubOptions {
   /** `ok` serves the packaged TLE from /api/tle; `fail` answers 503. */
   tle?: 'ok' | 'fail'
+  /** Leave the first-visit tour on (it is marked seen by default, so its
+   *  modal never sits over another spec's clicks and keys). */
+  tour?: boolean
 }
 
 /**
@@ -13,6 +16,16 @@ export interface StubOptions {
  */
 export async function stubNetwork(page: Page, opts: StubOptions = {}): Promise<void> {
   const tle = opts.tle ?? 'ok'
+
+  if (!opts.tour) {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('orbital-tour-seen', '1')
+      } catch {
+        // No storage: the tour would show; the specs that care say so.
+      }
+    })
+  }
 
   await page.route('**/api/tle', (route) => {
     if (tle === 'fail') return route.fulfill({ status: 503, body: 'unavailable' })

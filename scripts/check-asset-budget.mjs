@@ -28,6 +28,12 @@ const deferredAssets = [
   { path: 'public/models/international_space_station.glb', maxBytes: 7 * MiB },
   { path: 'public/models/iss_igoal_locate.glb', maxBytes: 10 * MiB },
   { path: 'public/models/iss_igoal.glb', maxBytes: 35 * MiB },
+  // 8K Earth maps (plan 017 V2): KTX2 (day UASTC, night ETC1S), streamed after first paint on
+  // capable desktops only (src/rendering/earth/earthDetail.ts). Transfer is
+  // capped here; on the GPU each is 42.7 MiB as BC7 with mips, the same as
+  // the 4K RGBA8 map it replaces.
+  { path: 'public/textures/earth-day-8k.ktx2', maxBytes: 24 * MiB },
+  { path: 'public/textures/earth-night-8k.ktx2', maxBytes: 3 * MiB },
 ]
 const INITIAL_ASSET_BUDGET = 5 * MiB
 const MAX_IMAGE_BYTES = 2.5 * MiB
@@ -134,6 +140,13 @@ if (initialBytes > INITIAL_ASSET_BUDGET) {
 const issSource = await readFile(path.join(root, 'src/rendering/iss/ISSModel.tsx'), 'utf8')
 if (/useGLTF\.preload\(\s*(?:DETAILED_MODEL_URL|['"]\/models\/international_space_station\.glb['"])/.test(issSource)) {
   errors.push('the detailed ISS model must remain deferred, not preloaded at module scope')
+}
+
+// The 8K maps must stay deferred: never preloaded or loaded through
+// useTexture (which would put them behind the loading gate).
+const earthSource = await readFile(path.join(root, 'src/rendering/earth/EarthSurface.tsx'), 'utf8')
+if (/EARTH_8K_TEXTURES|8k\.ktx2/.test(earthSource)) {
+  errors.push('EarthSurface.tsx must not load the 8K maps directly; they stream via useEarthDetailUpgrade')
 }
 
 if (errors.length > 0) {

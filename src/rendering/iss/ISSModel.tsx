@@ -55,7 +55,6 @@ import React, {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { sunVisibility } from '@/core/orbital/SunVisibility'
@@ -66,8 +65,8 @@ import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
 import { countMissingTextures, createPreparationTarget, withPreparationTarget } from './detailPreparation'
-import { KTX2_TEXTURE_STALL_MS, guardLoadStall } from './loadStallGuard'
-import { BASIS_TRANSCODER_PATH, versionTranscoderUrl } from './basisTranscoderUrl'
+import { applyHighlightKneeTo } from './highlightKnee'
+import { ktx2LoaderFor } from './ktx2Loader'
 import { sharedJointStates } from './ISSRigAnimator'
 import {
   SHADOW_HALF_EXTENT,
@@ -103,48 +102,8 @@ const GLINT_COLOR_SHADOW = new THREE.Color('#6FAEE0')
 useGLTF.setDecoderPath('/draco/')
 
 // ─── KTX2 / Basis textures ───────────────────────────────────────────────────
-// The IGOAL assets ship GPU-compressed KTX2 (ETC1S) textures: ~4–8× less
-// texture memory than decoded WebP, transcoded in workers instead of decoded
-// on the main thread. The transcoder is self-hosted in public/basis/ (copied
-// from three/examples/jsm/libs/basis at the renderer's version), like Draco.
-// detectSupport picks the GPU format (BC / ETC / ASTC) per renderer, so the
-// loader is rebuilt if the renderer ever changes.
-//
-// The .js glue is not a plain copy: it is patched to never evaluate strings
-// (npm run patch:basis): the production CSP forbids it, and three's stock
-// copy hung every KTX2 load on the live site. Each texture load
-// is also stall-guarded, so a transcoder that never answers fails into the
-// reliability ladder instead of suspending the detail model forever.
-class StallGuardedKTX2Loader extends KTX2Loader {
-  override load(
-    url: string,
-    onLoad: (texture: THREE.CompressedTexture) => void,
-    onProgress?: (event: ProgressEvent) => void,
-    onError?: (error: unknown) => void,
-  ): void {
-    const guarded = guardLoadStall(onLoad, onError, KTX2_TEXTURE_STALL_MS, 'KTX2 texture')
-    super.load(url, guarded.onLoad, onProgress, guarded.onError)
-  }
-}
-
-// The transcoder files carry a content-hash query (basisTranscoderUrl.ts) via
-// the loader's own manager, so a changed transcoder reaches cached clients.
-const ktx2Manager = new THREE.LoadingManager()
-ktx2Manager.setURLModifier((url) => versionTranscoderUrl(url, __BASIS_ID__))
-
-let ktx2Loader: KTX2Loader | null = null
-let ktx2Renderer: THREE.WebGLRenderer | null = null
-
-function ktx2LoaderFor(gl: THREE.WebGLRenderer): KTX2Loader {
-  if (!ktx2Loader || ktx2Renderer !== gl) {
-    ktx2Loader?.dispose()
-    ktx2Loader = new StallGuardedKTX2Loader(ktx2Manager)
-      .setTranscoderPath(BASIS_TRANSCODER_PATH)
-      .detectSupport(gl)
-    ktx2Renderer = gl
-  }
-  return ktx2Loader
-}
+// The IGOAL assets ship GPU-compressed KTX2 (ETC1S) textures, loaded through
+// the shared, CSP-safe and stall-guarded loader in ktx2Loader.ts.
 
 // drei's GLTFLoader is three-stdlib's, whose typings declare their own
 // KTX2Loader class; three's loader is runtime-compatible (the GLTF parser only
@@ -370,7 +329,11 @@ class FallbackModelErrorBoundary extends Component<
 
 function FallbackISSModel(): JSX.Element {
   const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
-  const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
+  const fallbackScene = useMemo(() => {
+    const clone = fallbackGltf.scene.clone()
+    applyHighlightKneeTo(clone)
+    return clone
+  }, [fallbackGltf.scene])
   return (
     <primitive
       object={fallbackScene}
@@ -425,6 +388,9 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         object.receiveShadow = true
       }
     })
+    // Glints stay under the bloom threshold (highlightKnee.ts). Materials are
+    // shared through the GLTF cache, so this patches each one once.
+    applyHighlightKneeTo(clone)
     return clone
   }, [detailedGltf.scene])
   // Validated rig contract from the asset's scene extras (emitted by

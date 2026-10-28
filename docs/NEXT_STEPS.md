@@ -5,8 +5,64 @@
 > (see CLAUDE.md). Keep the Current state section fresh in the same commit as
 > behavior changes - never ship an errata banner, fix the stale text instead.
 
-## Current state (2026-10-26)
+## Current state (2026-10-28)
 
+- **HUD tools, tour, sun and glint polish (2026-10-28)**, from the owner's
+  live-site review:
+  - *Tool row*: Passes, Modules and Settings sit together top right, each a
+    line icon and a label (`ToolIcon.tsx`, `.hud-tool`); the bare gear and
+    the mid-left Modules button are gone. Modules (and the new `M` key)
+    works from anywhere: away from the station it Locates and the explorer
+    opens on arrival (`moduleExplorerControl.ts`, `pendingOpenAt` in
+    `explorerStore`; Reset view cancels it, and it lapses after 5 min).
+  - *Tour*: an eight-step guided tour (`src/ui/tour/`), offered once on the
+    first visit after the loading screen (`orbital-tour-seen` in
+    localStorage, failures read as unseen), replayable from About and the
+    `?` overlay. A spotlight ring dims the rest; the card goes below, above
+    or beside its control (`placeCard`). Modal overlay `'tour'`. The e2e
+    fixture and the bench mark it seen.
+  - *Glare aim*: the glare overlay was aimed in a priority-0 frame callback,
+    before Locate/Reset flights set the camera's orientation, so mid-flight
+    it sat up to 945 px from the sun ("the shiny ray moves down"). It is now
+    aimed in `onBeforeRender` with the drawing camera (0 px measured).
+  - *Sun*: a smaller blown core (~1.6x the disc), thinner, shorter spikes
+    widening with distance, a lower peak and a neutral white tint; no amber
+    veil.
+  - *Station glints*: a highlight knee (`highlightKnee.ts`) rolls every
+    station fragment off from 1.8 toward 2.3, under the 2.4 bloom threshold,
+    so a flat panel at its mirror angle can no longer bloom into a white
+    square. Shared materials and the explorer's highlight copies use one
+    program key (no extra compile).
+  - *Hide HUD* (`H`) now also hides the orbit line and the 3D ground track
+    (`hudStore.ts`); HUD-aware framing stops reserving HUD space.
+  - Radiators checked, no change: in daylight the TRRJ edge-on target moves
+    only a few degrees at the current beta angle, and in eclipse it holds.
+
+- **Wheel zoom while tracking fixed (2026-10-28)**: the station-locked carry
+  (2026-10-26 scrub fix) re-set camera-controls' pose with
+  `setLookAt(…, false)` every frame the clock ran, which also reset the end
+  pose a smoothed dolly eases toward: in Follow/Inspect each wheel tick moved
+  ~1% (ten ticks 352 → 328 km; found by the A.2 bench session).
+  `carryControls` now carries both poses and keeps the user-control flags,
+  like `rotateOrbit`. Test: a dolly under continuous carry reaches the same
+  distance as without (~102 km); the old one-pose carry stalls above 300 km.
+
+- **017 V2 8K Earth (2026-10-26)**: first paint keeps the 4K WebP maps;
+  ~2.5 s later, on capable desktops (`MAX_TEXTURE_SIZE` ≥ 8192, fine
+  pointer, no Save-Data, a GPU compressed format; `earthDetail.ts`) an 8K
+  day map (KTX2 / Basis **UASTC**, 20.5 MiB) and 8K night lights (ETC1S,
+  1.4 MiB) stream in, are uploaded at most 1 MiB per frame
+  (`progressiveUpload.ts`: one-call uploads stalled 27–45 ms per map) and
+  swap together; the 4K maps' GPU copies are then released. ETC1S was
+  tried for the day map (4.1 MiB) but left 4×4 block halos along every
+  coastline at orbital magnification. Sources are the NASA originals the 4K
+  maps came from (identified by RMSE: Blue Marble NG July 2004 topo-bathy,
+  Black Marble 2016), rebuilt by `npm run build:earth-8k` with pinned
+  SHA-256. The KTX2 loader moved to `src/rendering/iss/ktx2Loader.ts`
+  (shared). Captures: `docs/images/earth-8k-day.webp`,
+  `earth-8k-night.webp`. Bench: `npm run bench -- --earth-8k on|off`
+  measures the swap itself as `earth-8k-swap`; numbers in
+  `docs/bench/README.md`.
 - **A.2 bench harness (2026-10-26)**: `npm run bench` builds the app in bench
   mode (production bundle plus the `window.__orbital*` hooks, now exposed via
   `src/utils/debugHooks.ts` in dev and bench builds only), serves it with
@@ -330,15 +386,6 @@ The display, visuals and polish roadmap is **`plans/017-display-visuals-polish-r
 (2026-10-26: viewport audit at nine sizes, sun/cloud/orbit captures, code
 read). Its order, merged with the older items:
 
-0. **Wheel zoom while tracking (regression from the 2026-10-26 scrub fix).**
-   In Follow/Inspect with the clock running each wheel tick dollies ~1%
-   (352 → 328 km over ten ticks; paused, six ticks go 354 → 102 km). The
-   carry in `CameraController.tsx` fires every frame (`MIN_CARRY_ANGLE_RAD`
-   is 1e-7) and its `setLookAt(…, false)` resets camera-controls' end pose,
-   so a smoothed dolly keeps one frame of progress; it also clears the
-   `_isUserControlling*` flags (the trap HANDOFF documents for
-   `FreeOrbitControls`). Carry the end pose too, then add a regression test
-   (a wheel dolly while carrying reaches the same radius as without).
 1. ~~**017 R1–R7 — responsive display.**~~ Landed 2026-10-26 (see Current
    state). Follow-up only if wanted: a real-device pass on iOS Safari
    (address-bar collapse with `100dvh`, notch insets in landscape).
@@ -352,7 +399,8 @@ read). Its order, merged with the older items:
 4. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
    (ALL CAPS wordmark, blue limb, no new mark); I1/I2 landed 2026-10-26.
 5. **017 V3** — the sun landed 2026-10-26 (round glare, limb fade and
-   reddening, sunrise band); it awaits the owner's side-by-side with ISS
+   reddening, sunrise band) and was toned down 2026-10-28 after the owner
+   found it overdone; it awaits the owner's side-by-side with ISS
    photography at the limb.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
@@ -361,9 +409,9 @@ read). Its order, merged with the older items:
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
    (not the schematic) at Follow and the full model appears only below 200 km.
-7. **017 V2** (8K day/night as deferred KTX2 on capable desktops only; the A.2
-   baseline it is gated on landed 2026-10-26). A.2 leftovers: the flare and
-   300× rows, the leak check, and why Bloom off costs more GPU time than on.
+7. A.2 leftovers: the flare and 300× rows, the leak check, and why Bloom
+   off costs more GPU time than on. 017 V2 landed 2026-10-26; beyond 8K is
+   D.8 (GIBS tiles).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8. **017 X1**
    follow-ups if wanted: per-truss-segment entries (P4–P6 and S4–S6 are one
