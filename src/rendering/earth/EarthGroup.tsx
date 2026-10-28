@@ -1,11 +1,12 @@
 import type { JSX } from 'react'
-import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { EarthSurface } from './EarthSurface'
 import { CloudLayer } from './CloudLayer'
 import { AtmosphereShell } from './AtmosphereShell'
+import { LiveClouds } from './liveClouds'
 import { GroundTrack } from './GroundTrack'
 import { useHudStore } from '@/stores/hudStore'
 import { useSettingsStore } from '@/stores/settingsStore'
@@ -22,6 +23,13 @@ export function EarthGroup(): JSX.Element {
   const groundTrack = useSettingsStore((state) => state.groundTrack)
   // The 3D track and footprint are annotations: they hide with the HUD (`H`).
   const hudHidden = useHudStore((state) => state.hidden)
+  // Today's clouds (NOAA, hourly), shared by the cloud shell and the shadows.
+  const { gl } = useThree()
+  const clouds = useMemo(() => new LiveClouds(gl), [gl])
+  useEffect(() => {
+    clouds.start()
+    return () => clouds.dispose()
+  }, [clouds])
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -35,10 +43,10 @@ export function EarthGroup(): JSX.Element {
   return (
     <group ref={groupRef}>
       {/* 1. Solid Earth terrain with day/night texture blending and specular highlights */}
-      <EarthSurface />
+      <EarthSurface clouds={clouds} />
 
-      {/* 2. Slow-rotating cloud deck at 1.003× radius */}
-      <CloudLayer />
+      {/* 2. Cloud deck at 1.003× radius: live clouds, or the drifting composite */}
+      <CloudLayer clouds={clouds} />
 
       {/* 3. Outer atmospheric glowing shell at 1.025× radius */}
       <AtmosphereShell />

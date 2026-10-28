@@ -3,10 +3,12 @@ import type { ReactNode } from 'react'
 import { switchOverlay } from '../overlay/overlay'
 import { HudPanel } from '../overlay/HudPanel'
 import { useOverlay } from '../overlay/useOverlay'
+import { useCloudSourceStore } from '@/rendering/earth/liveClouds'
 
 // ─── About: what is real (roadmap 017 P, formerly B.7) ───────────────────────
-// Static content. The measured / illustrative split is the honest-instrument
-// rule stated in words; the credits follow NOTICE.md (keep the two in step).
+// The measured / illustrative split is the honest-instrument rule stated in
+// words; the credits follow NOTICE.md (keep the two in step). The clouds line
+// follows what is on screen: live (with its time) or the composite.
 
 const REPO_URL = 'https://github.com/slklnarnv/orbital'
 
@@ -22,10 +24,17 @@ const MEASURED = [
 const ILLUSTRATIVE = [
   'Attitude details: a nominal Earth-facing attitude, not attitude telemetry',
   'Solar array and radiator angles: a tracking law on the same geometry, not joint telemetry',
-  'Clouds: a NASA composite, not today’s weather',
   'Lens flare, bloom and the station’s glint',
   'Station size: drawn about 1,000× larger so it stays visible; Earth and distances are to scale',
 ]
+
+const CLOUDS_COMPOSITE = 'Clouds: a NASA composite, not today’s weather (live clouds have not loaded)'
+
+/** Live clouds: NOAA's infrared mosaic, hourly (rendering/earth/liveClouds.ts). */
+function cloudsLive(timeMs: number): string {
+  const hhmm = new Date(timeMs).toISOString().slice(11, 16)
+  return `Clouds: NOAA satellite infrared from ${hhmm} UTC, updated hourly; low ocean clouds are estimated and the polar caps are a NASA composite`
+}
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }): JSX.Element {
   return (
@@ -50,6 +59,7 @@ function List({ items }: { items: string[] }): JSX.Element {
  */
 export function AboutPanel(): JSX.Element {
   const { isOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('about', 'panel')
+  const liveTime = useCloudSourceStore((state) => state.liveTime)
 
   return (
     <>
@@ -92,10 +102,10 @@ export function AboutPanel(): JSX.Element {
             </p>
 
             <h3 className="hud-label hud-panel__section">Measured</h3>
-            <List items={MEASURED} />
+            <List items={liveTime === null ? MEASURED : [...MEASURED, cloudsLive(liveTime)]} />
 
             <h3 className="hud-label hud-panel__section">Illustrative</h3>
-            <List items={ILLUSTRATIVE} />
+            <List items={liveTime === null ? [...ILLUSTRATIVE.slice(0, 2), CLOUDS_COMPOSITE, ...ILLUSTRATIVE.slice(2)] : ILLUSTRATIVE} />
 
             <h3 className="hud-label hud-panel__section">Data and credits</h3>
             <ul className="hud-about__list">
@@ -112,6 +122,7 @@ export function AboutPanel(): JSX.Element {
               </li>
               <li>ISS model: NASA IGOAL and NASA 3D Resources</li>
               <li>Earth and sky: NASA Blue Marble, Black Marble, a NASA cloud composite and star map</li>
+              <li>Live clouds: NOAA Global Mosaic of Geostationary Satellite Imagery (GMGSI)</li>
               <li>Stars: the Yale Bright Star Catalogue; the Moon: NASA Lunar Reconnaissance Orbiter</li>
               <li>Close-up Earth imagery: NASA GIBS, streamed as you approach the ground</li>
               <li>Type: Space Grotesk by Florian Karsten and Chivo Mono by Omnibus-Type (SIL OFL 1.1)</li>

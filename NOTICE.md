@@ -14,6 +14,7 @@ in [`public/textures/README.md`](public/textures/README.md).
 | ISS two-line elements (packaged) | `src/data/fallback-tle.json` | CelesTrak, refreshed by `npm run refresh:tle` | Public domain |
 | Place names (countries, oceans, seas) | `src/data/place-index.json`, built by `scripts/build-place-index.mjs` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:50m admin-0 countries and marine polygons | Public domain |
 | City search (observer for visible passes) | `src/data/city-index.json`, built by `scripts/build-city-index.mjs` | [Natural Earth](https://www.naturalearthdata.com/) v5.1.2, 1:10m populated places | Public domain |
+| Live clouds | fetched hourly by `/api/clouds` (`api/clouds.ts`) and converted to a cloud map | NOAA [GMGSI](https://www.ospo.noaa.gov/Products/imagery/gmgsi/) longwave infrared, via the NOAA Open Data Dissemination program on AWS (`noaa-gmgsi-pds`) | Public domain (US Government work) |
 | Weather and timezone | fetched at runtime | [Open-Meteo](https://open-meteo.com/) | CC BY 4.0 (data), keyless |
 | ISS module facts (launch dates, agencies, masses) | `src/data/issModules.ts` | NASA [Station Assembly Elements](https://www.nasa.gov/international-space-station/international-space-station-assembly-elements/) and the element pages it links, read 2026-10-26; the purpose lines are our own wording | Facts; NASA material, generally not copyrighted |
 
@@ -73,6 +74,8 @@ modified versions not use the reserved names. See
 - [zustand](https://github.com/pmndrs/zustand) — MIT
 - [camera-controls](https://github.com/yomotsu/camera-controls) — MIT
 - [idb-keyval](https://github.com/jakearchibald/idb-keyval) — Apache-2.0
+- [h5wasm](https://github.com/usnistgov/h5wasm) (reads NOAA's NetCDF4 files in `/api/clouds`) — NIST software notice; developed by the National Institute of Standards and Technology. Bundles [HDF5](https://www.hdfgroup.org/) — BSD-style
+- [sharp](https://sharp.pixelplumbing.com/) (image encoding in `/api/clouds` and build scripts) — Apache-2.0
 - [Vite](https://vite.dev/), [TypeScript](https://www.typescriptlang.org/), [Vitest](https://vitest.dev/), [Tailwind CSS](https://tailwindcss.com/) — MIT (build-time)
 
 ## Trademarks

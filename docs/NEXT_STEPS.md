@@ -16,7 +16,9 @@
   SARJ/BGA/TRRJ driven by the pure, tested `ISSJointKinematics.ts`; a
   highlight knee keeps its glints under the bloom threshold.
 - **Earth and sky**: 4K WebP first paint, 8K KTX2 day and night maps streamed
-  in on capable desktops; bicubic clouds with near-deck detail and shadows;
+  in on capable desktops; today's clouds from NOAA's hourly infrared mosaic
+  (`/api/clouds`, crossfaded in; the NASA composite before it loads, near the
+  poles and as the fallback), bicubic with near-deck detail and shadows;
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
   Below ~4,500 km the ground near the view centre streams in from NASA GIBS
   (~2 km, then ~0.5 km per pixel below ~1,500 km; `surfaceDetail.ts`,
@@ -39,7 +41,7 @@
   (offline city search, Web Worker); module explorer (pick, explode, focus);
   orbit tape scrubbing with a station-locked camera; `H` hides the HUD, the
   orbit line and the 3D ground track.
-- **Gate**: `npm run verify` (708 unit tests on 2026-10-28) is the merge
+- **Gate**: `npm run verify` (724 unit tests on 2026-10-29) is the merge
   gate and the only CI job. The Playwright smoke + viewport suites
   (`npm run test:e2e`) run locally, by hand; `npm run bench` for measured perf
   (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 19
@@ -58,9 +60,11 @@
      precomputed-scattering model was weighed and not taken: ~100+
      exponentials per pixel over most of the frame does not fit the iGPU
      budget; revisit only with a measured reason.
-   - *Clouds*: soft cloud shadows on the ground at low sun (needs the sun
-     direction in the rotating deck frame), and same-day cloud imagery (GIBS
-     has daily true colour, but it carries its own clouds). A cloud rim past the terminator was tried (#53) and removed:
+   - *Clouds*: ~~today's clouds~~ landed 2026-10-29 (NOAA GMGSI, hourly,
+     `/api/clouds`). Still open: long cloud shadows at low sun (needs the sun
+     direction in the deck frame; live clouds no longer rotate, which makes
+     it simpler), and low cloud over land (infrared cannot tell it from the
+     ground by day, so it is left out). A cloud rim past the terminator was tried (#53) and removed:
      from the overview it drew a hard grey-orange stripe down the terminator.
      Any retry must be judged from the overview, not only close dusk views.
    - ~~*Surface up close*~~: landed with D.8 (GIBS imagery under the

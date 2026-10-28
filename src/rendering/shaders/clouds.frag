@@ -1,6 +1,10 @@
 precision highp float;
 
 uniform sampler2D cloudMap;
+// A newer live map fading in (liveClouds.ts), its u offset, and the fade.
+uniform sampler2D cloudMapB;
+uniform float cloudOffsetB;
+uniform float cloudBlend;
 uniform vec2 cloudTexelSize;
 uniform vec3 sunDirection;
 uniform float opacity;
@@ -21,7 +25,8 @@ void main() {
   // cloudDensity.glsl reconstructs magnified texels bicubically and adds the
   // close-range detail term; the surface shadows read the same function.
   float cloudDensity = cloudDensityAt(
-    cloudMap, vUv, 1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, CLOUD_DETAIL_MAX_OCTAVES
+    cloudMap, vUv, cloudMapB, vec2(vUv.x + cloudOffsetB, vUv.y), cloudBlend,
+    1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, CLOUD_DETAIL_MAX_OCTAVES
   );
 
   // Early discard of fully transparent pixels is NOT used here — it would

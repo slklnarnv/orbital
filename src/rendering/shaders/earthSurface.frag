@@ -4,6 +4,9 @@ uniform sampler2D dayMap;
 uniform sampler2D nightMap;
 uniform sampler2D specularMap;
 uniform sampler2D cloudMap;
+uniform sampler2D cloudMapB;    // a newer live map fading in (liveClouds.ts)
+uniform float cloudOffsetB;
+uniform float cloudBlend;
 uniform vec2 cloudTexelSize;
 uniform float cloudRotation;
 uniform vec3 sunDirection;    // world-space unit vector toward sun
@@ -149,7 +152,8 @@ void main() {
   // shell and only dims terrain by up to 18%, so finer octaves do not show.
   vec2 cloudUv = vec2(vUv.x - cloudRotation / TWO_PI, vUv.y);
   float cloudShadowDensity = cloudDensityAt(
-    cloudMap, cloudUv, 1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, 2
+    cloudMap, cloudUv, cloudMapB, vec2(cloudUv.x + cloudOffsetB, cloudUv.y), cloudBlend,
+    1.0 / cloudTexelSize, normalize(vCloudDir), cameraPosition, 2
   );
   float cloudShadowDay = smoothstep(0.04, 0.40, sunDot);
   float cloudTransmittance = 1.0 - cloudShadowDensity * cloudShadowDay * 0.18;

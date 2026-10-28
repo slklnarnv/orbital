@@ -4,6 +4,10 @@
     "api/tle.ts": {
       "maxDuration": 30,
       "supportsCancellation": true
+    },
+    "api/clouds.ts": {
+      "maxDuration": 60,
+      "includeFiles": "public/textures/{earth-clouds-4k,earth-specular-4k}.webp"
     }
   },
   "headers": [

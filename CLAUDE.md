@@ -31,11 +31,11 @@ Real-time ISS visualizer: public TLEs -> SGP4 (`satellite.js`) -> simulation
 advanced at 10 Hz by a runtime fully decoupled from React and WebGL ->
 interpolated into a React Three Fiber scene. React 19 (R3F 9, drei 10), TypeScript strict,
 Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
-`/api/tle` function).
+`/api/tle` and `/api/clouds` functions).
 
 ## Commands
 
-- `npm run dev` - Vite; serves `/api/tle` through the real handler
+- `npm run dev` - Vite; serves `/api/tle` and `/api/clouds` through the real handlers
 - `npm test` - Vitest watch
 - `npm run test:e2e` - Playwright smoke + viewport suites (production preview); local only, not in CI
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (CI does this
@@ -52,6 +52,8 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 
 - `api/tle.ts` - Vercel function; guarded (GET/HEAD only, query-refusal,
   warm memo + dedupe, stale-on-error)
+- `api/clouds.ts` - Vercel function, same guards: NOAA's hourly GMGSI infrared
+  mosaic -> the cloud map the app crossfades in (`liveClouds.ts`)
 - `src/core/` - simulation truth: clock, runtime, SGP4, telemetry manager,
   geo lookup, sun visibility / eclipse forecast / ground track, Moon ephemeris.
   No React, no three.
