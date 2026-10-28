@@ -47,6 +47,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Changed
 
+- Earth's limb reddens and darkens where its air passes into Earth's
+  shadow, following the real sun angle.
+
 - City lights up close resolve into points of light instead of glowing
   blocks; from afar they look as before.
 

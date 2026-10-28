@@ -8,6 +8,27 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Atmosphere: twilight from the sun path (2026-10-28)
+
+- **Before**: the limb's twilight colour was a rose/gold window and its night
+  fade a smoothstep, both on the fragment's own normal, so neither followed
+  the sun's actual angle to the air being drawn.
+- **Now** (`atmosphere.frag`): each fragment finds the air it shows (the view
+  ray's tangent point, or the ground point for rays that hit Earth) and the
+  height of the sunlight's grazing path to it (`sunPathHeight`, continuous
+  across the terminator). Its transmittance (`SunAppearance` constants) sets
+  the twilight hue where that path is below ~45 km; the shadow edge is
+  `smoothstep(-6, 14, hSunAir)`. The day-side limb keeps its calibrated
+  blue/white; the sunrise band is unchanged.
+- **Airglow removed** on the owner's review: a faint green band at 95 km in
+  tangent height, drawn where the air is shadowed, read as a drawn line
+  (an orbit-line look-alike) over dark ocean. Not to be re-added as a line.
+- **Rejected**: a precomputed-LUT or ray-marched scattering model (~100+
+  exponentials per pixel over most of the frame) for the iGPU budget.
+- **Cost**: ~30 ALU ops, a sqrt and four exp per atmosphere fragment.
+- Test: `AtmosphereTwilight.test.ts` (sun-path shadow edge, continuity and
+  sign of `sunPathHeight` via a JS mirror, no airglow).
+
 ## City lights up close (2026-10-28)
 
 - **Symptom**: at Follow distance the night side showed glowing rectangles.
