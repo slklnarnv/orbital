@@ -31,19 +31,40 @@ export const SHADOW_MAP_SIZE = 2048
 export function configureStationShadow(light: THREE.DirectionalLight): void {
   const shadow = light.shadow
   shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE)
-  const camera = shadow.camera
-  camera.left = -SHADOW_HALF_EXTENT
-  camera.right = SHADOW_HALF_EXTENT
-  camera.top = SHADOW_HALF_EXTENT
-  camera.bottom = -SHADOW_HALF_EXTENT
-  camera.near = SUN_LIGHT_DISTANCE - SHADOW_HALF_EXTENT - 20
-  camera.far = SUN_LIGHT_DISTANCE + SHADOW_HALF_EXTENT + 20
-  camera.updateProjectionMatrix()
+  setStationShadowExtent(light, SHADOW_HALF_EXTENT)
   // Tuned on the IGOAL asset under the app's lighting: no acne on the thin
   // array blankets or the curved modules, no visible peter-panning.
   shadow.bias = -0.0002
   shadow.normalBias = 0.05
   shadow.autoUpdate = false
+}
+
+/**
+ * Size the shadow box (±halfExtent km, depth range to match). Returns true
+ * when it changed, i.e. the cached map no longer matches and must be redrawn.
+ */
+export function setStationShadowExtent(light: THREE.DirectionalLight, halfExtent: number): boolean {
+  const camera = light.shadow.camera
+  if (camera.right === halfExtent) return false
+  camera.left = -halfExtent
+  camera.right = halfExtent
+  camera.top = halfExtent
+  camera.bottom = -halfExtent
+  camera.near = SUN_LIGHT_DISTANCE - halfExtent - 20
+  camera.far = SUN_LIGHT_DISTANCE + halfExtent + 20
+  camera.updateProjectionMatrix()
+  return true
+}
+
+/**
+ * Shadow half-extent for an exploded station: the box grows with the
+ * explode (every point sits at most 1 + factor·eased times as far out) in
+ * quarter steps, so an explode redraws the map four times rather than
+ * every frame, and the box always covers the station.
+ */
+export function explodedShadowHalfExtent(eased: number, factor: number): number {
+  const step = Math.ceil(Math.min(1, Math.max(0, eased)) * 4 - 1e-9) / 4
+  return SHADOW_HALF_EXTENT * (1 + factor * step)
 }
 
 /**

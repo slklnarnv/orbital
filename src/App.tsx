@@ -15,6 +15,7 @@ import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
 import { CameraCluster } from '@/ui/clusters/CameraCluster'
 import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
 import { OrbitTape } from '@/ui/clusters/OrbitTape'
+import { ModuleExplorerPanel } from '@/ui/clusters/ModuleExplorerPanel'
 import { LoadingScreen } from '@/ui/loading/LoadingScreen'
 
 /**
@@ -91,6 +92,7 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         <CameraCluster />
       </main>
 
+      <ModuleExplorerPanel />
       <ShortcutHelp />
     </>
   )

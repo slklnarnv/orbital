@@ -51,6 +51,7 @@ import {
   type RigMetadataParse,
 } from './ISSJointKinematics'
 import { RigAnimator, type RigConfig } from './ISSRigAnimator'
+import { explorerParked, explorerRuntime } from './explorerRuntime'
 
 const STATIC_CONFIG: RigConfig = {
   joints: [],
@@ -131,6 +132,9 @@ export function ISSAnimations({ rootRef, quality, active, rigMetadata, onError }
       epochMs: simTime.epochMs,
       wallDeltaSec: delta,
       nowWallMs: performance.now(),
+      // The module explorer's exploded view parks every joint.
+      parked: explorerParked(),
+      snap: explorerRuntime.reducedMotion,
     })
   })
 

@@ -7,6 +7,23 @@
 
 ## Current state (2026-10-26)
 
+- **017 X1 module explorer landed (2026-10-26)**: in Inspect and close
+  Follow (a visible IGOAL tier), a "Modules" control on the left edge opens
+  the explorer. Hover tints a module light blue, a click (or the module
+  list, for keyboards) selects it and opens a card: name, agency, launch
+  year, mass, history and purpose for 45 elements (`src/data/issModules.ts`,
+  launch dates and masses from NASA's station assembly element pages, masses
+  converted from the published pounds, "—" where NASA gives none).
+  "Explode" moves the 39 hub-level parts out along their centroid vectors
+  (×1.6 the distance, 1.4 s, eased) while every joint parks on its authored
+  angle at the 12°/s wall-clock cap; "Assemble" reverses it and the SARJs
+  glide back onto their sun target. "Focus camera" moves the tracked point
+  onto the module and keeps the eye outside the (exploded) clearance sphere.
+  Reduced motion jumps instead of animating. The module map is derived at
+  runtime from the batch names (no GLB rebuild); legacy and Model A say
+  "Not available on this model". Picking tests batches in bounding-sphere
+  order and stops at the first sure hit, so a hover pick touches one to
+  three of the 217 batches.
 - **017 R1–R7 responsive display landed (2026-10-26)**: measured with a
   viewport audit at ten sizes (360×640 to 3440×1440, overview and Follow,
   headless Edge on the owner's GPU). Before → after:
@@ -288,9 +305,12 @@ read). Its order, merged with the older items:
    scrub fps (the GPU was busy during the 2026-10-26 measurement).
 7. **A.2** measured perf baseline — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
-   satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
-   exploded module explorer (later). B.3 follow-ups if wanted: an observer
-   marker on the globe, pass magnitude.
+   satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8. **017 X1**
+   follow-ups if wanted: per-truss-segment entries (P4–P6 and S4–S6 are one
+   batch each, so splitting them needs a batching change in
+   `build-iss-model.mjs`), masses for the elements NASA's pages omit.
+   B.3 follow-ups if wanted: an observer marker on the globe, pass
+   magnitude.
 
 ## Roadmap (2026-10-04, after the gcdatlas comparison)
 

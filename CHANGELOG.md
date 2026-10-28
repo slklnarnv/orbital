@@ -14,6 +14,10 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- Module explorer: in Inspect and close Follow, point at the station to
+  identify a module, click it for a card with its agency, launch year, mass
+  and purpose, explode the station into its parts, and focus the camera on
+  one module ([#41](https://github.com/slklnarnv/orbital/pull/41)).
 - A render-scale setting (Auto, 100%, 75%, 50%) to trade sharpness for
   frame rate ([#42](https://github.com/slklnarnv/orbital/pull/42)).
 - Keyboard shortcuts with a `?` overlay: `Space`, `1`–`4`, `0`, `L`, `R`,

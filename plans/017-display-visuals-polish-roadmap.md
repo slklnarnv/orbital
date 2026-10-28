@@ -195,6 +195,9 @@ overlay. Static content, shares the overlay system with A1.
 
 ## X — Later: exploded view and module explorer
 
+**Status: X1 landed (2026-10-26)** — see `plans/PROGRESS.md` and
+`docs/NEXT_STEPS.md`.
+
 The IGOAL hierarchy names its modules and the batching keeps geometry per
 module, so per-module picking is possible. Needs:
 - a module data file (name, partner agency, launch year, mass, purpose);

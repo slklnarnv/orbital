@@ -16,6 +16,9 @@ import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
 import { easeInOutCubic } from '@/utils/math'
+import { explorerRuntime } from '@/rendering/iss/explorerRuntime'
+import { FocusTween, explorerMinDistanceKm, pointInAncestor } from '@/rendering/iss/moduleExplorer'
+import { ISS_MODEL_CLEARANCE_KM } from './CameraStateMachine'
 import { prefersReducedMotion } from '@/utils/reducedMotion'
 import type { CameraTransitionState } from '@/types/camera'
 
@@ -51,6 +54,9 @@ const _carryEye = new THREE.Vector3()
 const _carryTarget = new THREE.Vector3()
 const _carryUp = new THREE.Vector3()
 const _rollReference = new THREE.Vector3()
+const _trackPoint = new THREE.Vector3()
+const _focusGoal = new THREE.Vector3()
+const _focusWorld = new THREE.Vector3()
 
 /**
  * Longest a Locate waits at departure for the detail model to finish
@@ -131,6 +137,7 @@ export const CameraController = React.memo(function CameraController({
   const freeOrbitRef = useRef<FreeOrbitControls | null>(null)
   const freeZoomEntryRef = useRef<number | null>(null)
   const stationCarryRef = useRef(new StationFrameCarry())
+  const focusTweenRef = useRef(new FocusTween())
   // The framing the Reset View button measures against: the camera pose at first
   // mount, replaced by each completed Reset. Any user orbit, zoom, or pan
   // deviates from it and makes the button appear.
@@ -444,14 +451,26 @@ export const CameraController = React.memo(function CameraController({
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
     const stationCarry = stationCarryRef.current
+    const focusTween = focusTweenRef.current
     if (useCameraStore.getState().isTracking && !isTransitioning) {
+
+      // Module explorer focus (plan 017 X1): the tracked point eases from
+      // the station centre onto the focused module and rides with it — the
+      // point is read from this frame's explode pose and the station's
+      // current attitude, so it moves with the station as one body. With
+      // no focus the goal is the centre and this is plain tracking.
+      const anchor = explorerRuntime.focusAnchor
+      if (!anchor || !pointInAncestor(anchor.anchor, anchor.local, renderedISS, _focusGoal)) _focusGoal.set(0, 0, 0)
+      focusTween.sample(anchor ? anchor.moduleId : null, _focusGoal, delta, explorerRuntime.reducedMotion)
+      _focusWorld.copy(focusTween.current).applyQuaternion(renderedISS.quaternion)
+      _trackPoint.copy(_currentISSPos).add(_focusWorld)
 
       // Tracking can set the target directly; unlike a flight it has no
       // in-progress target interpolation to preserve.
       controls.moveTo(
-        _currentISSPos.x,
-        _currentISSPos.y,
-        _currentISSPos.z,
+        _trackPoint.x,
+        _trackPoint.y,
+        _trackPoint.z,
         false // Direct mutation, no slow transition interpolation
       )
 
@@ -474,6 +493,14 @@ export const CameraController = React.memo(function CameraController({
         )
       }
 
+      // Exploded or focused, the eye must stay outside the grown station:
+      // an orbit of this radius about the target encloses the clearance
+      // sphere. Both terms change smoothly, so the push-out is a glide.
+      const required = explorerMinDistanceKm(explorerRuntime.eased, focusTween.current.length())
+      if (required > ISS_MODEL_CLEARANCE_KM && controls.distance < required) {
+        void controls.dollyTo(required, false)
+      }
+
       // JITTER FIX: drei's CameraControls runs its own update at useFrame
       // priority −1, before this controller retargets at priority 0 (ISSGroup
       // has already moved the station at −2). Left to that schedule, the
@@ -485,6 +512,7 @@ export const CameraController = React.memo(function CameraController({
       controls.update(0)
     } else {
       stationCarry.reset()
+      focusTween.reset()
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────
