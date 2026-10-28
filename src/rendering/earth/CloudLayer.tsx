@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { CLOUD_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
-import { cloudRotationAtEpoch } from './CloudMotion'
+import { cloudRotationAtEpoch, liveCloudRotation } from './CloudMotion'
 import type { LiveClouds } from './liveClouds'
 import vertexShader from '../shaders/clouds.vert'
 import fragmentShader from '../shaders/clouds.frag'
@@ -85,8 +85,9 @@ export const CloudLayer = React.memo(function CloudLayer({ clouds }: { clouds: L
     // 1. Slow wind current drift (absolute rotation tied to simulation time).
     // Do not repeatedly integrate simDeltaMs here: the application runtime updates
     // it at 10 Hz while this render callback may read the same snapshot many times.
-    // Live clouds (once faded in) do not drift: they are where the satellites saw them.
-    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs))
+    // Live clouds sit where the satellites saw them at the present and drift
+    // away from there as the simulation leaves it.
+    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs), liveCloudRotation(simTime.epochMs, Date.now()))
     if (cloudMeshRef.current) cloudMeshRef.current.rotation.y = frame.rotationA
     const u = uniformsRef.current
     u.cloudMap.value = frame.mapA ?? cloudTexture

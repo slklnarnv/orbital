@@ -9,8 +9,10 @@ import { create } from 'zustand'
 // a quarter of the composite's), and crossfades it in over CLOUD_FADE_MS;
 // every CLOUD_REFRESH_MS it checks for a newer hour and fades that in the
 // same way. Until the first map arrives, and whenever the function fails,
-// the composite stays, drifting as before. Live clouds do not drift: they
-// are where the satellites saw them.
+// the composite stays, drifting as before. Live clouds sit where the
+// satellites saw them at the present and drift away from there as the
+// simulation leaves it (CloudMotion.liveCloudRotation): scrubbing the orbit
+// tape or speeding up time shows the deck travelling over the ground.
 //
 // The cloud shell and the surface shadows both sample through
 // cloudDensity.glsl and read the same frame state (`cloudFrame`), so the
@@ -25,11 +27,11 @@ const CLOUDS_URL = '/api/clouds'
 export interface CloudFrame {
   /** Map A: null means the packaged composite. */
   mapA: THREE.Texture | null
-  /** Rotation of map A about the pole (radians): the composite's drift, 0 when live. */
+  /** Rotation of map A about the pole (radians): the composite's or the live drift. */
   rotationA: number
   /** Map B, fading in over A (always live), or null. */
   mapB: THREE.Texture | null
-  /** Texture-u offset that puts unrotated B under A's rotated frame. */
+  /** Texture-u offset that puts B (live, with its own drift) in A's frame. */
   offsetB: number
   /** 0 → A only, 1 → B only. */
   blend: number
@@ -41,15 +43,15 @@ interface LiveCloudsState {
   fadeStart: number
 }
 
-/** Pure: the frame state for `now` (performance.now ms) and the composite's drift. */
-export function cloudFrame(state: LiveCloudsState, now: number, compositeRotation: number): CloudFrame {
-  const rotationA = state.current ? 0 : compositeRotation
+/** Pure: the frame state for `now` (performance.now ms) and each map's drift. */
+export function cloudFrame(state: LiveCloudsState, now: number, compositeRotation: number, liveRotation: number): CloudFrame {
+  const rotationA = state.current ? liveRotation : compositeRotation
   const t = state.next ? Math.min(1, Math.max(0, (now - state.fadeStart) / CLOUD_FADE_MS)) : 0
   return {
     mapA: state.current,
     rotationA,
     mapB: state.next,
-    offsetB: rotationA / (2 * Math.PI),
+    offsetB: (rotationA - liveRotation) / (2 * Math.PI),
     blend: t * t * (3 - 2 * t),
   }
 }
@@ -82,15 +84,15 @@ export class LiveClouds {
     this.schedule(CLOUD_FIRST_FETCH_DELAY_MS)
   }
 
-  frame(now: number, compositeRotation: number): CloudFrame {
-    const f = cloudFrame(this.state, now, compositeRotation)
+  frame(now: number, compositeRotation: number, liveRotation: number): CloudFrame {
+    const f = cloudFrame(this.state, now, compositeRotation, liveRotation)
     if (this.state.next && f.blend >= 1) {
       release(this.state.current)
       this.state.current = this.state.next
       this.currentTime = this.nextTime
       this.state.next = null
       useCloudSourceStore.setState({ liveTime: this.currentTime })
-      return cloudFrame(this.state, now, compositeRotation)
+      return cloudFrame(this.state, now, compositeRotation, liveRotation)
     }
     return f
   }
