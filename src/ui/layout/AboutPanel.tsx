@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import type { ReactNode } from 'react'
 import { switchOverlay } from '../overlay/overlay'
 import { HudPanel } from '../overlay/HudPanel'

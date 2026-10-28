@@ -21,7 +21,6 @@
 // a per-model pre-rotation constant (MODEL_PRE_ROTATION) applied on the
 // model's own subtree, so this file never cares which GLB is loaded.
 
-import type { JSX } from 'react'
 import { useRef, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -74,7 +73,7 @@ const _targetQuat = new THREE.Quaternion()
  *   OrbitLine is mounted at the scene root in SceneRoot.tsx instead.
  */
 interface ISSGroupProps {
-  groupRef: RefObject<THREE.Group | null>
+  groupRef: RefObject<THREE.Group>
 }
 
 export function ISSGroup({ groupRef }: ISSGroupProps): JSX.Element {

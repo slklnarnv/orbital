@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { sampleGroundTrack } from '@/core/orbital/GroundTrack'

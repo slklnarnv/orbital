@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import React, { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'

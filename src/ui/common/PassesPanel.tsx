@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react'
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { usePassStore, type ObserverLocation } from '@/stores/passStore'

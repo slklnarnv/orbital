@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 interface HudGaugeProps {
   label: string
   value: string

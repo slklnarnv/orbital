@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { formatUtcClockParts } from '@/utils/formatters'
 import { TimeControls } from '@/ui/clusters/TimeControls'

@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { useExplorerStore } from '@/stores/explorerStore'
 import { toggleModuleExplorer } from '../clusters/moduleExplorerControl'
 import { ToolIcon } from './ToolIcon'

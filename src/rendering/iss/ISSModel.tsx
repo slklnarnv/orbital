@@ -42,7 +42,6 @@
 //   - Detail is requested on Locate intent or near-range entry, never at startup.
 //   - GPU preparation finishes before Locate moves the camera.
 
-import type { JSX } from 'react'
 import React, {
   Component,
   Suspense,

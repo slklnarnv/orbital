@@ -96,7 +96,7 @@ function initialRollErrorRad(view: THREE.Vector3, up: THREE.Vector3): number {
 
 
 interface CameraControllerProps {
-  issGroupRef: RefObject<THREE.Group | null>
+  issGroupRef: RefObject<THREE.Group>
 }
 
 export const CameraController = React.memo(function CameraController({
