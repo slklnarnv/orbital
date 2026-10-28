@@ -15,6 +15,7 @@
     "build:earth-8k": "node scripts/build-earth-8k.mjs",
     "build:places": "node scripts/build-place-index.mjs",
     "build:cities": "node scripts/build-city-index.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
     "patch:basis": "node scripts/patch-basis-transcoder.mjs",
     "preview": "vite preview",
     "bench": "node scripts/bench/bench.mjs",

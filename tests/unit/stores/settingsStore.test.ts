@@ -53,4 +53,12 @@ describe('sanitizePersistedSettings', () => {
   it.each([null, undefined, 'string', 3, [1, 2]])('returns nothing for non-object input %j', (value) => {
     expect(sanitizePersistedSettings(value)).toEqual({})
   })
+
+  it('keeps a known render scale, drops anything else, and defaults to auto', () => {
+    expect(sanitizePersistedSettings({ renderScale: 0.75 })).toEqual({ renderScale: 0.75 })
+    expect(sanitizePersistedSettings({ renderScale: 'auto' })).toEqual({ renderScale: 'auto' })
+    expect(sanitizePersistedSettings({ renderScale: 3 })).toEqual({})
+    expect(sanitizePersistedSettings({ renderScale: '0.5' })).toEqual({})
+    expect(useSettingsStore.getState().renderScale).toBe('auto')
+  })
 })

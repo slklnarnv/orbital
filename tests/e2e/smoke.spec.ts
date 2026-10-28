@@ -62,7 +62,7 @@ test('Locate reaches Follow · Locked', async ({ page }) => {
   test.setTimeout(360_000)
   await bootLive(page)
   await clickByCoordinates(page, page.locator('#btn-locate-iss'))
-  await expect(page.locator('[role="status"]').first()).toHaveText(/Follow\s*·\s*Locked/, {
+  await expect(page.locator('.hud-camera__status')).toHaveText(/Follow\s*·\s*Locked/, {
     timeout: 270_000,
   })
 })
@@ -133,4 +133,108 @@ test('TLE failure degrades gracefully', async ({ page }) => {
   await expect(modeLabel(page, /^(Cached|Recovery|Fallback)$/)).toBeVisible({ timeout: 45_000 })
   await expect(modeLabel(page, /^Live$/)).toHaveCount(0)
   expect(errors.filter((e) => e.startsWith('pageerror'))).toEqual([])
+})
+
+// ─── Keyboard, overlays and About (roadmap 017 A1–A3, P) ────────────────────
+
+test('? opens the shortcut overlay; Escape closes it', async ({ page }) => {
+  await bootLive(page)
+  await focusBody(page)
+  await page.keyboard.press('Shift+Slash')
+  const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  await expect(help).toBeVisible()
+  await expect(help).toBeFocused()
+  for (const label of ['Pause or resume', 'Locate the ISS', 'Reset to the Earth overview', 'Run at 300×', 'Return to live time', 'Visible passes', 'Render settings']) {
+    await expect(help.getByText(label, { exact: true })).toBeVisible()
+  }
+  // Modal: other shortcuts pause while it is open.
+  await page.keyboard.press('Space')
+  await expect(page.locator('button[aria-label="Pause time"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(help).toHaveCount(0)
+})
+
+test('rate and live shortcuts drive the transport', async ({ page }) => {
+  await bootLive(page)
+  await focusBody(page)
+  await page.keyboard.press('4')
+  await expect(page.locator('button[aria-label="Time rate 300×"]')).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('0')
+  await expect(page.locator('button[aria-label^="Live"]')).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('shortcuts never fire while typing in the place search', async ({ page }) => {
+  await bootLive(page)
+  await focusBody(page)
+  await page.keyboard.press('p')
+  const search = page.getByRole('combobox', { name: 'Observer location' })
+  await expect(search).toBeFocused()
+  await page.keyboard.type('h 1 g0')
+  await expect(search).toHaveValue('h 1 g0')
+  await expect(page.locator('html')).not.toHaveClass(/hud-hidden/)
+  await expect(page.locator('button[aria-label^="Live"]')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('dialog', { name: 'Render settings' })).toHaveCount(0)
+  // Escape still closes, and focus returns to the Passes trigger.
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Visible passes' })).toHaveCount(0)
+  await expect(page.locator('button[aria-label="Visible passes"]')).toBeFocused()
+})
+
+test('G opens settings and Escape returns focus to the gear', async ({ page }) => {
+  await bootLive(page)
+  await focusBody(page)
+  await page.keyboard.press('g')
+  const dialog = page.getByRole('dialog', { name: 'Render settings' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator(':focus')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('#btn-settings')).toBeFocused()
+})
+
+test('About shows what is real, credits and the build, and links to the shortcuts', async ({ page }) => {
+  await bootLive(page)
+  await clickByCoordinates(page, page.getByRole('button', { name: 'About', exact: true }))
+  const about = page.getByRole('dialog', { name: 'About Orbital' })
+  await expect(about).toBeVisible()
+  for (const text of ['Measured', 'Illustrative', 'Data and credits', 'CelesTrak', 'Natural Earth', 'Open-Meteo']) {
+    await expect(about.getByText(text, { exact: true }).first()).toBeVisible()
+  }
+  await expect(about.getByText(/^Build \S+$/)).toBeVisible()
+  await about.getByRole('button', { name: /Keyboard shortcuts/ }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+  await expect(about).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'About', exact: true })).toBeFocused()
+})
+
+test('skip link, scene summary and a focus ring on every control', async ({ page }) => {
+  await bootLive(page)
+  await focusBody(page)
+  await page.keyboard.press('Tab')
+  const skip = page.getByRole('link', { name: 'Skip to time and camera controls' })
+  await expect(skip).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#hud-main')).toBeFocused()
+
+  await expect(page.locator('#scene-summary')).toHaveText(/^The ISS (is|position)/)
+  await expect(page.getByRole('img', { name: /3D view of Earth/ })).toHaveAttribute('aria-describedby', 'scene-summary')
+
+  // Tab through the whole HUD; every stop must draw a visible outline.
+  await focusBody(page)
+  const unringed: string[] = []
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press('Tab')
+    const info = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null
+      if (!el || el === document.body) return null
+      const style = getComputedStyle(el)
+      const name = el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName
+      return { name, ringed: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0 }
+    })
+    if (info === null) break
+    if (!info.ringed) unringed.push(info.name)
+  }
+  expect(unringed).toEqual([])
 })

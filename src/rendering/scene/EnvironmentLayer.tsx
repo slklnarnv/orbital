@@ -7,8 +7,10 @@ import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { SUN_LIGHT_DISTANCE, SUN_LIGHT_NAME } from '../iss/stationShadow'
 import { SUN_BILLBOARD_DISTANCE_KM } from '@/utils/constants'
 import { assetUrl } from '@/utils/assetUrl'
-import billboardVert from '../shaders/billboard.vert'
+import sunVert from '../shaders/sun.vert'
 import sunFrag from '../shaders/sun.frag'
+import { SunGlare } from './SunGlare'
+import { DARK_SKY_EXPOSURE, SUN_EXPOSURE_DROP } from './sunGlareConfig'
 
 // ─── Preload Starmap Texture at Module Scope ─────────────────────────────────
 // Pre-warms the new high-quality starmap immediately on page startup
@@ -19,6 +21,7 @@ useTexture.preload(STARMAP_URL)
 // Reused every frame inside useFrame; never re-allocated after module init.
 const _sunDirVec = new THREE.Vector3()
 const _cameraDir = new THREE.Vector3()
+const _sunPoint = new THREE.Vector3()
 
 // ─── Starmap Sphere Orientation Constants ─────────────────────────────────────
 // Orients the NASA starmap panorama so the galactic plane runs at a natural
@@ -96,6 +99,11 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
   const sunLightRef = useRef<THREE.DirectionalLight>(null)
   const sunMeshRef = useRef<THREE.Mesh>(null)
 
+  // The camera point-spread function around the sun: the billboard's core
+  // uniforms, the screen-space halo/spikes overlay and the occlusion probe.
+  const glare = useMemo(() => new SunGlare(), [])
+  useEffect(() => () => glare.dispose(), [glare])
+
   // Load the runtime-sized starmap as a subtle astrophotography backdrop
   const starmapTex = useTexture(STARMAP_URL)
 
@@ -131,15 +139,13 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     const light = sunLightRef.current
     light.position.copy(light.target.position).addScaledVector(_sunDirVec, SUN_LIGHT_DISTANCE)
 
+    // The sun billboard's point along the sun direction. The lens flare, the
+    // glare overlay and the atmosphere's sunrise band all aim at this same point.
+    _sunPoint.set(sunDir.x, sunDir.y, sunDir.z).multiplyScalar(SUN_BILLBOARD_DISTANCE_KM)
+
     // Position and orient the procedural sun billboard
     if (sunMeshRef.current) {
-      // Place the sun billboard along the sun direction (the lens flare aims at this same point)
-      const sunBillboardDist = SUN_BILLBOARD_DISTANCE_KM
-      sunMeshRef.current.position.set(
-        sunDir.x * sunBillboardDist,
-        sunDir.y * sunBillboardDist,
-        sunDir.z * sunBillboardDist
-      )
+      sunMeshRef.current.position.copy(_sunPoint)
       sunMeshRef.current.lookAt(state.camera.position)
 
       // Dynamically scale the sun billboard to maintain a constant apparent angular size.
@@ -165,12 +171,18 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     state.camera.getWorldDirection(_cameraDir)
     const cameraSunDot = _cameraDir.dot(_sunDirVec) // -1.0 (looking away) to 1.0 (looking at sun)
 
-    // Blinding sun adjusts exposure down to 0.75; dark space boosts it up to 1.05
+    // Blinding sun adjusts exposure down to 0.75; dark space boosts it up to 1.05.
+    // Only a sun that is actually seen counts: behind the Earth or the
+    // station it no longer stops the camera down (SunGlare.measure).
+    const sunVisibility = glare.measure(state.camera, _sunPoint, delta)
     const sunAlignment = Math.max(0.0, cameraSunDot)
-    const targetExposure = 1.05 - 0.30 * Math.pow(sunAlignment, 2.0)
+    const targetExposure = DARK_SKY_EXPOSURE - SUN_EXPOSURE_DROP * Math.pow(sunAlignment, 2.0) * sunVisibility
 
     // Smoothly interpolate the renderer's exposure using dynamic temporal damping
     gl.toneMappingExposure = THREE.MathUtils.damp(gl.toneMappingExposure, targetExposure, 4.0, delta)
+
+    // Scale the glare by the exposure just chosen and aim the overlay/probe.
+    glare.apply(state.camera as THREE.PerspectiveCamera, _sunPoint, gl.toneMappingExposure, gl.domElement.height)
   })
 
   return (
@@ -196,14 +208,23 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
       <mesh ref={sunMeshRef} renderOrder={2}>
         <planeGeometry args={[110000, 110000]} />
         <shaderMaterial
-          vertexShader={billboardVert}
+          vertexShader={sunVert}
           fragmentShader={sunFrag}
+          uniforms={glare.billboardUniforms}
           transparent={true}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           depthTest={true}
         />
       </mesh>
+
+      {/* ─── Sun glare: halo + diffraction spikes, and the occlusion probe ───
+          The overlay (renderOrder 3) has no depth test: lens glare lies over
+          everything in the frame. The probe draws no colour; an occlusion
+          query on it tells the glare when the station hides the sun.
+          SunGlare owns and disposes both (dispose={null}). */}
+      <primitive object={glare.overlay} dispose={null} />
+      <primitive object={glare.probeMesh} dispose={null} />
 
       {/* ─── Layered Starfield System (THREE.Points) ─── */}
       {/* renderOrder=1: renders AFTER the starmap sphere but BEFORE the sun billboard.

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { earthMaskRadius } from '@/rendering/post/SunFlare'
+import { earthMaskRadius, viewOffsetNdc } from '@/rendering/post/SunFlare'
 
 describe('earthMaskRadius', () => {
   const angEarth = 0.5
@@ -24,5 +24,26 @@ describe('earthMaskRadius', () => {
 
   it('is 0 for a degenerate field of view', () => {
     expect(earthMaskRadius(-10, angEarth, 0)).toBe(0)
+  })
+})
+
+describe('viewOffsetNdc', () => {
+  it('is zero without an enabled view offset', () => {
+    expect(viewOffsetNdc(null, { x: 1, y: 1 })).toEqual({ x: 0, y: 0 })
+    expect(viewOffsetNdc({ enabled: false, fullWidth: 360, fullHeight: 640, offsetX: 0, offsetY: 60 }, { x: 1, y: 1 }))
+      .toEqual({ x: 0, y: 0 })
+  })
+
+  it('matches the projection three.js builds for a shifted window', async () => {
+    const THREE = await import('three')
+    const camera = new THREE.PerspectiveCamera(45, 360 / 640, 1, 1000)
+    const point = new THREE.Vector3(3, -7, -100)
+    const plain = point.clone().project(camera)
+    camera.setViewOffset(360, 640, 0, 60, 360, 640)
+    const shifted = point.clone().project(camera)
+    const ndc = viewOffsetNdc(camera.view, { x: 0, y: 0 })
+    expect(shifted.x).toBeCloseTo(plain.x + ndc.x, 9)
+    expect(shifted.y).toBeCloseTo(plain.y + ndc.y, 9)
+    expect(ndc.y).toBeGreaterThan(0)
   })
 })

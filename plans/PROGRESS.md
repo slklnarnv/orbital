@@ -78,6 +78,182 @@
   zooms. Open in NEXT_STEPS (item 0).
 - Tests: `benchStats.test.ts` (percentiles, frame and GPU summaries, the
   counter parser, CPU contention sums, process-tree walk).
+
+## 017 V3 the sun (2026-10-26)
+
+- **Before.** A ~15 px disc with a faint amber haze, kept under the bloom
+  threshold (UnrealBloom's 1/16 mip squares a compact HDR disc); next to the
+  limb it read as a bright star, and its haze stayed above the limb after
+  the disc had set.
+- **Glare = a camera PSF in two scene layers** (`SunGlare.ts`). The
+  billboard (`sun.vert`/`sun.frag`) draws the photosphere and a blown-out
+  core ~2x the disc through one soft knee `K(1 - exp(-x/K))`, K = 2.0,
+  depth-tested. A screen-space quad (`sunGlare.vert`/`.frag`, clip-space,
+  no depth test, renderOrder 3) draws the halo (Lorentzian, slope 0.55) and
+  six-blade diffraction spikes fixed to the screen, capped by `min(1, ·)`
+  at GLARE_PEAK 0.35. Budget `2.0 + 0.35 x 1.04 + dither < 2.4`
+  (`SunGlareBudget.test.ts`). Scene meshes, so Bloom off has no new pass.
+- **What fades it.** `SunAppearance.apparentSunFlux`: the rendered disc
+  (0.33° radius, `SUN_DISC_RADIUS_RAD`) integrated in 24 rows through the
+  atmosphere toward the billboard — transmittance `exp(-tau e^(-h/8 km))`,
+  tau (4, 8, 16) at tangent height 0 — so it reddens and dims over ~1° of
+  sun elevation, ~15 s of real time. The photosphere uses the same
+  transmittance per pixel. An `ANY_SAMPLES_PASSED_CONSERVATIVE` query on a
+  probe disc (inner 60% of the sun) hides the glare behind the station
+  (damped at 30/s); checked with the sun behind the Lab module (glare 0)
+  and just past an array edge (full, spikes over the array). The exposure
+  ratio (`exposure / 1.05`) scales both layers, and the exposure now drops
+  only for the visible sun (`× sunGlareState.visibility`).
+- **Sunrise band** (`atmosphere.frag`, gated by `limbProximity`, 1 at or
+  behind the limb, 0 from 10° above): forward scattering toward the
+  billboard (HG g 0.9 + 0.6), lit by sunlight reddened along its own
+  grazing path (`hSun`; zero in Earth's shadow), density e-fold 12 km; the
+  limb thread near the sun takes that light's hue. Folded into
+  `(atmoColor, alpha)` so the composer gets exactly `c·a + glow`. The old
+  "forward scatter" rim term was a sun-behind-the-viewer term; its comments
+  now say so (code unchanged).
+- **Lens flare.** Default stays off (ghosts are an optional camera artefact,
+  composer-only, and the glare now carries the "blinding" read). Its halo is
+  gone (it doubled the glare) and it uses the glare's visibility gate
+  instead of its own Earth-only penumbra.
+- **Checked.** Captures, 1280×720, dev build, Edge on the integrated AMD GPU,
+  Bloom on and off: open space, 3° above, grazing, 1° and 4° behind, plus a
+  limb sweep from +6° to −5° (`docs/images/sun-before-after.webp`). With the
+  sun behind the camera, before and after frames are pixel-identical in both
+  pipelines apart from the orbit line and station marker, which also differ
+  between two runs of the old code. GPU timer queries, 1920×1080 (GPU shared
+  with another process, so provisional): overlay 0.37 ms Bloom on (4× MSAA
+  HalfFloat), 0.11–0.14 ms off; 0.24 / 0.08 ms at 1280×720; billboard
+  0.01–0.03 ms; probe ≈ 0; sunrise branch +0.01–0.02 ms. Tests:
+  `SunAppearance.test.ts`, `SunGlareBudget.test.ts`.
+- **Open.** Owner sign-off against ISS photography at the limb.
+
+## 017 X1 module explorer (2026-10-26)
+
+- **Module map.** Derived at runtime, no asset change: a batch's module is
+  its `<module>.batch.<material>` prefix (from `userData.name`; GLTFLoader
+  strips the dots from `name`), else its nearest catalogued ancestor
+  (camera batches → Kibo, the mobile servicing system). Both IGOAL assets
+  map all 176/217 batches onto the 45 catalogue entries
+  (`ModuleExplorer.test.ts`). Rotating parts are their own entries (array
+  wing pairs, the two radiators) apart from their truss.
+- **Explode.** The 39 hub children move along (centroid − station
+  centroid) × 0.6 in the hub frame; only translations of hub children are
+  written, so joint frames and pivots are untouched. Exploded, the farthest
+  accessor-box corner stays inside 70 × 1.6 km (tested on both assets);
+  the camera floor, the eye push-out and the shadow box (quarter steps,
+  four redraws per explode) grow by the same factor. Joints park at 0 under
+  the 12°/s cap and rejoin with the cap plus the target's own rate, so the
+  SARJs converge at 300× too (`RigFrame.parked/snap`).
+- **Highlight.** Material-reference swaps on the clone to cached emissive
+  copies (same program, no compile, geometry unchanged, so the cached
+  shadow stays valid); the glint blue, since a white tint vanished on the
+  daylit modules; others dim while one is selected.
+- **Camera.** `CameraController` tracks station + `FocusTween` point (read
+  from the current explode pose through local transforms, the station's
+  current attitude) before its `update(0)`; the eye is pushed out to
+  clearance(explode) + |focus offset| each frame. Not a flight, so no
+  takeover sync is needed.
+- **Captured** in headless Edge on the owner's GPU (dev build): hover,
+  card, exploding, exploded, focused, assembled, "not available" at 3,250 km.
+
+## 017 R1–R7: responsive display (2026-10-26)
+
+- **Audit** (scratch Playwright script, headless Edge on the owner's GPU,
+  ten sizes, overview + Follow, station box from the dev hooks). Before:
+  landscape-phone HUD 77% / 84% of the height; the station under the clock
+  in Follow at four phone sizes; six text styles at 7–8.5 px; every control
+  under 44 px. After: 26% / 28%; the station clear of every cluster at all
+  ten sizes; nothing below 9 px; no coarse target below 44 px; no
+  overlapping hit areas; nothing off-screen; no horizontal scroll.
+- **R1** `@media (max-height: 500px)`: one bottom row, thin tape (its hit
+  area runs under the row; the row passes touches through except on
+  buttons), camera control left of Passes + gear in one top row.
+- **R2** `HudAwareFraming.tsx` + pure `hudFraming.ts`: target shift = the
+  centre of the band no HUD box covers within the centred 50% column,
+  clamped to ±25% of the height; eased (τ 0.12 s) while tracking or flying
+  to Follow, 0 under `H`. `camera.setViewOffset` at `FRAME_PRIORITY.viewOffset`
+  (−1); the pose and frame order are untouched. `SunFlare` adds
+  `viewOffsetNdc`, so the flare stays on the sun billboard.
+- **R3** `--hud-fs-micro` / `--hud-fs-place` clamp() tokens; **R4**
+  coarse-pointer block (padding + negative margin; 16 px inputs against iOS
+  focus zoom); touch tablets in portrait take the stacked composition (the
+  44 px transport row did not fit between the corner instruments at 768).
+- **R5** `--hud-zoom` steps and an ultrawide `--hud-gutter` (CSS `zoom` keeps
+  percentages and centring, and scales lengths; checked in Edge).
+- **R6** `renderScale` setting (persisted, sanitized); `AdaptiveDpr` pins and
+  re-creates the governor. Checked: 50% on a DPR-3 phone → a 360 px canvas
+  at 360 CSS px; Auto → 720.
+- **R7** `tests/e2e/viewport.spec.ts`; `E2E_DEV=1` serves the dev server so
+  the station-framing check can read the scene hooks.
+- Tests: `hudFraming.test.ts`, `renderScale.test.ts`, `viewOffsetNdc`
+  (matches three's projection), `renderScale` in `settingsStore.test.ts`.
+
+## 017 A1–A4 + P: keyboard, screen readers, About (2026-10-26)
+
+- **Shortcuts.** `src/ui/shortcuts/shortcutRegistry.ts` (pure, unit-tested)
+  + `useShortcuts` (the one global keydown handler; `useHudVisibility` and
+  the Space effect in `TimeControls` folded in). Keys: Space, 1–4, 0, L, R,
+  H, P, G, ?, Esc. Rules: never while typing (Escape excepted), never with
+  Ctrl/Cmd/Alt, Space yields to activatable controls, repeats swallowed,
+  the help overlay is modal (only ? and Esc). Letters match `key`; `code`
+  only when the layout typed no ASCII character (Dvorak-safe, Cyrillic
+  works). `findConflicts` also guards the keys controls own (tape arrows,
+  radio arrows, Enter, Tab).
+- **Overlay system.** `src/ui/overlay/` — `overlay.ts` store (one open at a
+  time, `switchOverlay` chains About → help and returns focus to About),
+  `useOverlay` (trigger registration, keyboard-open focus-in, outside
+  pointerdown closes without stealing focus), `HudPanel` (titled dialog,
+  Tab trap when modal). Settings, Passes and Set time moved onto it; their
+  three copies of the outside-click/Escape effect are gone.
+- **Screen readers.** Skip link → `#hud-main`; canvas wrapper `role="img"`
+  described by `#scene-summary` (`sceneSummary.ts`, whole minutes); polite
+  `SceneAnnouncer` (camera mode after 1.2 s settle, sunlit flips, silent when
+  accelerated). The camera status label lost `role="status"` (it announced
+  every Locked/Free flip); the smoke spec selects `.hud-camera__status`.
+- **Contrast/motion.** `--hud-lo` 0.38 → 0.5 (3.1 → 4.7:1 on `--space`;
+  `HudContrast.test.ts`). Measured in Edge, worst background pixel under each
+  `--hud-lo` line: overview 4.4–4.7:1 except the tape period over the orbit
+  ring (2.1:1); Follow at the limb 1.6–4.7:1. `prefersReducedMotion()`
+  (`src/utils/reducedMotion.ts`) now gates the glint pulse and the flare's
+  ghosts as well as flights.
+- **About.** `src/ui/layout/AboutPanel.tsx`, beside the wordmark: measured vs
+  illustrative, credits (keep in step with `NOTICE.md`), `__BUILD_ID__`, a
+  button into the shortcut overlay.
+- **Verified.** Unit: `shortcutRegistry`, `overlayStore`, `sceneSummary`,
+  `HudContrast`. Playwright (Edge, real GPU): smoke specs green, 6 new.
+
+## 017 I1 icon + manifest, I2 loading screen (2026-10-26)
+
+- **Icon.** One parametric mark (orbit ellipse, gradient toward a glint;
+  `--hud-hi` on `--space`) drawn by `scripts/build-icons.mjs`
+  (`npm run build:icons`, sharp): `favicon.svg` (size-optimised, no sparkle
+  rays), `favicon.ico` (16/32/48 PNG frames), `apple-touch-icon.png` (180,
+  full bleed), `icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
+  (mark scaled 0.82 to sit inside the 80% safe zone). `favicon.png` removed.
+  `index.html`: icon links, manifest, `theme-color` #020409,
+  `color-scheme: dark`. `vercel.json`: 1-day cache for icons, manifest
+  served as `application/manifest+json`; CSP unchanged (same-origin).
+- **Loading screen.** Stages: data link (bootstrap promise settled →
+  `telemetryModeVisual` label and dot), Earth (`/textures/`, incl. the star
+  map) and station (`/models/`, `/draco/`, `/basis/`, GLTF blob textures),
+  counted per distinct URL from `DefaultLoadingManager` item hooks. The gate
+  is assets only (the link never blocks: the bundled TLE propagates
+  meanwhile). Static first-paint copy in `index.html`; the React screen
+  carries the shell's animation clock over (`bootShell.ts`). Reduced motion:
+  glint parked at the icon position, no fade.
+- **Measured** (local production builds of `main` and this branch, headless
+  Edge, 12 Mbps / 80 ms, cache off, one run each): first contentful paint
+  840 → 520 ms (388 ms with reduced motion); the old build was blank at
+  0.3 s, the new one shows the stages. Assets still settle in ~5–7 s on that
+  link (unchanged; same files).
+- **Tests.** `tests/unit/ui/bootProgress.test.ts` (classification, repeat
+  starts, growing totals, failures, the gate), `bootMarkSync.test.ts`
+  (index.html, CSS offset-path and the icon script share one geometry); e2e
+  waits on the `progressbar` named "Loading".
+- **Open.** `og-image.png` still shows the old wordmark treatment; refresh it
+  with the name decision (I3).
+
 ## 017 V1 close-range clouds (2026-10-26)
 
 - **Cause.** `clouds.frag` uses map density directly as alpha (no coverage
@@ -662,9 +838,9 @@ Landed via PR #12 (`feat/hardening-and-gcdatlas-pass`) and the passes before it:
   D.6. D.1 (penumbra) and D.3 (ground-track depth, solved with a constant
   clip-space bias) landed 2026-10-25 with plans 011 and 015. Still open: D.7,
   D.8, D.9.
-- **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14 (the `H` toggle
-  closes the "Hide-HUD toggle" quick win; the coarse-pointer hit-area block
-  and the pinned render-scale override from D.6 are still open).
+- **Hide-HUD (`H`) and safe-area insets**: LANDED in PR #14; the D.6
+  coarse-pointer hit areas and the pinned render-scale override landed
+  2026-10-26 with plan 017 R4/R6.
 - **Orbit line, remaining polish**: the ring now closes and the dash is
   anchored to the orbit in the shader (017 V4), but two things are still
   unverified or open.

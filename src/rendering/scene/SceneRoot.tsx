@@ -9,12 +9,17 @@ import { EarthGroup } from '../earth/EarthGroup'
 import { ISSGroup } from '../iss/ISSGroup'
 import { OrbitLine } from '../iss/OrbitLine'
 import { CameraController } from '@/interaction/camera/CameraController'
+import { HudAwareFraming } from '@/interaction/camera/HudAwareFraming'
 import { cameraControlsRef } from './cameraControlsRef'
 import { useCameraStore } from '@/stores/cameraStore'
 import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
 import CameraControlsImpl from 'camera-controls'
 import { DprGovernor } from './DprGovernor'
 import { DEBUG_HOOKS, exposeDebugHook } from '@/utils/debugHooks'
+import { useExplorerStore } from '@/stores/explorerStore'
+import { explorerMinDistanceKm } from '../iss/moduleExplorer'
+import { dprCeiling, dprFloor, pinnedDpr } from './renderScale'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 /**
  * F-02 FIX: Error boundary that catches asset-load failures inside the 3D scene.
@@ -50,6 +55,11 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const mode = useCameraStore((state) => state.mode)
   const transition = useCameraStore((state) => state.transition)
   const isTransitioning = useCameraStore((state) => state.isTransitioning)
+  // Module explorer: an exploded station or a focused module raises the
+  // zoom floor (CameraController pushes the eye out to it while it grows).
+  const explorerFloor = useExplorerStore((state) => explorerMinDistanceKm(
+    state.exploded ? 1 : 0, state.focused ? state.focusOffsetKm : 0,
+  ))
   const mouseButtons = useMemo(() => ({
     left: isTransitioning ? CameraControlsImpl.ACTION.ROTATE : CameraControlsImpl.ACTION.NONE,
     middle: CameraControlsImpl.ACTION.DOLLY,
@@ -71,7 +81,7 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   const activeTargetMode = (isTransitioning && transition) ? transition.toMode : mode
   const minDistance = isTransitioning ? 5
     : activeTargetMode === 'FOLLOW' || activeTargetMode === 'INSPECT' || activeTargetMode === 'APPROACH'
-      ? CAMERA_ZOOM_RANGES.INSPECT.minDistance
+      ? Math.max(CAMERA_ZOOM_RANGES.INSPECT.minDistance, explorerFloor)
       : CAMERA_ZOOM_RANGES.FREE.minDistance
 
   // Store-2 FIX: Hoist ref callback with useCallback so it is not recreated every render.
@@ -98,21 +108,42 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
 })
 
 /**
- * AdaptiveDpr — feeds wall-clock frame deltas to the DprGovernor and applies
- * its pixel ratio. Starts at R3F's default ceiling (min(devicePixelRatio, 2))
- * and only steps down on sustained slow frames; hidden-tab and hitch frames
- * are ignored by the governor.
+ * AdaptiveDpr — applies the pixel-ratio policy (renderScale.ts). On Auto it
+ * feeds wall-clock frame deltas to the DprGovernor, which starts at the
+ * device ceiling (min(devicePixelRatio, 2), coarse pointers included) and
+ * only steps down on sustained slow frames; hidden-tab and hitch frames are
+ * ignored. A manual render scale pins the ratio and stops sampling, and a
+ * return to Auto starts a fresh governor: the old one's history measured a
+ * different resolution.
  */
 const AdaptiveDpr = React.memo(function AdaptiveDpr(): null {
   const setDpr = useThree((state) => state.setDpr)
-  const governorRef = useRef<DprGovernor | null>(null)
-  if (governorRef.current === null) {
+  const renderScale = useSettingsStore((state) => state.renderScale)
+  const ceilingRef = useRef<number | null>(null)
+  if (ceilingRef.current === null) {
     const deviceDpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
-    governorRef.current = new DprGovernor({ maxDpr: Math.min(deviceDpr, 2), minDpr: Math.min(deviceDpr, 1) })
+    const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true
+    ceilingRef.current = dprCeiling(deviceDpr, coarse)
   }
+  const ceiling = ceilingRef.current
+  const pinned = pinnedDpr(ceiling, renderScale)
+  const governorRef = useRef<DprGovernor | null>(null)
+
+  useEffect(() => {
+    if (pinned !== null) {
+      governorRef.current = null
+      setDpr(pinned)
+      return
+    }
+    const governor = new DprGovernor({ maxDpr: ceiling, minDpr: dprFloor(ceiling) })
+    governorRef.current = governor
+    setDpr(governor.dpr)
+  }, [pinned, ceiling, setDpr])
 
   useFrame((_, delta) => {
-    const next = governorRef.current!.sample(delta * 1000, document.visibilityState === 'visible')
+    const governor = governorRef.current
+    if (!governor) return
+    const next = governor.sample(delta * 1000, document.visibilityState === 'visible')
     if (next !== null) setDpr(next)
   })
 
@@ -257,6 +288,10 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
 
           {/* Foundational Camera System (Layer 4) */}
           <CameraController issGroupRef={issGroupRef} />
+
+          {/* Centres the tracked station in the area the HUD leaves free
+              (projection offset only; plan 017 R2) */}
+          <HudAwareFraming />
 
           {/* Isolated programmatic camera controls */}
           <AppCameraControls />

@@ -1,3 +1,7 @@
+// Must stay the first import: it wraps three's DefaultLoadingManager before the
+// scene modules' top-level preload calls (evaluated while App is imported)
+// start any request, so the loading screen sees every file.
+import './ui/loading/assetLoadTracker'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -10,6 +14,7 @@ import { useTelemetryStore } from './stores/telemetryStore'
 import { telemetryManager } from './core/telemetry/TelemetryManager'
 import { simulationClock } from './core/clock/SimulationClock'
 import { DEBUG_HOOKS, exposeDebugHook } from './utils/debugHooks'
+import { captureBootShellClock } from './ui/loading/bootShell'
 
 interface Props {
   children?: ReactNode
@@ -175,6 +180,9 @@ if (DEBUG_HOOKS) {
     settings: useSettingsStore,
     telemetry: useTelemetryStore,
   })
+  import('./stores/explorerStore').then((m) => {
+    ;(window as unknown as Record<string, unknown>).__orbitalExplorer = m.useExplorerStore
+  })
 }
 
 // NOTE: React.StrictMode is intentionally NOT used here.
@@ -187,6 +195,8 @@ if (DEBUG_HOOKS) {
 //
 // The ErrorBoundary above provides the safety net for render-phase crashes. Strict
 // Mode's double-mount guarantees are not applicable to imperative WebGL rendering.
+// Read the static loading shell's animation clock before React replaces it.
+captureBootShellClock()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <App />
