@@ -15,6 +15,7 @@ import { useCameraStore } from '@/stores/cameraStore'
 import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
 import CameraControlsImpl from 'camera-controls'
 import { DprGovernor } from './DprGovernor'
+import { DEBUG_HOOKS, exposeDebugHook } from '@/utils/debugHooks'
 import { useExplorerStore } from '@/stores/explorerStore'
 import { explorerMinDistanceKm } from '../iss/moduleExplorer'
 import { dprCeiling, dprFloor, pinnedDpr } from './renderScale'
@@ -89,10 +90,8 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const setCameraRef = useCallback((c: any) => {
     cameraControlsRef.current = c
-    // DEV DEBUG HOOK: expose the controls instance for runtime camera diagnostics
-    if (import.meta.env.DEV) {
-      ;(window as unknown as Record<string, unknown>).__orbitalControls = c
-    }
+    // DEBUG HOOK (dev + bench builds): the controls instance for camera diagnostics
+    if (DEBUG_HOOKS) exposeDebugHook('__orbitalControls', c)
   }, [])
 
   return (
@@ -234,9 +233,11 @@ export const SceneRoot = React.memo(function SceneRoot(): JSX.Element {
           gl.shadowMap.enabled = true
           gl.shadowMap.type = THREE.PCFShadowMap
           scene.background = new THREE.Color(0x000000) // Explicitly set background to pure neutral black
-          // DEV DEBUG HOOK: scene access for runtime diagnostics (matching __orbitalControls)
-          if (import.meta.env.DEV) {
-            ;(window as unknown as Record<string, unknown>).__orbitalScene = scene
+          // DEBUG HOOK (dev + bench builds): scene and renderer access for runtime
+          // diagnostics (matching __orbitalControls)
+          if (DEBUG_HOOKS) {
+            exposeDebugHook('__orbitalScene', scene)
+            exposeDebugHook('__orbitalRenderer', gl)
           }
         }}
         camera={{

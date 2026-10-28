@@ -439,7 +439,7 @@ landed through its own PR.
   Zooming in never releases FREE.
 - `controls.smoothTime` (0.25) and `minDistance` clamps were ruled out as
   jitter sources by experiment — don't chase them again.
-- DEV-only hook: `window.__orbitalControls` (set in `AppCameraControls`).
+- Debug hook (dev and bench builds): `window.__orbitalControls` (set in `AppCameraControls`).
 
 ## Debugging playbook learned this session
 
@@ -461,9 +461,11 @@ landed through its own PR.
   `toDataURL` issued from a later rAF callback sees a cleared buffer —
   measured mean 0, max 0 over a 300×158 sample. Any capture must happen in
   the same frame as the draw.
-- **`__orbitalScene` is DEV-only** (`import.meta.env.DEV`). Inspecting the
-  scene graph works on `npm run dev` (5173), never on `vite preview` (4173);
-  reach for the dev server when a check needs object internals.
+- **`__orbitalScene` and the other `__orbital*` hooks exist in dev and bench
+  builds only** (`DEBUG_HOOKS`, `src/utils/debugHooks.ts`). Inspecting the
+  scene graph works on `npm run dev` (5173) or a bench build
+  (`vite build --mode bench`, what `npm run bench` serves), never on the
+  production `vite preview` (4173).
 - **The orbit arc refreshes at most once per 60 s of SIM time** (plus a
   250 ms wall floor). A browser check that waits ~5 s will see a stale arc —
   seek the clock (simulationStore.seek) to force a regeneration instead of

@@ -21,6 +21,79 @@
   node: carried dolly = uncarried (~102 km); the old carry stalls (> 300 km);
   flags survive.
 
+## 017 V2 8K Earth (2026-10-26)
+
+- **Sources.** The 4K maps were identified against NASA candidates at
+  1024×512: day = Blue Marble NG July 2004 topo-bathy (RMSE 2.6; Aug 4.3,
+  Jun 16.4), night = Black Marble 2016 (RMSE 1.9; 2012 16.1). The 8K maps
+  are rebuilt from the full-resolution originals (21600×10800, 13500×6750)
+  by `npm run build:earth-8k` (SHA-256 pinned; Lanczos 3; flipped for
+  compressed `flipY = false`). Provenance in `public/textures/README.md`
+  and `NOTICE.md`.
+- **Codec** (PSNR vs the 8K master; today's 4K upscaled: 31.6 day / 33.3
+  night): night ETC1S 38.2 dB, 1.4 MiB; day UASTC + RDO λ 1 + zstd 44.6 dB,
+  20.5 MiB. Day ETC1S (35.3 dB, 4.1 MiB) was rejected after a magnified
+  comparison: light-blue 4×4 block halos along coastlines.
+- **Runtime.** `earthDetail.ts` gate (MAX_TEXTURE_SIZE ≥ 8192, fine
+  pointer, no Save-Data, a compressed GPU format; dev/bench override
+  `window.__orbitalEarth8k`); `useEarthDetailUpgrade.ts` starts 2.5 s after
+  the Earth mounts plus an idle callback, loads both through the shared
+  `ktx2Loader.ts`, uploads with `progressiveUpload.ts` (three allocates via
+  `source.dataReady = false`, then ≤ 1 MiB of `compressedTexSubImage2D` per
+  frame), swaps both on one frame and disposes the 4K maps' GPU copies.
+- **Measured** (`npm run bench -- --earth-8k off|on`, same simulation
+  time): with 8K off every row matches the A.2 baseline (the gate and hook
+  cost nothing before the swap). Tracked GPU memory after the swap is
+  unchanged, 525.5 MiB at overview: two 8K BC7 maps (42.7 MiB each) replace
+  two 4K RGBA8 maps. Swap upload: a one-call `initTexture` stalled 27–45 ms
+  per map; strips sized by measured throughput stalled 64 ms once the D3D11
+  staging filled; fixed 1 MiB strips: no frame over 20 ms (ETC1S build,
+  idle machine). With the UASTC day map, three repeats: load 1.8–2.2 s,
+  upload 1.44 s, no frame over 20 ms (max 17.3–18 ms); three alternating
+  off/on pairs put overview GPU time at 9.22 vs 8.89 ms (Bloom): no measurable
+  sampling cost. Every row holds 59.9 fps after the swap. Table in
+  `docs/bench/README.md`.
+- Asset gates: both files are deferred assets in `check:assets` (24 / 3
+  MiB caps; the check also rejects any 8K reference in `EarthSurface.tsx`);
+  `.ktx2` joins the cache-busting asset build id.
+- Tests: `earthDetail.test.ts`, `progressiveUpload.test.ts`,
+  `earth8kBuild.test.ts`, `assetBuildId` (ktx2).
+
+## A.2 bench harness (2026-10-26)
+
+- `npm run bench` (`scripts/bench/`): bench-mode build (`vite build --mode
+  bench`: production bundle + `__orbital*` hooks via `src/utils/debugHooks.ts`;
+  production strips them), `vite preview` with the production CSP, installed
+  Edge headless on ANGLE/D3D11, 1280×720 at DPR 1.5, network stubbed, the
+  simulation seeked to ≥ 25 min of station daylight at 1× (`--at` pins it).
+- Scenarios × Bloom on/off: overview, Follow (Locate click), Follow tape
+  scrub (25 ↔ 75%, 4 s period), Inspect (wheel zoom to ≤ 130 km, full model
+  ready + 5 s), Inspect scrub. Per scenario: fps, p50/p90/p99/max, frames
+  > 20 ms; GPU ms per frame and per pass from timer queries cut at every
+  draw-framebuffer bind and blit (`page-probe.js`); tracked GPU memory from
+  every texture / renderbuffer / buffer allocation; app state (mode, DPR,
+  detail model, sunlit).
+- Contention guard (`contention.mjs`): refuses when another process uses a
+  GPU 3D/compute engine ≥ 10% or other processes take ≥ 15% of all cores;
+  samples both every second during the run and flags contended scenarios
+  (`--allow-busy-gpu` to measure anyway, exit 3). The CPU half exists
+  because sibling agents' SwiftShader browsers (~85% of 16 cores) stalled
+  frames for 200 ms while the GPU counters read idle.
+- **Baseline** (`docs/bench/baseline-2026-10-26.json`; recorded once the
+  guard found the machine idle, after refusing a game at ~90% GPU and
+  sibling sessions' browsers earlier that day). Radeon 780M, 1920×1080
+  buffer: 59.9 fps, p99 ≤ 17.7 ms in all ten rows. GPU mean (Bloom / no
+  Bloom): overview 9.2 / 12.5 ms, Follow 11.4 / 16.2, Inspect 15.3 / 16.1,
+  Inspect scrub 16.0 / 16.2 (p99 20–21). Tracked GPU memory 526 MiB at
+  overview, 1,081 MiB in Inspect; six 4K maps are 256 MiB. Table and
+  reading notes in `docs/bench/README.md`.
+- Found: wheel zoom while tracking with the clock running moves ~1% per
+  tick (the station-frame carry's per-frame `setLookAt(…, false)` cancels
+  camera-controls' smoothed dolly); the bench pauses the clock while it
+  zooms. Open in NEXT_STEPS (item 0).
+- Tests: `benchStats.test.ts` (percentiles, frame and GPU summaries, the
+  counter parser, CPU contention sums, process-tree walk).
+
 ## 017 V3 the sun (2026-10-26)
 
 - **Before.** A ~15 px disc with a faint amber haze, kept under the bloom

@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { collectErrors, stubNetwork } from './fixtures'
 
 // Smoke suite against `vite preview`. Assertions are on user-visible DOM only;
-// the DEV-only scene hooks are absent from the production bundle.
+// the dev/bench-only scene hooks are absent from the production bundle.
 
 /**
  * Click by coordinates. The rAF render loop defeats Playwright's actionability

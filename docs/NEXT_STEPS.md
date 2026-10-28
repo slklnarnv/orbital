@@ -16,6 +16,43 @@
   like `rotateOrbit`. Test: a dolly under continuous carry reaches the same
   distance as without (~102 km); the old one-pose carry stalls above 300 km.
 
+- **017 V2 8K Earth (2026-10-26)**: first paint keeps the 4K WebP maps;
+  ~2.5 s later, on capable desktops (`MAX_TEXTURE_SIZE` ≥ 8192, fine
+  pointer, no Save-Data, a GPU compressed format; `earthDetail.ts`) an 8K
+  day map (KTX2 / Basis **UASTC**, 20.5 MiB) and 8K night lights (ETC1S,
+  1.4 MiB) stream in, are uploaded at most 1 MiB per frame
+  (`progressiveUpload.ts`: one-call uploads stalled 27–45 ms per map) and
+  swap together; the 4K maps' GPU copies are then released. ETC1S was
+  tried for the day map (4.1 MiB) but left 4×4 block halos along every
+  coastline at orbital magnification. Sources are the NASA originals the 4K
+  maps came from (identified by RMSE: Blue Marble NG July 2004 topo-bathy,
+  Black Marble 2016), rebuilt by `npm run build:earth-8k` with pinned
+  SHA-256. The KTX2 loader moved to `src/rendering/iss/ktx2Loader.ts`
+  (shared). Captures: `docs/images/earth-8k-day.webp`,
+  `earth-8k-night.webp`. Bench: `npm run bench -- --earth-8k on|off`
+  measures the swap itself as `earth-8k-swap`; numbers in
+  `docs/bench/README.md`.
+- **A.2 bench harness (2026-10-26)**: `npm run bench` builds the app in bench
+  mode (production bundle plus the `window.__orbital*` hooks, now exposed via
+  `src/utils/debugHooks.ts` in dev and bench builds only), serves it with
+  `vite preview` and drives installed Edge headless on the real GPU through
+  overview, Follow, a Follow tape scrub, Inspect (full model settled) and an
+  Inspect scrub, each with Bloom on and off. It reports fps, p50/p90/p99
+  frame time, frames over 20 ms, GPU ms per frame and per pass (timer
+  queries around framebuffer binds and blits) and tracked GPU memory, to
+  JSON. It refuses to run while another process uses the GPU (Windows GPU
+  engine counters) or the CPU (other processes at ≥ 15% of all cores:
+  other agents' SwiftShader browsers never show on the GPU counters), and
+  keeps checking during the run. Docs: `docs/bench/README.md`. **Baseline**
+  (`docs/bench/baseline-2026-10-26.json`, Radeon 780M, 1920×1080 buffer, no
+  contention): 59.9 fps and p99 ≤ 17.7 ms in all ten rows; GPU 9–11 ms at
+  overview/Follow with Bloom, 15–16 ms in Inspect and scrubs (p99 19–21 ms:
+  little headroom up close); Bloom off measures more GPU time than Bloom on
+  (12.5 vs 9.2 ms at overview), not yet explained; six 4K maps are 256 of
+  330 MiB of textures. Found while building it: **wheel zoom barely works while
+  tracking with the clock running** (~1% per tick, ~19% when paused) — the
+  station-frame carry's per-frame `setLookAt(…, false)` cancels each
+  smoothed dolly (Next, item 0).
 - **017 V3 the sun (2026-10-26)**: the sun now reads as the blinding sun
   seen from orbit instead of a bright star by the limb. A camera
   point-spread function in two scene layers, so Bloom on and off draw the
@@ -179,8 +216,9 @@
   shadow redraws are capped while seeking. After: the limb holds its place
   and the ground flows beneath through the same scrub. Follow scrubs ran at
   60 fps before and after; Inspect scrubs (full model) were 44.5 fps with 57
-  shadow redraws per 3.5 s — the cap halves the redraws, and the fps re-run
-  is pending (the GPU was busy during the last measurement).
+  shadow redraws per 3.5 s — the cap halves the redraws; re-run on an idle
+  GPU with `npm run bench` (A.2), the Inspect scrub holds 59.9 fps (the
+  44.5 was the busy GPU).
 - **B.3 visible passes landed (2026-10-26)**: a "Passes" control beside the
   settings gear. The observer comes from an offline city search (Natural
   Earth 10m populated places, `src/data/city-index.json`, 7,342 places,
@@ -338,9 +376,10 @@ read). Its order, merged with the older items:
    visual pass on the penumbra fade at a terminator crossing (300x), the
    countdown, the ground track (HUD globe and the 3D setting) and the Bloom
    MSAA edges; on a throttled connection, Locate departs with the detailed LOD
-   (not the schematic) at Follow and the full model appears only below 200 km. Also re-run the Inspect
-   scrub fps (the GPU was busy during the 2026-10-26 measurement).
-7. **A.2** measured perf baseline — then **017 V2** (8K day/night as deferred KTX2 on capable desktops only).
+   (not the schematic) at Follow and the full model appears only below 200 km.
+7. A.2 leftovers: the flare and 300× rows, the leak check, and why Bloom
+   off costs more GPU time than on. 017 V2 landed 2026-10-26; beyond 8K is
+   D.8 (GIBS tiles).
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
    satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8. **017 X1**
    follow-ups if wanted: per-truss-segment entries (P4–P6 and S4–S6 are one
@@ -364,6 +403,11 @@ can be extended. "Touches" lists the files expected to change.
    planetary × Bloom on/off × flare on/off × model quality, plus 300×.
    Record p50/p95/p99 and `renderer.info.memory` after 5 Bloom toggles and
    3 model switches (leak check). Table goes in PROGRESS before any cut.
+   **Harness LANDED 2026-10-26** (`npm run bench`, `docs/bench/README.md`):
+   overview / Follow / Follow scrub / Inspect / Inspect scrub × Bloom on/off,
+   fps and p50/p90/p99, GPU ms per pass, tracked GPU memory, with a GPU and
+   CPU contention guard; baseline `docs/bench/baseline-2026-10-26.json`.
+   Still open: the flare and 300× rows, and the leak check.
 3. **Browser smoke suite (Playwright).** LANDED 2026-10-25 (plan 013):
    `tests/e2e/smoke.spec.ts` + `fixtures.ts`, `playwright.config.ts`, Chromium
    on software WebGL against `vite preview` with the network stubbed, `npm run
