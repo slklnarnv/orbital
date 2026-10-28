@@ -26,6 +26,10 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   retries: process.env.CI ? 1 : 0,
   workers: 1,
+  // Lets `--shard` split by test rather than by file (two files, one of them
+  // most of the time), so CI's three shards come out balanced. Every test
+  // boots its own page, so none depends on another's order.
+  fullyParallel: true,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
     baseURL: `http://localhost:${port}`,

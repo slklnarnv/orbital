@@ -160,7 +160,9 @@ of the height, and the large-screen zoom. Its station-framing check (the
 tracked station clear of the clock and gauges at 360×640, 390×844 and
 844×390) needs the DEV scene hooks, so it skips on the preview; run it with
 `E2E_DEV=1 npx playwright test viewport`, which serves the dev server on port
-4174 instead. CI runs it as the `e2e` job after
-`verify`; the job is advisory (not a required status check — `verify` is the
+4174 instead. CI runs it as the `e2e` job on
+pull requests, split into three shards on three runners and started
+alongside `verify` (skipped on push to main; `workflow_dispatch` runs it on
+demand). The job is advisory (not a required status check — `verify` is the
 merge gate), so a red `e2e` is a prompt to look, not a blocked merge. It does
 not replace the visual checks above.

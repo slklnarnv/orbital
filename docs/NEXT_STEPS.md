@@ -28,8 +28,10 @@
   (offline city search, Web Worker); module explorer (pick, explode, focus);
   orbit tape scrubbing with a station-locked camera; `H` hides the HUD, the
   orbit line and the 3D ground track.
-- **Gate**: `npm run verify` (668 unit tests on 2026-10-28) and the
-  Playwright smoke + viewport suites in CI; `npm run bench` for measured perf
+- **Gate**: `npm run verify` (668 unit tests on 2026-10-28) is the merge
+  gate. The Playwright smoke + viewport suites run on pull requests as an
+  advisory job in three parallel shards (skipped on push to main, on demand
+  via `workflow_dispatch`); `npm run bench` for measured perf
   (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 18,
   three r170, Vite 6, Vitest 5; Dependabot weekly.
 

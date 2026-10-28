@@ -203,16 +203,15 @@ function stationBox(): { left: number; top: number; right: number; bottom: numbe
 
 test.describe('station framing', () => {
   test.use({ hasTouch: true, isMobile: true })
+  // Skip before booting: each boot costs ~25 s on CI, and CI runs the
+  // production build, which has no scene hooks.
+  test.skip(process.env.E2E_DEV !== '1', 'needs the DEV scene hooks: run with E2E_DEV=1')
 
   for (const size of [[360, 640], [390, 844], [844, 390]] as const) {
     test(`tracked station clears the clock and gauges at ${size[0]}×${size[1]}`, async ({ page }) => {
       test.setTimeout(360_000)
       await page.setViewportSize({ width: size[0], height: size[1] })
       await boot(page)
-      // main.tsx sets __orbitalSimulation at module load in DEV only, so it
-      // tells the builds apart without racing the controls mounting.
-      const isDev = await page.evaluate(() => '__orbitalSimulation' in window)
-      test.skip(!isDev, 'needs the DEV scene hooks: run with E2E_DEV=1')
       await page.waitForFunction(() => '__orbitalControls' in window && '__orbitalScene' in window)
 
       const locate = await page.locator('#btn-locate-iss').boundingBox()
