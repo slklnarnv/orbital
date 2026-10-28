@@ -1,9 +1,33 @@
 precision highp float;
 
 uniform vec3 sunDirection;
+// Sunrise band (see the forward-scattering block at the end).
+uniform vec3 sunBillboard;    // world position of the visible sun (EnvironmentLayer)
+uniform float limbProximity;  // 1 with the sun at or behind the limb, 0 well above it
+uniform vec3 atmTau;          // SunAppearance.SUN_TANGENT_TAU
+uniform float atmScaleHeight; // SunAppearance.ATMOSPHERE_SCALE_HEIGHT_KM
 
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
+
+const float EARTH_R = 6371.0;
+
+// Forward-scattering glow: two Henyey-Greenstein lobes, each normalised to 1
+// toward the sun — a tight aureole (g 0.9) and a broad arc (g 0.6) that runs
+// tens of degrees along the limb.
+const float GLOW_GAIN = 20.0;
+const float GLOW_SCALE_HEIGHT = 12.0; // km — the band hugs the lowest air
+const float GLOW_TIGHT = 0.7;
+
+// SunAppearance.atmosphereTransmittance.
+vec3 transmittance(float h) {
+  if (h < 0.0) return vec3(0.0);
+  return exp(-atmTau * exp(-h / atmScaleHeight));
+}
+
+float hgNormalised(float g, float cosTheta) {
+  return pow((1.0 - g) * (1.0 - g) / (1.0 + g * g - 2.0 * g * cosTheta), 1.5);
+}
 
 void main() {
   // ── World-Space Vectors ──────────────────────────────────────────────────────
@@ -61,8 +85,10 @@ void main() {
 
     glow = limb_core + limb_band + limb_haze;
 
-    // Strengthened forward scattering sun-facing rim response:
-    // As the camera looks towards the sun, the limb overexposes into a thin, brilliant, white-hot thread.
+    // Sun-behind-the-viewer rim response. viewDir points from the fragment
+    // TO the camera, so this lights the limb when the sun is behind the
+    // camera (the sunlit limb seen from the day side) — it is not forward
+    // scattering; that is the sunrise band at the end of main().
     float viewSunDot = dot(viewDir, normalize(sunDirection));
     float forwardScatter = pow(max(viewSunDot, 0.0), 6.0); // Slightly tightened angular compression
     glow += forwardScatter * 5.2 * pow(hFactor, 16.0); // Strengthened rim scattering multiplier (was 3.8)
@@ -77,7 +103,7 @@ void main() {
     // Smooth transition from peak horizon intensity (7.8 + 0.15 + 0.005 = 7.955)
     glow = 7.955 * pow(fadeFactor, 3.0);
 
-    // ATM-1 FIX: Mirror the forward-scatter term into the inside-disk branch.
+    // ATM-1 FIX: Mirror the sun-behind-viewer rim term into the inside-disk branch.
     // Without this, the sun-facing limb glow contribution abruptly drops to zero at
     // the horizon boundary (dotNV = 0.22016), creating a subtle darkening seam
     // visible from space on the sunward limb. The tapered amplitude ensures the
@@ -139,6 +165,60 @@ void main() {
   float proximityFade = smoothstep(6530.275, 6900.0, camDist);
 
   float alpha = glow * extinction * 0.92 * proximityFade;
+
+  // ── Forward Scattering: The Sunrise Band ──────────────────────────────────
+  // With the sun at or behind the limb, the air between camera and sun
+  // scatters its light forward: a band along the limb, brightest under the
+  // sun and running tens of degrees either way. Its colour is the physics of
+  // the grazing path: sunlight reaching the view ray's tangent point has
+  // crossed the air at its OWN grazing height (hSun) and is reddened by it,
+  // then crosses roughly half that again toward the camera. So the lowest air
+  // glows deep red, ~20 km orange-gold and the top of the band white — before
+  // the disc itself rises through it. Air in Earth's shadow (hSun < 0)
+  // receives nothing, so the band dies out as the sun sinks further.
+  //
+  // The phase is taken toward the VISIBLE sun (the billboard, at a finite
+  // distance, differs from sunDirection by up to ~1.4 deg of parallax at ISS
+  // altitude) so the band centres on the disc the eye sees; the shadow test
+  // uses the physical direction, like all other lighting.
+  //
+  // Folded into (atmoColor, alpha) so that the additive result is exactly
+  // atmoColor * alpha + glowRgb in linear light (the composer path), while
+  // the direct path (alpha clamps at 1 in the 8-bit target) still brightens.
+  // limbProximity is 0 whenever the sun is well above the limb and the branch
+  // is skipped: every other view is untouched.
+  if (limbProximity > 0.0) {
+    vec3 rayDir = -viewDir;
+    float cosSun = dot(rayDir, normalize(sunBillboard - vWorldPosition));
+    float tc = max(-dot(cameraPosition, rayDir), 0.0);
+    vec3 tangentPoint = cameraPosition + rayDir * tc;
+    float hView = length(tangentPoint) - EARTH_R;
+    if (cosSun > 0.5 && hView > 0.0) {
+      vec3 sunDir = normalize(sunDirection);
+      float along = dot(tangentPoint, sunDir);
+      float hSun = along < 0.0 ? length(tangentPoint - along * sunDir) - EARTH_R : hView;
+
+      float broad = hgNormalised(0.6, cosSun);
+      float phase = GLOW_TIGHT * hgNormalised(0.9, cosSun) + (1.0 - GLOW_TIGHT) * broad;
+      float density = exp(-hView / GLOW_SCALE_HEIGHT);
+      vec3 light = transmittance(hSun) * sqrt(transmittance(hView));
+      float near = limbProximity * smoothstep(0.5, 0.8, cosSun);
+
+      // The existing limb thread near the sun is lit by the same grazing
+      // sunlight: take its hue (red low down, black in Earth's shadow) so the
+      // thread itself turns red-gold under the rising sun. Hue only — the
+      // brightness stays the calibrated thread's.
+      vec3 hue = light / max(max(light.r, light.g), max(light.b, 1e-3));
+      atmoColor = mix(atmoColor, atmoColor * hue, near * broad);
+
+      vec3 glowRgb = light * (GLOW_GAIN * density * phase * near * proximityFade);
+      float q = dot(glowRgb, vec3(0.2126, 0.7152, 0.0722)) / 3.0;
+      if (q > 0.0) {
+        atmoColor = (atmoColor * alpha + glowRgb) / (alpha + q);
+        alpha += q;
+      }
+    }
+  }
 
   gl_FragColor = vec4(atmoColor, alpha);
   #include <tonemapping_fragment>

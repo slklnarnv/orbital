@@ -132,6 +132,10 @@ rounded square (documented in `sun.frag`).
    station's lighting).
 3. Revisit the lens flare default (exists, off by default).
 *Accept*: side-by-side with ISS photography at the limb, owner's sign-off.
+*Status (2026-10-26)*: implemented (glare billboard core + screen-space
+halo/spikes overlay, apparent-flux fade with an occlusion query, sunrise band
+and limb-thread hue; flare kept off, halo removed). Captures in
+`docs/images/sun-before-after.webp`; awaiting the owner's sign-off.
 
 **V4. Dashed orbit line — code, not looks.** The dashes look correct, but
 `OrbitLine.tsx` (361 lines) recomputes `dashSize`/`gapSize` from camera

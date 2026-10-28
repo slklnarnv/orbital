@@ -7,6 +7,32 @@
 
 ## Current state (2026-10-26)
 
+- **017 V3 the sun (2026-10-26)**: the sun now reads as the blinding sun
+  seen from orbit instead of a bright star by the limb. A camera
+  point-spread function in two scene layers, so Bloom on and off draw the
+  same thing and Bloom off stays the direct pipeline: the billboard
+  (`sun.frag`) draws the disc and a blown-out core ~2x its size through one
+  soft knee (depth-tested, cut by Earth and the station), and a
+  screen-space overlay (`SunGlare.ts`, `sunGlare.frag`, no depth test)
+  draws the wide halo and faint six-blade spikes over everything. Both stay
+  under the bloom threshold (2.0 + 0.35 x 1.04 < 2.4, a unit test), so the
+  square artifact cannot return. The glare fades with the sun's apparent
+  flux (`SunAppearance.ts`: the disc integrated through the atmosphere
+  along each line of sight, reddening and dimming as it sinks into the
+  limb), an occlusion query when the station hides the sun, and the
+  exposure ratio; the camera now stops down only for a sun it actually
+  sees. The atmosphere adds a forward-scattering sunrise band at the limb
+  (red low down, gold, then white) while the sun is at or behind the limb,
+  and the limb thread near the sun takes the grazing sunlight's hue. The
+  lens flare stays off by default: it lost its halo (the glare draws it)
+  and shares the glare's gate. GPU time (timer queries, integrated AMD,
+  1920x1080, GPU shared with another process so provisional): overlay
+  0.37 ms with Bloom on, 0.11–0.14 ms off, only while the sun is near the
+  frame; billboard 0.01–0.03 ms; probe ~0; sunrise branch +0.01–0.02 ms.
+  With the sun out of view, frames are pixel-identical to before in both
+  pipelines (Earth, atmosphere, stars). Captures:
+  `docs/images/sun-before-after.webp`. Owner sign-off against ISS
+  photography is the remaining acceptance step.
 - **017 X1 module explorer landed (2026-10-26)**: in Inspect and close
   Follow (a visible IGOAL tier), a "Modules" control on the left edge opens
   the explorer. Hover tints a module light blue, a click (or the module
@@ -294,7 +320,9 @@ read). Its order, merged with the older items:
    (removed earlier by request) — is a design call.
 4. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
    (ALL CAPS wordmark, blue limb, no new mark); I1/I2 landed 2026-10-26.
-5. **017 V3** — the sun (round glare pass, limb scattering).
+5. **017 V3** — the sun landed 2026-10-26 (round glare, limb fade and
+   reddening, sunrise band); it awaits the owner's side-by-side with ISS
+   photography at the limb.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
@@ -732,7 +760,8 @@ Cost: one session. Low value for a tracker; listed for completeness.
   everywhere; keep culling.
 - **Unconditional composer.** Our bloom-off parity is a contract.
 - **Exposure / FOV sliders.** Bloom threshold 2.4 and the tonemapping are
-  calibrated to the sun core; a user exposure would invalidate that. Render
+  calibrated to the sun's glare budget (`sunGlareConfig.ts`); a user
+  exposure would invalidate that. Render
   scale (D.6) is the safe lever.
 - **Their settings merge, nginx real-IP config, no-test CI.**
 

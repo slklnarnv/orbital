@@ -66,8 +66,10 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - Never hand-edit `public/models/*.glb` - rebuild via
   `scripts/build-iss-model.mjs` (candidate -> validate -> publish; backups in
   `.tmp-iss-build/`).
-- The lens flare aims at the sun billboard (`SUN_BILLBOARD_DISTANCE_KM`);
-  keep flare and billboard on the same point.
+- The lens flare, the sun glare overlay and the atmosphere's sunrise band
+  aim at the sun billboard (`SUN_BILLBOARD_DISTANCE_KM`); keep them on the
+  same point. The sun (billboard + glare) stays under the bloom threshold
+  (`SunGlareBudget.test.ts`): UnrealBloom turns a compact HDR disc square.
 
 ## Docs (reading order)
 

@@ -54,6 +54,11 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   (the far end no longer shrinks to dots) and stays fixed to the orbit at
   any time rate or while scrubbing
   ([#38](https://github.com/slklnarnv/orbital/pull/38)).
+- The sun reads as blinding from orbit: a round camera glare (bright core,
+  wide halo, faint six-point spikes) that fades and reddens as the sun sets
+  behind Earth's limb or hides behind the station, and a red-to-gold
+  sunrise band along the limb as it rises
+  ([#43](https://github.com/slklnarnv/orbital/pull/43)).
 
 ### Changed
 
