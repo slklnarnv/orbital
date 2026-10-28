@@ -11,7 +11,7 @@ import { CameraNavigationConstraint } from './CameraNavigationConstraint'
 import { CameraFlightPath } from './CameraFlightPath'
 import { FlightHorizon } from './FlightHorizon'
 import { FreeOrbitControls } from './FreeOrbitControls'
-import { MIN_CARRY_ANGLE_RAD, StationFrameCarry, carryPose } from './StationFrameCarry'
+import { MIN_CARRY_ANGLE_RAD, StationFrameCarry, carryControls } from './StationFrameCarry'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
@@ -50,9 +50,6 @@ const _syncUp = new THREE.Vector3()
 const _syncEye = new THREE.Vector3()
 const _syncTargetA = new THREE.Vector3()
 const _carryRotation = new THREE.Quaternion()
-const _carryEye = new THREE.Vector3()
-const _carryTarget = new THREE.Vector3()
-const _carryUp = new THREE.Vector3()
 const _rollReference = new THREE.Vector3()
 const _trackPoint = new THREE.Vector3()
 const _focusGoal = new THREE.Vector3()
@@ -476,21 +473,12 @@ export const CameraController = React.memo(function CameraController({
 
       // Station-locked framing (StationFrameCarry.ts): ride along with this
       // frame's station rotation so a scrub or accelerated time keeps the
-      // user's viewpoint on the station instead of swinging around it. Same
-      // order as syncRenderedPoseToControls — read the pose in the current
-      // up-space, then adopt the carried up, then set the pose.
+      // user's viewpoint on the station instead of swinging around it. Both
+      // the rendered and the end pose are carried, so a wheel dolly or other
+      // smoothed motion in progress keeps going (carryControls).
       const rotation = stationCarry.step(renderedISS.quaternion, _carryRotation)
       if (rotation && 2 * Math.acos(Math.min(1, Math.abs(rotation.w))) > MIN_CARRY_ANGLE_RAD) {
-        controls.getPosition(_carryEye, false)
-        controls.getTarget(_carryTarget, false)
-        _carryUp.copy(camera.up)
-        carryPose(_carryEye, _carryTarget, _carryUp, rotation)
-        camera.up.copy(_carryUp)
-        controls.updateCameraUp()
-        void controls.setLookAt(
-          _carryEye.x, _carryEye.y, _carryEye.z,
-          _carryTarget.x, _carryTarget.y, _carryTarget.z, false,
-        )
+        carryControls(controls, rotation)
       }
 
       // Exploded or focused, the eye must stay outside the grown station:

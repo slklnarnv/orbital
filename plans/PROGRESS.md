@@ -6,6 +6,21 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Wheel zoom while tracking (2026-10-28)
+
+- **Symptom** (A.2 bench session): with the clock running in Follow/Inspect,
+  each wheel tick dollied ~1% (ten ticks 352 → 328 km; paused, six ticks
+  went 354 → 102 km).
+- **Cause**: the station-locked carry's `setLookAt(…, false)` ran every
+  frame and reset camera-controls' end pose to the rendered pose, so a
+  smoothed dolly kept one frame of progress; it also cleared the
+  `_isUserControlling*` flags.
+- **Fix**: `carryControls` (`StationFrameCarry.ts`) rotates the rendered and
+  the end pose and restores the flags (`preserveUserControlFlags`, now
+  exported from `FreeOrbitControls.ts`). Tests drive real camera-controls in
+  node: carried dolly = uncarried (~102 km); the old carry stalls (> 300 km);
+  flags survive.
+
 ## 017 V3 the sun (2026-10-26)
 
 - **Before.** A ~15 px disc with a faint amber haze, kept under the bloom

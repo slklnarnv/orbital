@@ -7,6 +7,15 @@
 
 ## Current state (2026-10-26)
 
+- **Wheel zoom while tracking fixed (2026-10-28)**: the station-locked carry
+  (2026-10-26 scrub fix) re-set camera-controls' pose with
+  `setLookAt(…, false)` every frame the clock ran, which also reset the end
+  pose a smoothed dolly eases toward: in Follow/Inspect each wheel tick moved
+  ~1% (ten ticks 352 → 328 km; found by the A.2 bench session).
+  `carryControls` now carries both poses and keeps the user-control flags,
+  like `rotateOrbit`. Test: a dolly under continuous carry reaches the same
+  distance as without (~102 km); the old one-pose carry stalls above 300 km.
+
 - **017 V3 the sun (2026-10-26)**: the sun now reads as the blinding sun
   seen from orbit instead of a bright star by the limb. A camera
   point-spread function in two scene layers, so Bloom on and off draw the

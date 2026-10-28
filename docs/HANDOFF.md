@@ -308,7 +308,10 @@ landed through its own PR.
   fixed in inertial space, so scrubbing the orbit tape or running 300×
   swung the view around the station as its Earth-facing frame turned. The
   re-base follows `syncRenderedPoseToControls`' order: read the pose, adopt
-  the up, set the pose.
+  the up, set the pose. It carries the rendered AND the end pose and keeps the
+  `_isUserControlling*` flags (`carryControls`, same pattern as `rotateOrbit`):
+  carrying only the rendered pose reset the end pose every running frame, so
+  a wheel dolly while tracking stalled after one frame of smoothing.
 - While the clock is paused, `ISSGroup` propagates at the clock's time every
   frame (`OrbitalRenderInterpolator.snapTo`) and snaps the attitude
   (`AttitudeFollower.snap`): every scrub, nudge, Set time and Watch moves the
