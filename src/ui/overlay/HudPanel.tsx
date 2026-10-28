@@ -1,4 +1,4 @@
-import { useId, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { useId, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { closeOverlay, focusableWithin } from './overlay'
 
 interface HudPanelProps {
@@ -7,6 +7,10 @@ interface HudPanelProps {
   className: string
   /** Holds Tab inside the panel (the help overlay). */
   modal?: boolean
+  /** Placement computed at runtime (the tour card). */
+  style?: CSSProperties
+  /** Keys the panel handles itself, before the Tab trap. */
+  onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
   children: ReactNode
 }
 
@@ -31,13 +35,17 @@ function trapTab(event: KeyboardEvent<HTMLDivElement>): void {
 }
 
 /**
- * The frame shared by the text panels of the overlay system — About and the
- * keyboard-shortcut overlay: a titled dialog with a Close control. The panel
+ * The frame shared by the text panels of the overlay system — About, the
+ * keyboard-shortcut overlay and the tour card: a titled dialog with a Close control. The panel
  * itself takes focus on a keyboard open (tabIndex −1), so a screen reader
  * announces the title before the content.
  */
-export function HudPanel({ title, panelRef, className, modal = false, children }: HudPanelProps): JSX.Element {
+export function HudPanel({ title, panelRef, className, modal = false, style, onKeyDown, children }: HudPanelProps): JSX.Element {
   const titleId = useId()
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    onKeyDown?.(event)
+    if (modal && !event.defaultPrevented) trapTab(event)
+  }
   return (
     <div
       ref={panelRef}
@@ -46,8 +54,9 @@ export function HudPanel({ title, panelRef, className, modal = false, children }
       aria-labelledby={titleId}
       tabIndex={-1}
       className={`hud-panel ${className} hud-text`}
+      style={style}
       data-overlay=""
-      onKeyDown={modal ? trapTab : undefined}
+      onKeyDown={modal || onKeyDown ? handleKeyDown : undefined}
     >
       <div className="hud-panel__head">
         <h2 id={titleId} className="hud-panel__title">{title}</h2>

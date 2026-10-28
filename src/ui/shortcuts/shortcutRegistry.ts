@@ -18,6 +18,7 @@ export type ShortcutAction =
   | { kind: 'rate'; rate: number }
   | { kind: 'live' }
   | { kind: 'toggleOverlay'; overlay: 'passes' | 'settings' | 'help' }
+  | { kind: 'toggleModules' }
   | { kind: 'close' }
 
 export interface KeyBinding {
@@ -108,6 +109,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: 'Panels',
     bindings: [letter('p')],
     action: { kind: 'toggleOverlay', overlay: 'passes' },
+  },
+  {
+    id: 'modules',
+    keys: ['M'],
+    label: 'Module explorer',
+    group: 'Panels',
+    bindings: [letter('m')],
+    action: { kind: 'toggleModules' },
   },
   {
     id: 'settings',

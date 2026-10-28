@@ -11,11 +11,14 @@ import { CameraNavigationConstraint } from './CameraNavigationConstraint'
 import { CameraFlightPath } from './CameraFlightPath'
 import { FlightHorizon } from './FlightHorizon'
 import { FreeOrbitControls } from './FreeOrbitControls'
-import { MIN_CARRY_ANGLE_RAD, StationFrameCarry, carryPose } from './StationFrameCarry'
+import { MIN_CARRY_ANGLE_RAD, StationFrameCarry, carryControls } from './StationFrameCarry'
 import { cameraControlsRef } from '@/rendering/scene/cameraControlsRef'
 import { telemetryManager } from '@/core/telemetry/TelemetryManager'
 import { shouldAwaitDetail, useLoadingStore } from '@/stores/loadingStore'
 import { easeInOutCubic } from '@/utils/math'
+import { explorerRuntime } from '@/rendering/iss/explorerRuntime'
+import { FocusTween, explorerMinDistanceKm, pointInAncestor } from '@/rendering/iss/moduleExplorer'
+import { ISS_MODEL_CLEARANCE_KM } from './CameraStateMachine'
 import { prefersReducedMotion } from '@/utils/reducedMotion'
 import type { CameraTransitionState } from '@/types/camera'
 
@@ -47,10 +50,10 @@ const _syncUp = new THREE.Vector3()
 const _syncEye = new THREE.Vector3()
 const _syncTargetA = new THREE.Vector3()
 const _carryRotation = new THREE.Quaternion()
-const _carryEye = new THREE.Vector3()
-const _carryTarget = new THREE.Vector3()
-const _carryUp = new THREE.Vector3()
 const _rollReference = new THREE.Vector3()
+const _trackPoint = new THREE.Vector3()
+const _focusGoal = new THREE.Vector3()
+const _focusWorld = new THREE.Vector3()
 
 /**
  * Longest a Locate waits at departure for the detail model to finish
@@ -131,6 +134,7 @@ export const CameraController = React.memo(function CameraController({
   const freeOrbitRef = useRef<FreeOrbitControls | null>(null)
   const freeZoomEntryRef = useRef<number | null>(null)
   const stationCarryRef = useRef(new StationFrameCarry())
+  const focusTweenRef = useRef(new FocusTween())
   // The framing the Reset View button measures against: the camera pose at first
   // mount, replaced by each completed Reset. Any user orbit, zoom, or pan
   // deviates from it and makes the button appear.
@@ -444,34 +448,45 @@ export const CameraController = React.memo(function CameraController({
 
     // ── 1. ACTIVE TRACKING (FOLLOW / INSPECT / APPROACH) ──────────────────────
     const stationCarry = stationCarryRef.current
+    const focusTween = focusTweenRef.current
     if (useCameraStore.getState().isTracking && !isTransitioning) {
+
+      // Module explorer focus (plan 017 X1): the tracked point eases from
+      // the station centre onto the focused module and rides with it — the
+      // point is read from this frame's explode pose and the station's
+      // current attitude, so it moves with the station as one body. With
+      // no focus the goal is the centre and this is plain tracking.
+      const anchor = explorerRuntime.focusAnchor
+      if (!anchor || !pointInAncestor(anchor.anchor, anchor.local, renderedISS, _focusGoal)) _focusGoal.set(0, 0, 0)
+      focusTween.sample(anchor ? anchor.moduleId : null, _focusGoal, delta, explorerRuntime.reducedMotion)
+      _focusWorld.copy(focusTween.current).applyQuaternion(renderedISS.quaternion)
+      _trackPoint.copy(_currentISSPos).add(_focusWorld)
 
       // Tracking can set the target directly; unlike a flight it has no
       // in-progress target interpolation to preserve.
       controls.moveTo(
-        _currentISSPos.x,
-        _currentISSPos.y,
-        _currentISSPos.z,
+        _trackPoint.x,
+        _trackPoint.y,
+        _trackPoint.z,
         false // Direct mutation, no slow transition interpolation
       )
 
       // Station-locked framing (StationFrameCarry.ts): ride along with this
       // frame's station rotation so a scrub or accelerated time keeps the
-      // user's viewpoint on the station instead of swinging around it. Same
-      // order as syncRenderedPoseToControls — read the pose in the current
-      // up-space, then adopt the carried up, then set the pose.
+      // user's viewpoint on the station instead of swinging around it. Both
+      // the rendered and the end pose are carried, so a wheel dolly or other
+      // smoothed motion in progress keeps going (carryControls).
       const rotation = stationCarry.step(renderedISS.quaternion, _carryRotation)
       if (rotation && 2 * Math.acos(Math.min(1, Math.abs(rotation.w))) > MIN_CARRY_ANGLE_RAD) {
-        controls.getPosition(_carryEye, false)
-        controls.getTarget(_carryTarget, false)
-        _carryUp.copy(camera.up)
-        carryPose(_carryEye, _carryTarget, _carryUp, rotation)
-        camera.up.copy(_carryUp)
-        controls.updateCameraUp()
-        void controls.setLookAt(
-          _carryEye.x, _carryEye.y, _carryEye.z,
-          _carryTarget.x, _carryTarget.y, _carryTarget.z, false,
-        )
+        carryControls(controls, rotation)
+      }
+
+      // Exploded or focused, the eye must stay outside the grown station:
+      // an orbit of this radius about the target encloses the clearance
+      // sphere. Both terms change smoothly, so the push-out is a glide.
+      const required = explorerMinDistanceKm(explorerRuntime.eased, focusTween.current.length())
+      if (required > ISS_MODEL_CLEARANCE_KM && controls.distance < required) {
+        void controls.dollyTo(required, false)
       }
 
       // JITTER FIX: drei's CameraControls runs its own update at useFrame
@@ -485,6 +500,7 @@ export const CameraController = React.memo(function CameraController({
       controls.update(0)
     } else {
       stationCarry.reset()
+      focusTween.reset()
     }
 
     // ── 2. MEASURE AND CATEGORIZE (SCROLL & ZOOM DETECTIONS) ───────────────────

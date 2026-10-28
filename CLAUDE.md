@@ -29,6 +29,10 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (CI does this
   Mon/Thu and commits to `main`; run it by hand only if CI is off)
 - `npm run preview` - production bundle locally
+- `npm run bench` - measured perf run: headless Edge on the real GPU,
+  fps / frame-time percentiles / GPU ms per pass / tracked GPU memory per
+  scenario, refuses to run while another process uses the GPU or CPU
+  (`docs/bench/README.md`; Windows + installed Edge)
 - `npm run verify` - the gate (see Rule 1)
 
 ## Map
@@ -66,8 +70,13 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - Never hand-edit `public/models/*.glb` - rebuild via
   `scripts/build-iss-model.mjs` (candidate -> validate -> publish; backups in
   `.tmp-iss-build/`).
-- The lens flare aims at the sun billboard (`SUN_BILLBOARD_DISTANCE_KM`);
-  keep flare and billboard on the same point.
+- The lens flare, the sun glare overlay and the atmosphere's sunrise band
+  aim at the sun billboard (`SUN_BILLBOARD_DISTANCE_KM`); keep them on the
+  same point, and the glare is aimed in `onBeforeRender` (flights set the
+  camera after the frame callbacks). The sun (billboard + glare) and every
+  station material (`highlightKnee.ts`) stay under the bloom threshold
+  (`SunGlareBudget.test.ts`, `HighlightKnee.test.ts`): UnrealBloom turns a
+  compact HDR source square.
 
 ## Docs (reading order)
 

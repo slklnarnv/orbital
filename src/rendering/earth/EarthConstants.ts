@@ -23,3 +23,10 @@ export const EARTH_TEXTURES = {
   cloudMap: assetUrl('/textures/earth-clouds-4k.webp'),
   specularMap: assetUrl('/textures/earth-specular-4k.webp'),
 } as const
+
+// Deferred 8K maps (KTX2: day UASTC, night ETC1S) streamed after first paint on capable
+// desktops only — see earthDetail.ts. Off the initial asset budget.
+export const EARTH_8K_TEXTURES = {
+  dayMap: assetUrl('/textures/earth-day-8k.ktx2'),
+  nightMap: assetUrl('/textures/earth-night-8k.ktx2'),
+} as const

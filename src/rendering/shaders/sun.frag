@@ -1,42 +1,70 @@
 precision highp float;
 varying vec2 vUv;
+varying vec3 vWorldPosition;
 
 // ─── The Sun ──────────────────────────────────────────────────────────────────
-// One radial function, three nested elements:
+// The disc and the blown-out core of the camera's point-spread function. The
+// wide halo and the diffraction spikes are the other half of the PSF, drawn by
+// the screen-space glare overlay (sunGlare.frag, SunGlare.ts): unlike this
+// billboard they are a lens effect and must not be cut by the depth buffer.
 //
 //   photosphere  ~0.66 deg across (the real disc is 0.53 deg; slightly
-//                oversized for presence) with mild limb darkening inside and a
-//                short shoulder at the limb — never a cut-out white sticker.
-//   glare        the near-limb glow that keeps the disc from reading as a
-//                pasted-on circle: it carries ~0.95 of radiance right at the
-//                limb, so the total falls only 1.7x across the limb (2.30 ->
-//                1.33) instead of cliffing into the tail.
-//   haze         a wide, faint amber tail on a power law, out to ~3-4 deg. This
-//                is the "vast soft presence"; it fades to nothing well inside
-//                the billboard.
+//                oversized for presence), seen through the atmosphere PER
+//                PIXEL: each pixel's line of sight has a tangent height, and
+//                the transmittance along it (SunAppearance.ts, same constants
+//                as uniforms) reddens and dims the part of the disc that sinks
+//                into the limb. Bright enough that the knee saturates it.
+//   core         the blown-out region: ~2x the disc, white, rolling into a
+//                warm shoulder by ~2 deg. Scaled by uGlare, the disc's
+//                integrated flux x foreground visibility x exposure ratio, so
+//                it fades and reddens as a whole while the disc sets, instead
+//                of leaving a glow above the limb after the disc has gone.
+//
+// Everything passes through one soft knee, uKnee * (1 - exp(-x / uKnee)):
+// linear for faint values, saturating smoothly at the ceiling. Inside it the
+// exposure ratio (exposure / dark-sky exposure) scales the input, so as the
+// camera stops down for the sun the saturated core shrinks, like a camera's.
 //
 // WHY THE ENTIRE SUN STAYS BELOW THE BLOOM THRESHOLD
 // UnrealBloom resolves its coarsest mip at 1/16 of the frame. A compact HDR
 // disc ~15 px across is barely one texel there, so the pass reconstructs it as
 // a rounded SQUARE. Measured with bloom ON: an axis/diagonal sector asymmetry
 // of 0.43 extending to r ~ 140 px. With bloom OFF: a clean 1.00 (round). The
-// sun is kept out of that path and carries its own glow here instead — exact,
-// radial, and cheap (still one additive quad). Peak radiance below (2.37) is
-// below BLOOM_THRESHOLD (2.4), and the exposure factor the scene applies while
-// any part of the quad is on screen can only lower it: the quad can be visible
-// only while the sun is within ~47 deg of the view axis, where the exposure
-// term (EnvironmentLayer: 1.05 - 0.30 * alignment^2) is <= 0.91, i.e. <= 2.16.
+// sun is kept out of that path and carries its own glow instead — exact,
+// radial, and cheap. The bloom pass reads the composer's buffer BEFORE
+// exposure (OutputPass applies it), so the budget is on raw radiance: the
+// knee caps this billboard at uKnee (2.0) and the overlay adds at most its
+// peak (0.35 x 1.04 dither), 2.37 < BLOOM_THRESHOLD (2.4) — asserted in
+// tests/unit/rendering/SunGlareBudget.test.ts.
 //
 // THE QUAD: theta = d * PLANE_FULL_RAD reaches PLANE_FULL_RAD / 2 = 0.0925 rad
 // (5.3 deg) along the UV axes and 0.131 rad (7.5 deg) toward the corners. The
-// haze is already below 1/255 by ~4 deg and the safety taper completes at
-// d = 0.46 (4.9 deg), so the billboard boundary can never read as an edge.
+// core is below 1/255 by ~4 deg and the safety taper completes at d = 0.46
+// (4.9 deg), so the billboard boundary can never read as an edge.
 
 // Billboard angular width — MUST match targetAngularSize in EnvironmentLayer.tsx.
 const float PLANE_FULL_RAD = 0.185;
 
-// Photospheric radius in radians (0.33 deg -> 0.66 deg across).
-const float DISC_RAD = 0.00575;
+uniform float uDiscRad;       // rendered photospheric radius, rad
+uniform vec3 uGlare;          // flux (rgb) x foreground visibility x exposure ratio
+uniform float uExposureRatio;
+uniform float uKnee;
+uniform vec3 uTau;            // tangent optical depth at height 0, per channel
+uniform float uScaleHeight;   // km
+uniform float uEarthRadius;   // km
+
+// Photosphere input level: far into the knee, so the disc is a flat white
+// until the atmosphere takes most of its light away.
+const float PHOTOSPHERE = 30.0;
+
+// Core: an exponential that keeps the input >= ~5 (i.e. near the ceiling)
+// out to ~0.2 deg beyond the limb (a blown-out core ~1.6x the disc), and a
+// Lorentzian shoulder that carries the glow to where the overlay's halo takes
+// over. (A 2x core with a 0.6 shoulder read as a big soft ball: 2026-10-28.)
+const float CORE_GAIN = 14.0;
+const float CORE_EFOLD = 0.0030;   // rad (~0.17 deg)
+const float SHOULDER_GAIN = 0.32;
+const float SHOULDER_WIDTH = 0.006; // rad (~0.34 deg)
 
 // White noise for the dither. The usual `fract(sin(dot(gl_FragCoord, k)) * s)`
 // hash is NOT usable here: at screen coordinates of ~5e4 the product exceeds
@@ -49,48 +77,50 @@ float hash21(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+// Tangent height of the ray from o along d (SunAppearance.tangentHeightKm).
+float tangentHeight(vec3 o, vec3 d) {
+  float t = -dot(o, d);
+  vec3 closest = t > 0.0 ? o + d * t : o;
+  return length(closest) - uEarthRadius;
+}
+
+// SunAppearance.atmosphereTransmittance.
+vec3 transmittance(float h) {
+  if (h < 0.0) return vec3(0.0);
+  return exp(-uTau * exp(-h / uScaleHeight));
+}
+
 void main() {
   vec2 p = vUv - vec2(0.5);
   float d = length(p);
   float theta = d * PLANE_FULL_RAD;      // angular radius, rad
-  float s = max(theta - DISC_RAD, 0.0);  // angular distance beyond the limb
+  float s = max(theta - uDiscRad, 0.0);  // angular distance beyond the limb
 
   // 1. Photosphere: limb darkening (brighter centre) times a short limb
-  //    shoulder, so the edge rolls off instead of cutting.
-  float limb = 1.0 - smoothstep(DISC_RAD * 0.80, DISC_RAD * 1.15, theta);
-  float darkening = 1.0 - 0.35 * smoothstep(0.0, DISC_RAD * 0.95, theta);
-  float photosphere = limb * darkening;
+  //    shoulder, so the edge rolls off instead of cutting; then the
+  //    atmosphere along this pixel's own line of sight.
+  float limb = 1.0 - smoothstep(uDiscRad * 0.80, uDiscRad * 1.15, theta);
+  float darkening = 1.0 - 0.35 * smoothstep(0.0, uDiscRad * 0.95, theta);
+  vec3 sight = transmittance(tangentHeight(cameraPosition, normalize(vWorldPosition - cameraPosition)));
+  vec3 photosphere = vec3(1.00, 0.985, 0.955) * (limb * darkening * PHOTOSPHERE * uExposureRatio) * sight;
 
-  // 2. Glare: one exponential hugging the limb, e-fold ~0.29 deg. Tight by
-  //    design — the near-field must collapse fast or the sun reads as a soft
-  //    luminous marble instead of a blinding point source.
-  float glare = 0.95 * exp(-s / 0.0050);
+  // 2. Core: white at the limb, gold in the shoulder. Indexed on ANGLE so the
+  //    hue shift lands where the eye looks, immediately around the disc.
+  float core = CORE_GAIN * exp(-s / CORE_EFOLD);
+  float w = s / SHOULDER_WIDTH;
+  float shoulder = SHOULDER_GAIN / (1.0 + w * w);
+  vec3 tint = mix(vec3(1.00, 0.985, 0.955), vec3(1.00, 0.78, 0.45), smoothstep(0.002, 0.02, s));
+  vec3 glare = tint * (core + shoulder) * uGlare;
 
-  // 3. Haze: a wide, shallow power law. Real stray light falls off near
-  //    theta^-2; the +1 keeps it finite at the limb and gives the knee a
-  //    continuous slope. Shallow on purpose: this is the "vast soft presence"
-  //    — faint (a few LSB) but still legible out to ~4 deg, where the steep
-  //    near-field is already long gone.
-  float haze = 0.050 / pow(1.0 + s / 0.040, 1.8);
+  // 3. Soft knee: the bloom-safe ceiling (see the header).
+  vec3 x = photosphere + glare;
+  vec3 radiance = uKnee * (vec3(1.0) - exp(-x / uKnee));
 
-  float luminance = photosphere * 1.30 + glare + haze;
+  // 4. Safety taper: starts at ~3.4 deg, where the core is down to a few LSB,
+  //    and is a smooth product — it cannot draw a ring of its own.
+  radiance *= 1.0 - smoothstep(0.32, 0.46, d);
 
-  // 4. Colour by angular distance from the limb — white photosphere, gold just
-  //    outside, saturated amber in the haze. Indexed on ANGLE rather than UV so
-  //    the hue shift lands where the eye looks, immediately around the disc.
-  float c = clamp(s / 0.045, 0.0, 1.0);
-  vec3 sunColor = c < 0.4
-    ? mix(vec3(1.00, 0.985, 0.955), vec3(1.00, 0.82, 0.50), c / 0.4)
-    : mix(vec3(1.00, 0.82, 0.50), vec3(1.00, 0.58, 0.20), (c - 0.4) / 0.6);
-
-  // 5. Safety taper: starts at ~3.4 deg, where the haze is already down to a
-  //    few LSB, and is a smooth product — it cannot draw a ring of its own.
-  float edgeFade = 1.0 - smoothstep(0.32, 0.46, d);
-
-  vec3 radiance = sunColor * luminance * edgeFade;
-
-  // 6. Sub-LSB dither. The haze is a very low, very smooth gradient and at
-  //    8 bits its tail contour-quantises into concentric rings.
+  // 5. Sub-LSB dither against contouring in the shoulder.
   radiance += (hash21(gl_FragCoord.xy) - 0.5) * (1.6 / 255.0);
 
   // alpha = 1: the material uses AdditiveBlending, whose source factor is

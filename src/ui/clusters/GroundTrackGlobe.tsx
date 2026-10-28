@@ -160,10 +160,7 @@ export function GroundTrackGlobe(): JSX.Element {
   const wxText = wxSegments.length > 0 ? wxSegments.join(' · ') : '—'
 
   return (
-    <div
-      className="hud-text"
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}
-    >
+    <div className="hud-ground hud-text">
       <div className="hud-bezel" style={{ width: SIZE, height: SIZE }} aria-hidden="true">
         <span className="hud-bezel__ring" />
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
@@ -196,22 +193,22 @@ export function GroundTrackGlobe(): JSX.Element {
         </svg>
       </div>
 
-      <span className="hud-label" style={{ fontSize: 8 }}>
-        Passing over
-      </span>
-      {!accelerated && (
-        <span className="hud-place" title={placeTitle}>
-          {placeText}
+      <div className="hud-ground__text">
+        <span className="hud-label hud-ground__caption">Passing over</span>
+        {!accelerated && (
+          <span className="hud-place" title={placeTitle}>
+            {placeText}
+          </span>
+        )}
+        <span className="hud-fine hud-groundcoords" style={{ whiteSpace: 'nowrap' }}>
+          {formatLatitude(latitude, 2)} · {formatLongitude(longitude, 2)}
         </span>
-      )}
-      <span className="hud-fine hud-groundcoords" style={{ whiteSpace: 'nowrap' }}>
-        {formatLatitude(latitude, 2)} · {formatLongitude(longitude, 2)}
-      </span>
-      {!accelerated && (
-        <span className="hud-fine hud-groundwx" style={{ whiteSpace: 'nowrap', color: 'var(--hud-lo)' }}>
-          {wxText}
-        </span>
-      )}
+        {!accelerated && (
+          <span className="hud-fine hud-groundwx" style={{ whiteSpace: 'nowrap', color: 'var(--hud-lo)' }}>
+            {wxText}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

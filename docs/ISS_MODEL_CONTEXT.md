@@ -171,7 +171,8 @@ The full `iss_igoal.glb` is requested only inside the 200/220 km Inspect band
 high-tier failure keeps the LOD; a LOD failure demotes the requested path to
 legacy. Rebuild after any high-asset rebuild with `npm run build:iss-lod`.
 Both tiers load through drei's `useGLTF` with a `KTX2Loader` (transcoder
-self-hosted in `public/basis/`). The `.js` glue is NOT a plain copy of
+self-hosted in `public/basis/`); the loader lives in
+`src/rendering/iss/ktx2Loader.ts`, shared with the deferred 8K Earth maps. The `.js` glue is NOT a plain copy of
 `three/examples/jsm/libs/basis`: three's embind glue builds its invokers with
 `new Function`, which the production CSP (no `'unsafe-eval'`) blocks inside
 the blob: transcoder workers — the worker dies at init without answering and
@@ -542,8 +543,10 @@ silent in code and obvious only in render.
    time and IGNORES `timeScale`. To accelerate:
    `window.__orbitalSimulation.getState().setMode('ACCELERATED');
    setTimeScale(n)`. Restore `setMode('REALTIME'); setTimeScale(1)` after.
-   Dev hooks exposed in `main.tsx`: `__orbitalSimulation`, `__orbitalClock`,
-   `__orbitalTelemetry`, `__orbitalControls`.
+   Hooks exposed in dev and bench builds (`src/utils/debugHooks.ts`):
+   `__orbitalSimulation`, `__orbitalClock`, `__orbitalTelemetry`,
+   `__orbitalStores` (camera, loading, settings, telemetry) from `main.tsx`;
+   `__orbitalControls`, `__orbitalScene`, `__orbitalRenderer` from `SceneRoot`.
 7. **Texture format**: the runtime assets' textures are KTX2 (Basis ETC1S);
    neither sharp nor the Read tool decodes them — extract with
    `ktx extract --transcode rgba8 --level 0 in.ktx2 out.png`, or inspect the
@@ -620,6 +623,19 @@ silent in code and obvious only in render.
 - Do NOT animate the legacy model or Model A (deliberately static).
 - Do NOT trust a measurement that disagrees with §2 until you have ruled out
   §6 (read pattern, corner count, frame of reference, pre/post-multiply).
+
+## 8a. Module explorer (plan 017 X1)
+
+The explorer reads the batching contract, not extra metadata:
+`src/rendering/iss/moduleExplorer.ts` maps each batch to a catalogue entry
+(`src/data/issModules.ts`) by its name prefix or nearest catalogued
+ancestor, using `userData.name` (GLTFLoader drops the dots from `name`).
+Exploding writes translations on the hub (`SSREF_IGOAL`) children only —
+static batches and the nodes that hold rig parts (the SARJs, `Truss_P1/S1`
+with the TRRJs, `JEM_PM`, `MT_Location`, `Node2`, `USLab`) — so joint
+frames and pivots are unchanged. While exploded the rig parks every joint
+on its authored angle (`RigFrame.parked`). If a rebuild renames a module or
+changes the batching, `ModuleExplorer.test.ts` fails on the unmapped batch.
 
 ## 9. Open items (ranked)
 

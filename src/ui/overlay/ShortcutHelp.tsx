@@ -1,5 +1,6 @@
 import { LOCAL_KEYS, SHORTCUTS, type Shortcut } from '../shortcuts/shortcutRegistry'
 import { HudPanel } from './HudPanel'
+import { switchOverlay } from './overlay'
 import { useOverlay } from './useOverlay'
 
 const GROUPS: Array<Shortcut['group']> = ['Time', 'View', 'Panels']
@@ -53,9 +54,14 @@ export function ShortcutHelp(): JSX.Element | null {
             </dl>
           </section>
         </div>
-        <p className="hud-fine hud-panel__note">
-          Shortcuts pause while you type in a field, and never take Ctrl, Alt or Cmd combinations.
-        </p>
+        <div className="hud-panel__foot">
+          <p className="hud-fine" style={{ color: 'var(--hud-lo)', lineHeight: 1.5 }}>
+            Shortcuts pause while you type in a field, and never take Ctrl, Alt or Cmd combinations.
+          </p>
+          <button type="button" className="hud-label hud-btn-text" onClick={() => switchOverlay('tour')}>
+            Take the tour
+          </button>
+        </div>
       </HudPanel>
     </>
   )

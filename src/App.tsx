@@ -8,6 +8,7 @@ import { scheduleLocatePrefetch } from '@/rendering/iss/prefetchDetail'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
 import { useShortcuts } from '@/ui/shortcuts/useShortcuts'
 import { ShortcutHelp } from '@/ui/overlay/ShortcutHelp'
+import { TourOverlay } from '@/ui/tour/TourOverlay'
 import { SceneAnnouncer, SceneSummary, SCENE_SUMMARY_ID } from '@/ui/a11y/SceneAnnouncer'
 import { TopBar } from '@/ui/layout/TopBar'
 import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
@@ -15,6 +16,7 @@ import { MissionClockCluster } from '@/ui/clusters/MissionClockCluster'
 import { CameraCluster } from '@/ui/clusters/CameraCluster'
 import { GroundTrackGlobe } from '@/ui/clusters/GroundTrackGlobe'
 import { OrbitTape } from '@/ui/clusters/OrbitTape'
+import { ModuleExplorerPanel } from '@/ui/clusters/ModuleExplorerPanel'
 import { LoadingScreen } from '@/ui/loading/LoadingScreen'
 
 /**
@@ -91,7 +93,9 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
         <CameraCluster />
       </main>
 
+      <ModuleExplorerPanel />
       <ShortcutHelp />
+      <TourOverlay />
     </>
   )
 })

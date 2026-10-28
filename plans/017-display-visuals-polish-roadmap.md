@@ -12,6 +12,8 @@
   clouds, icon/loading screen/name, accessibility and keyboard shortcuts, an
   info/about panel, and (later) an exploded module explorer — merged with the
   open items in `docs/NEXT_STEPS.md`.
+- **Landed**: R1–R7 (responsive display), 2026-10-26; see
+  `docs/NEXT_STEPS.md` Current state for the before/after numbers.
 - **Evidence**: a viewport audit in headless Edge on the owner's GPU (nine
   sizes, 360×640 to 3440×1440, overview and Follow; per-cluster boxes,
   overlaps, off-screen, font sizes below 9 px, targets below 32 px),
@@ -116,6 +118,14 @@ integrated GPUs and phones can hold. Plan:
 - specular stays 4K; clouds follow V1;
 - gate it on the A.2 perf baseline, and keep it off the initial budget.
 Close-range detail beyond 8K is D.8 (GIBS tiles).
+*Landed 2026-10-26* (`useEarthDetailUpgrade.ts`, `earthDetail.ts`,
+`progressiveUpload.ts`, `scripts/build-earth-8k.mjs`). Deviations from the
+plan, both measured: the day map ships as **UASTC** (20.5 MiB), not ETC1S —
+ETC1S (4.1 MiB) left 4×4 block halos along every coastline at orbital
+magnification; the night lights are ETC1S (1.4 MiB). The swap uploads at
+most 1 MiB per frame: a one-call upload stalled 27–45 ms per map. Captures:
+`docs/images/earth-8k-day.webp`, `earth-8k-night.webp`; bench numbers in
+`docs/bench/README.md`.
 
 **V3. The sun.** Today it renders as a small disc with a faint amber haze —
 next to Earth's limb it reads like a bright star. It is deliberately kept
@@ -130,6 +140,10 @@ rounded square (documented in `sun.frag`).
    station's lighting).
 3. Revisit the lens flare default (exists, off by default).
 *Accept*: side-by-side with ISS photography at the limb, owner's sign-off.
+*Status (2026-10-26)*: implemented (glare billboard core + screen-space
+halo/spikes overlay, apparent-flux fade with an occlusion query, sunrise band
+and limb-thread hue; flare kept off, halo removed). Captures in
+`docs/images/sun-before-after.webp`; awaiting the owner's sign-off.
 
 **V4. Dashed orbit line — code, not looks.** The dashes look correct, but
 `OrbitLine.tsx` (361 lines) recomputes `dashSize`/`gapSize` from camera
@@ -192,6 +206,9 @@ and credits (from `NOTICE.md`), the build id, and a link to the shortcut
 overlay. Static content, shares the overlay system with A1.
 
 ## X — Later: exploded view and module explorer
+
+**Status: X1 landed (2026-10-26)** — see `plans/PROGRESS.md` and
+`docs/NEXT_STEPS.md`.
 
 The IGOAL hierarchy names its modules and the batching keeps geometry per
 module, so per-module picking is possible. Needs:

@@ -8,17 +8,9 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { FRAME_PRIORITY } from '../framePriority'
+import { BLOOM_RADIUS, BLOOM_STRENGTH, BLOOM_THRESHOLD } from './bloomConfig'
 import { MultisampleRenderPass } from './MultisampleRenderPass'
 import { SunFlare } from './SunFlare'
-
-// ─── Bloom calibration ────────────────────────────────────────────────────────
-// Threshold sits well above the atmosphere limb and the ISS PBR highlights
-// (a low threshold made the limb smear into cloudy circles at planetary
-// zoom) while the sun core (~4.3) and city-light cores still bloom.
-// All tuning constants live here.
-const BLOOM_STRENGTH = 0.26
-const BLOOM_RADIUS = 0.4
-const BLOOM_THRESHOLD = 2.4
 
 // The composer bypasses the Canvas's antialiased backbuffer, so the scene
 // pass carries its own MSAA (WebGL2) — that pass only; the composer's

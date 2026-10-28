@@ -181,10 +181,19 @@ landed through its own PR.
 - **Geometry rule**: circles are only for physically-round things (the globe).
   Instruments use reticle corner-ticks (camera button) or bare typography.
 - **Frame map**: top-left = identity + link status; top-right = ephemeris line
-  + camera control (rule: *controls top, data bottom*); bottom-left = speed /
-  altitude bare gauges; bottom-center = UTC clock (Zulu suffix) over the orbit
-  tape; bottom-right = ground cluster alone; full-width orbit tape along the
-  bottom edge.
+  + the tool row (Passes, Modules, Settings: `.hud-tool`, a `ToolIcon` and a
+  label each) + camera control (rule: *controls top, data bottom*);
+  bottom-left = speed / altitude bare gauges; bottom-center = UTC clock (Zulu
+  suffix) over the orbit tape; bottom-right = ground cluster alone;
+  full-width orbit tape along the bottom edge.
+  Left edge, vertically centred (`.hud-explorer`): the module explorer card,
+  shown while open (017 X1). Modules opens it from anywhere: Locate first,
+  then it opens on arrival (`moduleExplorerControl.ts`).
+- **Tour** (`src/ui/tour/`): the first-visit guided tour, a modal overlay
+  (`'tour'`). Each step names a control by selector; a HUD control the tour
+  points at keeps its id (`#btn-passes`, `#btn-module-explorer`,
+  `#btn-settings`, `#btn-about`) or `TOUR_STEPS` changes with it. A missing
+  target centres the card instead of failing.
 - **Status vocabulary**: declared ONCE, top-left ("Live" / "Cached" /
   "Recovery" / "Fallback" via `telemetryModeVisual`). Do not repeat it in the
   clock caption.
@@ -207,6 +216,31 @@ landed through its own PR.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
+- **Responsive frame (plan 017 R1–R6)**, breakpoints in `src/index.css`:
+  - `max-width: 639px` (and touch tablets in portrait up to 899 px): one
+    bottom composition — clock row, then gauges | ground row (globe beside
+    its lines; the weather line is dropped on phones);
+  - `max-height: 500px` (landscape phones): one top row, one bottom row
+    (gauge values · time + transport · place + coordinates) and a thin tape
+    whose hit area runs under the row (the row passes touches through except
+    on buttons). Budget: the HUD stays ≤ 30% of the height;
+  - `pointer: coarse`: every control ≥ 44×44. Grow hit areas with padding
+    plus an equal negative margin, never with bigger glyphs, and widen gaps
+    where two hit areas would meet. Inputs are 16 px (iOS focus zoom);
+  - QHD and up: whole clusters `zoom: var(--hud-zoom)` (steps 1.15–1.9).
+    Under `zoom`, absolute lengths scale (vw-based ones included) and
+    percentages do not, so the ultrawide `--hud-gutter` is divided by the
+    zoom;
+  - type floor: nothing below 9 px (`--hud-fs-micro`, `--hud-fs-place`). A
+    line that does not fit at 9 px is hidden, not shrunk.
+- **HUD-aware framing (R2)**: while tracking, `HudAwareFraming` shifts the
+  projection (`camera.setViewOffset`) so the station centres in the band the
+  HUD leaves free. It measures cluster boxes (popovers excluded, the tape by
+  its line), so a new HUD cluster joins `HUD_SELECTORS` there. Anything that
+  projects to the screen by hand from fov and aspect must add the offset
+  (`viewOffsetNdc` in `SunFlare.ts`).
+- **Viewport audit**: `tests/e2e/viewport.spec.ts` asserts the above at nine
+  sizes; run it after any HUD layout change.
 
 ### Key files
 
@@ -224,6 +258,9 @@ landed through its own PR.
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
 | `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
+| `src/interaction/camera/HudAwareFraming.tsx` + `hudFraming.ts` | R2 projection shift (DOM measure + pure band math) |
+| `src/rendering/scene/renderScale.ts` | DPR ceiling and the pinned render-scale override (`AdaptiveDpr` in SceneRoot) |
+| `tests/e2e/viewport.spec.ts` | Viewport audit (layout, 9 px floor, 44 px targets, station framing under `E2E_DEV=1`) |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |
 | `src/stores/geoStore.ts` | Geo presentation state (written by the service only) |
 
@@ -251,6 +288,16 @@ landed through its own PR.
 
 ### Camera system facts (harder to get wrong)
 
+- **Module explorer focus (017 X1)**: while tracking, the target is the
+  station centre plus `FocusTween.current` (station-local), read from the
+  focused module's anchor mesh through its CURRENT local transforms
+  (`pointInAncestor`; `matrixWorld` is a frame old) and the station's
+  current attitude, before the tracking `update(0)`. The eye is pushed out
+  to `explorerMinDistanceKm(explode, |focus|)` each frame (an orbit of that
+  radius about the target encloses the grown clearance sphere) and
+  `AppCameraControls` raises `minDistance` to the same floor. Mode
+  decisions still use the station centre. The explode is applied at
+  priority −2 so the camera reads this frame's pose.
 - `ISSGroup` advances the station pose at `useFrame` priority **−2**
   (`src/rendering/framePriority.ts`), before everything else: R3F runs equal
   priorities in subscription order, children first, so a child of `ISSGroup`
@@ -268,7 +315,10 @@ landed through its own PR.
   fixed in inertial space, so scrubbing the orbit tape or running 300×
   swung the view around the station as its Earth-facing frame turned. The
   re-base follows `syncRenderedPoseToControls`' order: read the pose, adopt
-  the up, set the pose.
+  the up, set the pose. It carries the rendered AND the end pose and keeps the
+  `_isUserControlling*` flags (`carryControls`, same pattern as `rotateOrbit`):
+  carrying only the rendered pose reset the end pose every running frame, so
+  a wheel dolly while tracking stalled after one frame of smoothing.
 - While the clock is paused, `ISSGroup` propagates at the clock's time every
   frame (`OrbitalRenderInterpolator.snapTo`) and snaps the attitude
   (`AttitudeFollower.snap`): every scrub, nudge, Set time and Watch moves the
@@ -396,7 +446,7 @@ landed through its own PR.
   Zooming in never releases FREE.
 - `controls.smoothTime` (0.25) and `minDistance` clamps were ruled out as
   jitter sources by experiment — don't chase them again.
-- DEV-only hook: `window.__orbitalControls` (set in `AppCameraControls`).
+- Debug hook (dev and bench builds): `window.__orbitalControls` (set in `AppCameraControls`).
 
 ## Debugging playbook learned this session
 
@@ -418,9 +468,11 @@ landed through its own PR.
   `toDataURL` issued from a later rAF callback sees a cleared buffer —
   measured mean 0, max 0 over a 300×158 sample. Any capture must happen in
   the same frame as the draw.
-- **`__orbitalScene` is DEV-only** (`import.meta.env.DEV`). Inspecting the
-  scene graph works on `npm run dev` (5173), never on `vite preview` (4173);
-  reach for the dev server when a check needs object internals.
+- **`__orbitalScene` and the other `__orbital*` hooks exist in dev and bench
+  builds only** (`DEBUG_HOOKS`, `src/utils/debugHooks.ts`). Inspecting the
+  scene graph works on `npm run dev` (5173) or a bench build
+  (`vite build --mode bench`, what `npm run bench` serves), never on the
+  production `vite preview` (4173).
 - **The orbit arc refreshes at most once per 60 s of SIM time** (plus a
   250 ms wall floor). A browser check that waits ~5 s will see a stale arc —
   seek the clock (simulationStore.seek) to force a regeneration instead of

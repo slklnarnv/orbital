@@ -58,7 +58,7 @@ export function CameraCluster(): JSX.Element {
         // and ends only at arrival, so the motion never cuts mid-way.
         className={`hud-btn-locate${isTransitioning ? ' is-working' : ''}`}
       >
-        <span className="hud-reticle" style={{ width: 44, height: 44 }}>
+        <span className="hud-reticle">
           <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false">
             <path d="M2 15 V2 H15" strokeWidth={2} />
             <path d="M49 2 H62 V15" strokeWidth={2} />
