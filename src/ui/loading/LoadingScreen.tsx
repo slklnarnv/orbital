@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { useBootStore } from '@/stores/bootStore'

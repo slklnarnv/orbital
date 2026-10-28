@@ -42,6 +42,7 @@
 //   - Detail is requested on Locate intent or near-range entry, never at startup.
 //   - GPU preparation finishes before Locate moves the camera.
 
+import type { JSX } from 'react'
 import React, {
   Component,
   Suspense,
@@ -938,6 +939,12 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
     }
   })
 
+  // Uniforms go in through the constructor, which keeps this object by
+  // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
+  // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
+  // Memoized: R3F rebuilds the material whenever `args` changes identity.
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: glintUniforms }], [glintUniforms])
+
   return (
     <group ref={groupRef}>
       <ModuleExplorerDriver igoalVisible={visibleQuality === 'locate' || visibleQuality === 'high'} />
@@ -1014,7 +1021,7 @@ export const ISSModel = React.memo(function ISSModel(): JSX.Element {
         <shaderMaterial
           vertexShader={billboardVert}
           fragmentShader={softGlowFrag}
-          uniforms={glintUniforms}
+          args={materialArgs}
           transparent={true}
           depthWrite={false}
           depthTest={true}

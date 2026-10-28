@@ -88,6 +88,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Fixed
 
+- The Earth rendering black after an update on 28 October; it was rolled
+  back within the hour and the cause fixed.
+
 - The sun's glare stays on the sun during Locate and Reset flights instead
   of sliding across the screen.
 - Bright reflections on the station no longer bloom into a white square.

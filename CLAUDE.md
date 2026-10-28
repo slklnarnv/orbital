@@ -13,11 +13,23 @@ It is the release gate; never commit red. A first run also catches environment
 surprises (guard module-scope browser reads such as `navigator`; Node 20
 lacked a global `navigator` and this broke CI once). Requires Node 22+.
 
+## Rule 2 - look at it before pushing
+
+```bash
+npm run check:visual   # production build -> vite preview -> Edge on the real GPU -> screenshots
+```
+
+Unit tests and Playwright check the DOM, never pixels: a dependency upgrade
+once shipped a black Earth with every check green (2026-10-28). Before any
+push that touches rendering, shaders or dependencies, run it, and open
+`.visual-check/*.png`. It fails on a dark Earth disc or a page error.
+Windows + installed Edge.
+
 ## What this is
 
 Real-time ISS visualizer: public TLEs -> SGP4 (`satellite.js`) -> simulation
 advanced at 10 Hz by a runtime fully decoupled from React and WebGL ->
-interpolated into a React Three Fiber scene. React 18, TypeScript strict,
+interpolated into a React Three Fiber scene. React 19 (R3F 9, drei 10), TypeScript strict,
 Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 `/api/tle` function).
 
@@ -33,6 +45,7 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
   fps / frame-time percentiles / GPU ms per pass / tracked GPU memory per
   scenario, refuses to run while another process uses the GPU or CPU
   (`docs/bench/README.md`; Windows + installed Edge)
+- `npm run check:visual` - the pixel check (see Rule 2)
 - `npm run verify` - the gate (see Rule 1)
 
 ## Map

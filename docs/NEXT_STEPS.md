@@ -36,7 +36,8 @@
 - **Gate**: `npm run verify` (677 unit tests on 2026-10-28) is the merge
   gate and the only CI job. The Playwright smoke + viewport suites
   (`npm run test:e2e`) run locally, by hand; `npm run bench` for measured perf
-  (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 18,
+  (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 19
+  (R3F 9, drei 10, camera-controls 3),
   three r170, Vite 6, Vitest 5; Dependabot weekly.
 
 ## Next (ranked)
@@ -78,11 +79,9 @@
 6. **HUD over the bright daylight limb** (A4 follow-up): text falls to ~1.6:1
    at worst in Follow. A stronger scrim or a faint text shadow (removed
    earlier by request) is a design call.
-7. **Deferred majors**, as one track: React 19 + R3F 9 + drei 10, then
-   three r18x, Vite 7/8, satellite.js 7. camera-controls 3 (Dependabot #34,
-   held open) belongs with drei 10: drei 9 pins its own 2.10.1, so the bump
-   alone ships two copies, and our camera code relies on 2.x internals
-   (`preserveUserControlFlags`, `carryControls`). TypeScript 7 (#35, held)
+7. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
+   landed 2026-10-28 (one camera-controls copy, +37.6 KB gzip JS). Still
+   open: three r18x, Vite 7/8, satellite.js 7. TypeScript 7 (#35, held)
    waits for typescript-eslint to accept it (install fails with ERESOLVE).
 8. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
    and S4–S6 are one batch each; splitting needs a batching change in

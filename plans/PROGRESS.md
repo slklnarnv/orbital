@@ -64,6 +64,45 @@
 - Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
   weights, sane constants).
 
+## Black Earth after the React 19 upgrade, fixed (2026-10-28)
+
+- **What happened**: #55 shipped with verify, Playwright 16/16 and the bench
+  all green, and the live Earth rendered black (atmosphere ring only).
+  Reverted in #56 (live checked: disc brightness 66, no console errors).
+- **Cause**: R3F 9 applies a `uniforms` prop on `<shaderMaterial>` by copying
+  each uniform into new objects (`uniforms[name] = {...uniform}`). Earth,
+  clouds, atmosphere, sun billboard and station glint wrote textures and sun
+  vectors into their own objects after mount, which the material never saw:
+  `dayMap`/`nightMap`/`cloudMap` stayed null.
+- **Fix**: uniforms go in through memoized constructor args
+  (`args={materialArgs}`), which three keeps by reference.
+  `ShaderUniformsByReference.test.ts` forbids the prop.
+- **Why nothing caught it**: no check looked at pixels. `npm run
+  check:visual` now builds the production bundle, renders it in Edge on the
+  real GPU at three fixed times and fails on a dark Earth disc (it measured
+  0 on the broken build, 40–66 on working ones) or a page error. CLAUDE.md
+  Rule 2: run it before pushing rendering, shader or dependency changes.
+
+## React 19 + R3F 9 + drei 10 + camera-controls 3 (2026-10-28)
+
+- **Install**: npm kept drei 9's peers (react-spring, react-composer, the
+  React 18 reconciler) in the lockfile and refused the upgrade (ERESOLVE);
+  uninstalling the five packages first and reinstalling resolved it. One
+  camera-controls copy (3.1.2, deduped under drei 10).
+- **Code**: React 19 dropped the global `JSX` namespace (31 files import
+  `type { JSX } from 'react'`); `useRef<T>(null)` is `RefObject<T | null>`
+  (four ref props widened). Every camera-controls private field we touch
+  (`_target`, `_targetEnd`, `_spherical*`, `_focalOffset*`, `_needsUpdate`,
+  `_activePointers`, `_isUserControlling*`) exists in 3.1.2; the camera unit
+  tests drive the real library and pass.
+- **Measured**: `npm run verify` 677/677; local Playwright suites in Edge
+  16/16; bench at `--at 1793170179000` back to back with main: GPU time
+  equal or lower in every row (Follow + Bloom 11.09 → 9.40 ms), 60 fps held;
+  the upgrade's run was contended by Firefox in every row, main's in three.
+  Bundle: `r3f-core` 123.2 → 160.8 KB gzip (+37.6 KB: React 19's DOM client
+  and R3F 9's bundled reconciler); asset budget passes.
+- Dependabot: React/R3F/drei/camera-controls majors stay hand-moved together.
+
 ## e2e removed from CI (2026-10-28)
 
 - The owner removed the `e2e` job: even sharded it kept every PR waiting

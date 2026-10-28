@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react'
+import type { JSX } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
@@ -92,6 +93,12 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     uniformsRef.current.sunDirection.value.set(sunDir.x, sunDir.y, sunDir.z)
   })
 
+  // Uniforms go in through the constructor, which keeps this object by
+  // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
+  // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
+  // Memoized: R3F rebuilds the material whenever `args` changes identity.
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: uniformsRef.current }], [])
+
   return (
     <mesh ref={cloudMeshRef} position={[0, 0, 0]} renderOrder={10}>
       {/* Cloud shell radius is ~6,390 km (CLOUD_RADIUS_FACTOR ≈ 1.003) */}
@@ -100,7 +107,7 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
         ref={materialRef}
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
-        uniforms={uniformsRef.current}
+        args={materialArgs}
         transparent={true}
         depthWrite={false}  // Prevent depth buffer sorting glitches with atmospheric rim
         depthTest={true}

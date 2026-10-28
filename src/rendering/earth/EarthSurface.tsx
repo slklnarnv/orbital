@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react'
+import type { JSX } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
@@ -96,6 +97,12 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     uniformsRef.current.cloudRotation.value = cloudRotationAtEpoch(simTime.epochMs)
   })
 
+  // Uniforms go in through the constructor, which keeps this object by
+  // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
+  // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
+  // Memoized: R3F rebuilds the material whenever `args` changes identity.
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: uniformsRef.current }], [])
+
   return (
     <mesh position={[0, 0, 0]}>
       {/* 6,371 km Earth radius with high resolution segmentation */}
@@ -103,7 +110,7 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
-        uniforms={uniformsRef.current}
+        args={materialArgs}
         depthWrite={true}
         depthTest={true}
       />
