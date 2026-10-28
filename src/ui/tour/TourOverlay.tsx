@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useBootStore } from '@/stores/bootStore'
 import { useHudStore } from '@/stores/hudStore'

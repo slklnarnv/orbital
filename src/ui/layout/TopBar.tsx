@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useSimulationClock } from '@/hooks/useSimulationClock'
 import { useTelemetryStore } from '@/stores/telemetryStore'
 import { useShallow } from 'zustand/react/shallow'
