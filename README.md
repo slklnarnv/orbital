@@ -146,7 +146,7 @@ npm run test:e2e     # Playwright smoke suite against the production preview
 npm run preview      # production bundle, with the production security headers
 ```
 
-Stack: React 19, TypeScript, Vite, Three.js r170 with React Three Fiber and
+Stack: React 18, TypeScript, Vite, Three.js r170 with React Three Fiber and
 drei, `satellite.js`, Zustand, Tailwind CSS, Vitest and Playwright. The site
 deploys to Vercel as static files plus the `/api/tle` function.
 

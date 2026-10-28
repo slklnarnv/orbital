@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { LOCAL_KEYS, SHORTCUTS, type Shortcut } from '../shortcuts/shortcutRegistry'
 import { HudPanel } from './HudPanel'
 import { switchOverlay } from './overlay'

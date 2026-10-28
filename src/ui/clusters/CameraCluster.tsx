@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 import { useCameraStore } from '@/stores/cameraStore'
 import { hasCommittedDetail, useLoadingStore } from '@/stores/loadingStore'
 import { requestResetView } from '@/interaction/camera/resetView'

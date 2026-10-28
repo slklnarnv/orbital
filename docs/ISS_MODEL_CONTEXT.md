@@ -19,7 +19,7 @@ Related docs: `docs/MODEL_AUDIT.md` (forensic audit report + classifications),
 
 ## 1. What and where
 
-**App**: ORBITAL — real-time ISS orbital visualization (React 19, TS strict,
+**App**: ORBITAL — real-time ISS orbital visualization (React 18, TS strict,
 Vite 6, R3F + three r170, zustand 5, satellite.js). The ISS is rendered at
 **~1,000× real scale** (109 m wingspan → 109 render units = "km"). This is
 intentional and the entire camera/LOD system is calibrated to it. **Never

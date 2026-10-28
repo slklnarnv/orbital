@@ -1,4 +1,3 @@
-import type { JSX } from 'react'
 /**
  * Line icons for the top-right tool row (Passes, Modules, Settings): 13 px,
  * currentColor, so they take the control's tone like its label does.

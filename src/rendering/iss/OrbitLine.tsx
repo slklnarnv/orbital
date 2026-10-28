@@ -36,7 +36,6 @@
 // Visual encoding: NormalBlending + depthTest keep the arc "grounded" (not a
 // holographic overlay) and hidden behind Earth.
 
-import type { JSX } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useHudStore } from '@/stores/hudStore'
