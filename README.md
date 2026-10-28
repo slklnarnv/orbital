@@ -15,8 +15,10 @@ point below, and the station's attitude.
 
 | | | |
 |:-:|:-:|:-:|
-| ![Earth overview with the day-night terminator over Africa, the lights of Asia on the night side, and the ISS orbit ring](docs/images/earth-overview.webp) | ![The module explorer: the station exploded into its parts above Earth's limb, with the card for the Cupola](docs/images/modules-exploded.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
-| Earth overview | Module explorer | Inspect |
+| ![Earth overview over the Pacific with today's clouds from NOAA, including two typhoons, and the ISS orbit ring](docs/images/earth-overview.webp) | ![The module explorer: the station exploded into its parts above Earth's limb, with the card for the Cupola](docs/images/modules-exploded.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
+| Earth overview, today's clouds | Module explorer | Inspect |
+| ![Follow over central Australia with streamed NASA imagery: sharp terrain under the station](docs/images/closeup-imagery.webp) | ![Past Earth's twilit limb toward the Moon, among catalogue stars](docs/images/real-sky.webp) | |
+| Close-up imagery | The real sky and the Moon | |
 
 ## What you are looking at
 
@@ -48,8 +50,13 @@ point below, and the station's attitude.
   smooth interpolation to the display rate
 - Time controls: pause, 1×–300×, absolute UTC seeks, and a scrubbable
   revolution tape
-- Custom GLSL Earth: day/night terminator, city lights, ocean glint, clouds,
-  atmosphere
+- Custom GLSL Earth: day/night terminator, city lights, ocean glint,
+  atmosphere, and today's clouds from NOAA's geostationary satellites, updated
+  hourly (they drift over the ground when you move away from the present)
+- Close-up imagery: near the station the ground streams in from NASA GIBS,
+  down to about half a kilometre per pixel
+- The real sky: the 9,096 naked-eye stars at true position and colour, the
+  Milky Way, and the Moon at its true position and phase (eclipses included)
 - NASA's IGOAL ISS model in two tiers: a fast level of detail for Follow and
   the full model below 200 km. It uses GPU-compressed (KTX2) textures,
   animated joints and sun-cast self-shadowing.
@@ -122,7 +129,7 @@ station jump.
 | Revolution tape | Drag or click to scrub through the current orbit |
 | **Passes** | Set your location and see the next visible passes; **Watch** plays one |
 | **Modules** | Fly to the station and open the module explorer: pick, explode, focus |
-| **Settings** | Model quality, orbit style, bloom, lens flare, ground track, shadows, render scale |
+| **Settings** | Model quality, orbit style, bloom, lens flare, ground track, shadows, close-up imagery, render scale |
 | **About** | What is measured and what is illustrative, credits, and the guided tour |
 
 Shortcuts pause while you type in a field. A skip link, a text summary of
@@ -142,16 +149,17 @@ npm run dev          # http://localhost:5173, /api/tle served by the real handle
 
 ```bash
 npm run verify       # release gate: asset budget, shaders, types, lint, unit tests, build
-npm run test:e2e     # Playwright smoke suite against the production preview
+npm run test:e2e     # Playwright smoke suite against the production preview (local only)
+npm run check:visual # renders the production build on the GPU and checks the Earth draws
 npm run preview      # production bundle, with the production security headers
 ```
 
 Stack: React 19, TypeScript, Vite, Three.js r170 with React Three Fiber and
 drei, `satellite.js`, Zustand, Tailwind CSS, Vitest and Playwright. The site
-deploys to Vercel as static files plus the `/api/tle` function.
+deploys to Vercel as static files plus the `/api/tle` and `/api/clouds` functions.
 
 ```text
-api/            /api/tle function
+api/            /api/tle and /api/clouds functions
 src/core/       clock, runtime, SGP4, telemetry, geo lookup (pure, unit-tested)
 src/rendering/  Earth, ISS model and joints, post-processing, GLSL shaders
 src/interaction/ camera state machine and flights
@@ -172,8 +180,10 @@ measured.
 ## Credits and license
 
 The ISS models are NASA's (IGOAL and NASA 3D Resources). The Earth and sky
-imagery comes from NASA Blue Marble and Black Marble, place names from Natural
-Earth, and weather from Open-Meteo. Orbital data comes from CelesTrak and
+imagery comes from NASA Blue Marble, Black Marble and GIBS, live clouds from
+NOAA's GMGSI mosaic, the stars from the Yale Bright Star Catalogue, the Moon
+from NASA's Lunar Reconnaissance Orbiter, place names from Natural Earth, and
+weather from Open-Meteo. Orbital data comes from CelesTrak and
 wheretheiss.at. NASA does not endorse this project. Full terms are in
 [NOTICE.md](NOTICE.md).
 
