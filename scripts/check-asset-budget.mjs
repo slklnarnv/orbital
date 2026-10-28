@@ -5,6 +5,10 @@ import path from 'node:path'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const MiB = 1024 * 1024
 
+// Only assets shipped from /public are budgeted. The close-range NASA GIBS
+// tiles (rendering/earth/surfaceDetail.ts) are streamed at run time, only
+// below ~4,500 km of altitude, ~10–20 KB each and ≤ 32 resident: exempt by
+// construction.
 const initialAssets = [
   'public/textures/earth-day-4k.webp',
   'public/textures/earth-night-4k.webp',

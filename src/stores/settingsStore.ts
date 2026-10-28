@@ -37,6 +37,9 @@ interface SettingsStore {
   /** Pixel ratio: 'auto' lets the DprGovernor adapt; a number pins it at
    *  that fraction of the device ceiling (renderScale.ts). */
   renderScale: RenderScale
+  /** Close-range NASA GIBS imagery streamed under the camera below
+   *  ~4,500 km (rendering/earth/surfaceDetail.ts). Saver-data turns it off. */
+  surfaceImagery: boolean
   setIssModelQuality: (quality: IssModelQuality) => void
   setPostprocessing: (on: boolean) => void
   setOrbitLineStyle: (style: OrbitLineStyle) => void
@@ -44,12 +47,13 @@ interface SettingsStore {
   setGroundTrack: (on: boolean) => void
   setShadows: (on: boolean) => void
   setRenderScale: (scale: RenderScale) => void
+  setSurfaceImagery: (on: boolean) => void
 }
 
 const MODEL_QUALITIES: readonly IssModelQuality[] = ['high', 'legacy']
 const ORBIT_LINE_STYLES: readonly OrbitLineStyle[] = ['continuous', 'dashed']
 
-type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare' | 'groundTrack' | 'shadows' | 'renderScale'>>
+type PersistedSettings = Partial<Pick<SettingsStore, 'issModelQuality' | 'postprocessing' | 'orbitLineStyle' | 'lensFlare' | 'groundTrack' | 'shadows' | 'renderScale' | 'surfaceImagery'>>
 
 /** Keeps only known, well-typed persisted settings (exported for tests). */
 export function sanitizePersistedSettings(persisted: unknown): PersistedSettings {
@@ -67,6 +71,7 @@ export function sanitizePersistedSettings(persisted: unknown): PersistedSettings
   if (typeof raw.groundTrack === 'boolean') out.groundTrack = raw.groundTrack
   if (typeof raw.shadows === 'boolean') out.shadows = raw.shadows
   if (isRenderScale(raw.renderScale)) out.renderScale = raw.renderScale
+  if (typeof raw.surfaceImagery === 'boolean') out.surfaceImagery = raw.surfaceImagery
   return out
 }
 
@@ -81,6 +86,7 @@ export const useSettingsStore = create<SettingsStore>()(
       groundTrack: false,
       shadows: true,
       renderScale: 'auto',
+      surfaceImagery: true,
       setIssModelQuality: (issModelQuality) => set((state) => ({
         issModelQuality,
         selectionNonce: state.selectionNonce + 1,
@@ -91,6 +97,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setGroundTrack: (groundTrack) => set({ groundTrack }),
       setShadows: (shadows) => set({ shadows }),
       setRenderScale: (renderScale) => set({ renderScale }),
+      setSurfaceImagery: (surfaceImagery) => set({ surfaceImagery }),
     }),
     {
       name: 'orbital-settings',
@@ -104,6 +111,7 @@ export const useSettingsStore = create<SettingsStore>()(
         groundTrack: state.groundTrack,
         shadows: state.shadows,
         renderScale: state.renderScale,
+        surfaceImagery: state.surfaceImagery,
       }),
       // localStorage is user-editable and outlives schema changes. Zustand's
       // default merge spreads whatever is stored over the defaults, so a

@@ -7,6 +7,9 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { cloudRotationAtEpoch } from './CloudMotion'
 import { useEarthDetailUpgrade } from './useEarthDetailUpgrade'
+import { GibsDetailStream } from './GibsDetailStream'
+import { DETAIL_LEVELS } from './surfaceDetail'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { EARTH_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import vertexShader from '../shaders/earthSurface.vert'
 import fragmentShader from '../shaders/earthSurface.frag'
@@ -18,6 +21,33 @@ useTexture.preload(EARTH_TEXTURES.dayMap)
 useTexture.preload(EARTH_TEXTURES.nightMap)
 useTexture.preload(EARTH_TEXTURES.specularMap)
 useTexture.preload(EARTH_TEXTURES.cloudMap)
+
+// Close-range imagery: at most one tile upload per frame across both levels.
+const DETAIL_UPLOADS_PER_FRAME = 1
+
+const _viewDir = new THREE.Vector3()
+const _hit = new THREE.Vector3()
+const _local = new THREE.Vector3()
+
+/**
+ * Where the close-range inset centres: the ground point at the middle of the
+ * view, or the point under the camera when the view misses the Earth. In the
+ * sphere's own texture coordinates (three's SphereGeometry UVs), so the
+ * shader and the tiles agree without any longitude convention.
+ */
+function insetCenterUv(camera: THREE.Camera, earth: THREE.Object3D): { u: number; v: number } {
+  camera.getWorldDirection(_viewDir)
+  const o = camera.position
+  const b = o.dot(_viewDir)
+  const disc = b * b - (o.lengthSq() - EARTH_RADIUS * EARTH_RADIUS)
+  if (disc >= 0 && -b - Math.sqrt(disc) > 0) _hit.copy(o).addScaledVector(_viewDir, -b - Math.sqrt(disc))
+  else _hit.copy(o).setLength(EARTH_RADIUS)
+  earth.worldToLocal(_local.copy(_hit))
+  // SphereGeometry: x = −cos(2πu)·sinθ, z = sin(2πu)·sinθ, y = cosθ, v = 1 − θ/π.
+  const phi = Math.atan2(_local.z, -_local.x)
+  const u = phi / (2 * Math.PI)
+  return { u: u - Math.floor(u), v: 1 - Math.acos(THREE.MathUtils.clamp(_local.y / _local.length(), -1, 1)) / Math.PI }
+}
 
 /** Helper to apply optimal visual and GPU rendering parameters on loaded textures */
 const configureTexture = (texture: THREE.Texture, isSRGB: boolean, maxAnisotropy: number) => {
@@ -41,6 +71,7 @@ const configureTexture = (texture: THREE.Texture, isSRGB: boolean, maxAnisotropy
  */
 export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
   const { gl } = useThree()
+  const meshRef = useRef<THREE.Mesh>(null)
 
   // Load high-resolution day, night, and specular maps directly (blocks Suspense)
   const earthTextures = useTexture({
@@ -61,6 +92,27 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     sunDirection: { value: new THREE.Vector3(0, 0, 1) },
     nightIntensity: { value: 4.2 },
   })
+
+  // NASA GIBS close-range imagery (roadmap D.8), one ring buffer per level;
+  // their uniforms join the surface material's by reference.
+  const detail = useMemo(() => DETAIL_LEVELS.map((level) => new GibsDetailStream(level)), [])
+  useEffect(() => () => detail.forEach((stream) => stream.dispose()), [detail])
+  const surfaceImagery = useSettingsStore((state) => state.surfaceImagery)
+  const saveData = useMemo(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+    return connection?.saveData === true
+  }, [])
+  const uniforms = useMemo(() => {
+    const all: Record<string, THREE.IUniform> = { ...uniformsRef.current }
+    detail.forEach((stream, i) => {
+      all[`detailMap${i}`] = stream.uniforms.map
+      all[`detailWindow${i}`] = stream.uniforms.window
+      all[`detailCenter${i}`] = stream.uniforms.center
+      all[`detailSlots${i}`] = stream.uniforms.slots
+      all[`detailOn${i}`] = stream.uniforms.on
+    })
+    return all
+  }, [detail])
 
   // Configure and assign the high-res textures once they are loaded
   useEffect(() => {
@@ -87,7 +139,14 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
   // (KTX2, streamed and uploaded without a hitch); everyone else keeps 4K.
   useEarthDetailUpgrade(uniformsRef.current)
 
-  useFrame(() => {
+  useFrame((state, delta) => {
+    const earth = meshRef.current
+    const streaming = surfaceImagery && !saveData && earth !== null
+    const altitude = state.camera.position.length() - EARTH_RADIUS
+    const center = streaming ? insetCenterUv(state.camera, earth) : null
+    let budget = DETAIL_UPLOADS_PER_FRAME
+    for (const stream of detail) budget -= stream.update(gl, center, altitude, delta, budget)
+
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
 
@@ -101,10 +160,10 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
   // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
   // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
   // Memoized: R3F rebuilds the material whenever `args` changes identity.
-  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: uniformsRef.current }], [])
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms }], [uniforms])
 
   return (
-    <mesh position={[0, 0, 0]}>
+    <mesh ref={meshRef} position={[0, 0, 0]}>
       {/* 6,371 km Earth radius with high resolution segmentation */}
       <sphereGeometry args={[EARTH_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_SPHERE_SEGMENTS]} />
       <shaderMaterial

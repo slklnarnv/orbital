@@ -79,7 +79,7 @@ function reachedHosts(): string[] {
 
 describe('production connect-src', () => {
   it('finds the external endpoints in src/', () => {
-    expect(fetchedHosts()).toEqual(['api.open-meteo.com', 'api.wheretheiss.at'])
+    expect(fetchedHosts()).toEqual(['api.open-meteo.com', 'api.wheretheiss.at', 'gibs.earthdata.nasa.gov'])
   })
 
   it('allows every host the client fetches, including redirect targets', () => {

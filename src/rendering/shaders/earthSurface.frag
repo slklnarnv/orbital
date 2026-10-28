@@ -9,6 +9,19 @@ uniform float cloudRotation;
 uniform vec3 sunDirection;    // world-space unit vector toward sun
 uniform float nightIntensity; // city lights brightness multiplier
 
+// Streamed close-range albedo (surfaceDetail.glsl): level 5 (~2 km) and
+// level 7 (~0.5 km) ring buffers of NASA GIBS tiles.
+uniform sampler2D detailMap0;
+uniform vec4 detailWindow0;
+uniform vec2 detailCenter0;
+uniform float detailSlots0[16];
+uniform float detailOn0;
+uniform sampler2D detailMap1;
+uniform vec4 detailWindow1;
+uniform vec2 detailCenter1;
+uniform float detailSlots1[16];
+uniform float detailOn1;
+
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
@@ -17,6 +30,7 @@ varying vec3 vCloudDir;
 const float TWO_PI = 6.28318530718;
 
 #include "./cloudDensity.glsl"
+#include "./surfaceDetail.glsl"
 
 // ── City lights up close ──────────────────────────────────────────────────────
 // The Black Marble map is ~5 km per texel at 8K (~10 km at 4K). From Follow
@@ -96,6 +110,12 @@ vec3 nightKnee(vec3 c) {
 }
 
 void main() {
+  // Detail footprints first: derivatives are only defined outside branches.
+  vec2 detailG0 = detailTileCoord(vUv, detailWindow0.w);
+  vec2 detailG1 = detailTileCoord(vUv, detailWindow1.w);
+  float detailPpt0 = detailPixelsPerTexel(detailG0, detailWindow0.z);
+  float detailPpt1 = detailPixelsPerTexel(detailG1, detailWindow1.z);
+
   vec3 normal = normalize(vNormal);
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
   float sunDot = dot(normal, normalize(sunDirection));
@@ -134,7 +154,10 @@ void main() {
   float cloudShadowDay = smoothstep(0.04, 0.40, sunDot);
   float cloudTransmittance = 1.0 - cloudShadowDensity * cloudShadowDay * 0.18;
 
-  vec3 dayColor = texture2D(dayMap, vUv).rgb * terrainLight * cloudTransmittance * sunWarmth;
+  vec3 albedo = texture2D(dayMap, vUv).rgb;
+  albedo = applyDetailLevel(albedo, detailMap0, detailWindow0, detailCenter0, detailSlots0, detailOn0, detailG0, detailPpt0);
+  albedo = applyDetailLevel(albedo, detailMap1, detailWindow1, detailCenter1, detailSlots1, detailOn1, detailG1, detailPpt1);
+  vec3 dayColor = albedo * terrainLight * cloudTransmittance * sunWarmth;
 
   // ── City Lights — Warm Amber Tint & Photographic Response ────────────────────
   // NASA Black Marble images have a raw white-dominant encoding.

@@ -50,6 +50,8 @@ export function SettingsGear(): JSX.Element {
   const groundTrack = useSettingsStore((state) => state.groundTrack)
   const shadows = useSettingsStore((state) => state.shadows)
   const setShadows = useSettingsStore((state) => state.setShadows)
+  const surfaceImagery = useSettingsStore((state) => state.surfaceImagery)
+  const setSurfaceImagery = useSettingsStore((state) => state.setSurfaceImagery)
   const setGroundTrack = useSettingsStore((state) => state.setGroundTrack)
   const renderScale = useSettingsStore((state) => state.renderScale)
   const setRenderScale = useSettingsStore((state) => state.setRenderScale)
@@ -196,6 +198,15 @@ export function SettingsGear(): JSX.Element {
               className={`hud-label hud-option${shadows ? ' hud-option--on' : ''}`}
             >
               Shadows
+            </button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={surfaceImagery}
+              onClick={() => setSurfaceImagery(!surfaceImagery)}
+              className={`hud-label hud-option${surfaceImagery ? ' hud-option--on' : ''}`}
+            >
+              Close-up imagery
             </button>
           </div>
 
