@@ -18,8 +18,11 @@
 - **Earth and sky**: 4K WebP first paint, 8K KTX2 day and night maps streamed
   in on capable desktops; bicubic clouds with near-deck detail and shadows;
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
-  City lights up close resolve into points of light inside a soft glow
-  (`earthSurface.frag`), kept under the bloom threshold. The limb's twilight
+  Below ~4,500 km the ground near the view centre streams in from NASA GIBS
+  (~2 km, then ~0.5 km per pixel below ~1,500 km; `surfaceDetail.ts`,
+  Settings > Close-up imagery). City lights up close resolve into points of
+  light inside a soft glow (`earthSurface.frag`), kept under the bloom
+  threshold. The limb's twilight
   colour and shadow edge follow the sunlight path (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial;
@@ -36,7 +39,7 @@
   (offline city search, Web Worker); module explorer (pick, explode, focus);
   orbit tape scrubbing with a station-locked camera; `H` hides the HUD, the
   orbit line and the 3D ground track.
-- **Gate**: `npm run verify` (693 unit tests on 2026-10-28) is the merge
+- **Gate**: `npm run verify` (704 unit tests on 2026-10-28) is the merge
   gate and the only CI job. The Playwright smoke + viewport suites
   (`npm run test:e2e`) run locally, by hand; `npm run bench` for measured perf
   (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 19
@@ -56,38 +59,39 @@
      exponentials per pixel over most of the frame does not fit the iGPU
      budget; revisit only with a measured reason.
    - *Clouds*: soft cloud shadows on the ground at low sun (needs the sun
-     direction in the rotating deck frame), and same-day cloud imagery (NASA
-     GIBS, D.8). A cloud rim past the terminator was tried (#53) and removed:
+     direction in the rotating deck frame), and same-day cloud imagery (GIBS
+     has daily true colour, but it carries its own clouds). A cloud rim past the terminator was tried (#53) and removed:
      from the overview it drew a hard grey-orange stripe down the terminator.
      Any retry must be judged from the overview, not only close dusk views.
-   - *Surface up close*: detail under the station at Follow/Inspect (it softens
-     in close shots), and an ocean glint that follows wave roughness and wind.
+   - ~~*Surface up close*~~: landed with D.8 (GIBS imagery under the
+     station). Still open: an ocean glint that follows wave roughness and
+     wind; the night lights from GIBS (`VIIRS_Black_Marble`, 500 m) the same
+     way, if the procedural points ever fall short.
    - ~~*Stars and the Moon*~~: landed 2026-10-28 (Yale BSC5 and the LRO WAC
      mosaic, both public domain; the exposure already dims the stars with
      the sun in view).
-2. **D.8 streamed NASA GIBS imagery** (owner, 2026-10-28: next). Spec below.
-3. **Human visual pass** on a real GPU: the rebuilt materials at Follow and
+2. **Human visual pass** on a real GPU: the rebuilt materials at Follow and
    Inspect, day and night (MLI blankets, ELC grating, iROSA wings); the
    penumbra fade at a terminator crossing (300x), the countdown, the ground
    track (HUD globe and 3D), the Bloom MSAA edges; on a throttled
    connection, Locate departs with the detailed LOD and the full model
    appears only below 200 km. Also a real-device iOS Safari pass
    (address-bar collapse with `100dvh`, notch insets in landscape).
-4. **Bench leftovers (A.2)**: the flare and 300x rows, the GPU-memory leak
+3. **Bench leftovers (A.2)**: the flare and 300x rows, the GPU-memory leak
    check (5 Bloom toggles, 3 model switches), and why Bloom off measures more
    GPU time than Bloom on (12.5 vs 9.2 ms at overview).
-5. **HUD over the bright daylight limb** (A4 follow-up): text falls to ~1.6:1
+4. **HUD over the bright daylight limb** (A4 follow-up): text falls to ~1.6:1
    at worst in Follow. A stronger scrim or a faint text shadow (removed
    earlier by request) is a design call.
-6. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
+5. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
    landed 2026-10-28 (one camera-controls copy, +37.6 KB gzip JS). Still
    open: three r18x, Vite 7/8, satellite.js 7. TypeScript 7 (#35, held)
    waits for typescript-eslint to accept it (install fails with ERESOLVE).
-7. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
+6. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
    and S4–S6 are one batch each; splitting needs a batching change in
    `build-iss-model.mjs`) and masses for the elements NASA's pages omit;
    passes: an observer marker on the globe, pass magnitude; a higher-
-   resolution cloud source (017 V1.3, with D.8).
+   resolution cloud source (017 V1.3).
 
 ## Open backlog (specs kept for when they are picked up)
 
@@ -120,39 +124,6 @@
   0.30, future 0.60) against the closed ring is a visual call.
 
 ### Borrowed ideas still open (from the youreyesinspace comparison, 2026-10-19)
-
-#### D.8 - Streamed Earth imagery (NASA GIBS) for close-range detail - big
-
-Our surface is one 4K equirect map (day 1.05 MB, night 249 KB): ~10 km per
-texel at the equator. At INSPECT range the ground is visibly soft. Their
-Earth streams Blue Marble NG + VIIRS Black Marble from NASA GIBS (up to
-~500 m/px at their deepest level, 512 px tiles) and Moon/Mars from NASA
-Trek. The borrowable design
-is `TileGlobe.ts`: a quadtree refined by screen texel size
-(`REFINE_PX = 1.6`), horizon + frustum cull per node, `MAX_CONCURRENT = 8`,
-queued requests dropped after `STALE_REQUEST_MS = 150`, a 320-texture budget
-with 4 s pruning, and the key trick - an unfinished tile renders its parent's
-texture through a UV sub-rect (`mapInto`), so refinement never flashes
-level 0.
-
-Integration risks, all real:
-
-- Our surface shader owns the terminator, the cloud shadow (`cloudDensity.glsl`), the ocean
-  Fresnel and the city-light curve. Their `tile.frag` re-derives lighting and
-  has none of the cloud-shadow taps; porting the tile path means porting
-  those features or accepting a visible regression at the swap.
-- `vercel.json` CSP `img-src` must add `https://gibs.earthdata.nasa.gov`
-  (plus the credit line from D.4).
-- `check-asset-budget.mjs` gates only initial assets, so streamed tiles are
-  exempt by construction - state that in its comment.
-- Fill rate: our scene is already fill-bound (4K maps + bloom at up to 2x
-  DPR). Their 320-texture budget was measured on a different scene; measure
-  ours before adopting the number.
-- Their loader is a module-level singleton shared by every globe; keep ours
-  per-globe so a disposed globe cannot leave queued jobs behind.
-
-Do this only after A.2's measured baseline and C.6's cheap cuts. First cut:
-Earth only, day layer only, level <= 5, behind a settings toggle default off.
 
 #### D.9 - Reverse-time playback - optional, has a real blocker
 
@@ -248,7 +219,6 @@ access, not log integrity.
   `public/textures/README.md`.
 - **Brand: no borrowing.** The name and logo are trademarks of BigBrains.
 
-**Net:** D.1 and D.2 were the two changes with real user-visible payoff for
-under a session each, and both have landed. D.3 corrected our own B.2 spec and
-landed with it. D.8 is the only large borrow left worth doing, and only after
-the perf baseline.
+**Net:** D.1, D.2 and D.8 (streamed GIBS imagery, 2026-10-28) have landed;
+D.3 corrected our own B.2 spec and landed with it. D.9 is the only one left,
+and optional.
