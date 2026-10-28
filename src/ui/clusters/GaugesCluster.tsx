@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOrbitalState } from '@/hooks/useOrbitalState'
 import { useTelemetryStore } from '@/stores/telemetryStore'

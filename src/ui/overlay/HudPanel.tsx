@@ -1,9 +1,10 @@
+import type { JSX } from 'react'
 import { useId, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { closeOverlay, focusableWithin } from './overlay'
 
 interface HudPanelProps {
   title: string
-  panelRef: RefObject<HTMLDivElement>
+  panelRef: RefObject<HTMLDivElement | null>
   className: string
   /** Holds Tab inside the panel (the help overlay). */
   modal?: boolean

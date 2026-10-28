@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import React, { Suspense, useCallback, useMemo, useRef, useEffect, Component, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CameraControls } from '@react-three/drei'

@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { useSimulationStore } from '@/stores/simulationStore'

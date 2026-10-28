@@ -17,7 +17,7 @@ lacked a global `navigator` and this broke CI once). Requires Node 22+.
 
 Real-time ISS visualizer: public TLEs -> SGP4 (`satellite.js`) -> simulation
 advanced at 10 Hz by a runtime fully decoupled from React and WebGL ->
-interpolated into a React Three Fiber scene. React 18, TypeScript strict,
+interpolated into a React Three Fiber scene. React 19 (R3F 9, drei 10), TypeScript strict,
 Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 `/api/tle` function).
 
