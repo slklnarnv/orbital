@@ -118,6 +118,14 @@ integrated GPUs and phones can hold. Plan:
 - specular stays 4K; clouds follow V1;
 - gate it on the A.2 perf baseline, and keep it off the initial budget.
 Close-range detail beyond 8K is D.8 (GIBS tiles).
+*Landed 2026-10-26* (`useEarthDetailUpgrade.ts`, `earthDetail.ts`,
+`progressiveUpload.ts`, `scripts/build-earth-8k.mjs`). Deviations from the
+plan, both measured: the day map ships as **UASTC** (20.5 MiB), not ETC1S —
+ETC1S (4.1 MiB) left 4×4 block halos along every coastline at orbital
+magnification; the night lights are ETC1S (1.4 MiB). The swap uploads at
+most 1 MiB per frame: a one-call upload stalled 27–45 ms per map. Captures:
+`docs/images/earth-8k-day.webp`, `earth-8k-night.webp`; bench numbers in
+`docs/bench/README.md`.
 
 **V3. The sun.** Today it renders as a small disc with a faint amber haze —
 next to Earth's limb it reads like a bright star. It is deliberately kept
