@@ -4,6 +4,8 @@ uniform sampler2D cloudMap;
 uniform vec2 cloudTexelSize;
 uniform vec3 sunDirection;
 uniform float opacity;
+uniform vec3 atmTau;          // SunAppearance.SUN_TANGENT_TAU
+uniform float atmScaleHeight; // SunAppearance.ATMOSPHERE_SCALE_HEIGHT_KM
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -11,6 +13,16 @@ varying vec3 vWorldPosition;
 varying vec3 vCloudDir;
 
 #include "./cloudDensity.glsl"
+
+const float EARTH_R = 6371.0;
+#include "./sunPath.glsl"
+
+// Cloud tops stand ~10 km up, so they keep the sun for ~3.5 deg past the
+// ground's terminator, lit by sunlight that has skimmed the lower air: the
+// orange-to-red rim of cloud seen at every orbital sunset. The deck is drawn
+// at the cloud shell, but the light is taken at this height.
+const float CLOUD_TOP_KM = 10.0;
+const float CLOUD_RIM_GAIN = 0.75;
 
 void main() {
   // ── Cloud Density Sampling ───────────────────────────────────────────────────
@@ -65,6 +77,21 @@ void main() {
 
   vec3 cloudColor = mix(nightColor, dayColor, dayMask);
 
+  // ── Cloud tops past the terminator ────────────────────────────────────────────
+  // Only where the day shading has run out (sunDot just below 0): the rim adds
+  // the grazing sunlight the tops still receive, coloured by the air it crossed
+  // (transmittance at the height of its path), and nothing on the day side.
+  float rimW = 1.0 - smoothstep(-0.01, 0.03, sunDot);
+  float rimVisibility = 0.0;
+  if (rimW > 0.0) {
+    vec3 top = normalize(vWorldPosition) * (EARTH_R + CLOUD_TOP_KM);
+    float hSunTop = sunPathHeight(top, CLOUD_TOP_KM, normalize(sunDirection));
+    float sunUp = smoothstep(-2.0, 4.0, hSunTop);
+    vec3 rim = transmittance(max(hSunTop, 0.0)) * (CLOUD_RIM_GAIN * sunUp * rimW);
+    cloudColor += rim;
+    rimVisibility = sunUp * rimW;
+  }
+
   // ── Horizon Fresnel Edge Softness ─────────────────────────────────────────────
   // Attenuate alpha at glancing view angles to prevent the hard spherical shell edge
   // from becoming visible as a disc boundary. This is a view-space effect,
@@ -75,7 +102,7 @@ void main() {
   // ── Alpha Composition ─────────────────────────────────────────────────────────
   // Nightside clouds block 25% of background city lights, acting as soft dark silhouetted shadows.
   // Dayside clouds are modulated by the opacity uniform (0.32 default = subtle).
-  float visibilityFactor = mix(0.25, 1.0, dayMask);
+  float visibilityFactor = max(mix(0.25, 1.0, dayMask), rimVisibility);
   // The flat density shell is convincing from orbit but becomes a screen-filling
   // decal near the camera's minimum altitude. Fade only inside 229 km altitude;
   // normal ISS and planetary views remain fully opaque.
