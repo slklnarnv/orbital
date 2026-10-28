@@ -50,6 +50,14 @@
 - Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
   weights, sane constants).
 
+## e2e removed from CI (2026-10-28)
+
+- The owner removed the `e2e` job: even sharded it kept every PR waiting
+  6–7 min for an advisory check. CI is `verify` (+ `npm audit`) only, ~50 s.
+  The Playwright suites stay in `tests/e2e/` for local runs
+  (`npm run test:e2e`; `fullyParallel` kept, harmless with one worker).
+  Superseded the sharding below.
+
 ## Faster e2e in CI (2026-10-28)
 
 - **Measured** on PR #49: `verify` 50 s, then `e2e` 10 min 51 s, of which
