@@ -44,6 +44,11 @@
   02:50:30Z (Follow, looking down and zoomed) visibly sharper with no tile
   or inset edge; the antimeridian (22:58:15Z) shows no seam; the overview
   loads nothing and is unchanged (both levels at weight 0).
+- **Measured** (`npm run bench --at 1793170179000`, against the sky branch,
+  both at Firefox's 13–17% GPU, marked contended): 60 fps in every row; GPU
+  time within ±0.4 ms (Follow 10.59 vs 11.23 ms with Bloom, Inspect 15.52
+  vs 15.21). The same run put the sky branch's Inspect rows back at 60 fps,
+  so their earlier dip (under Firefox at 36–38%) was contention.
 - Tests: `SurfaceDetail.test.ts` (grid, URLs, dateline wrap, pole clamp,
   slots, the inset never leaving the window, shader contract),
   `settingsStore.test.ts`, `ConnectSrcCsp.test.ts`.
