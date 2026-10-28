@@ -50,6 +50,19 @@
 - Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
   weights, sane constants).
 
+## Cloud rim reverted (2026-10-28)
+
+- #53 lit cloud tops ~3.5 deg past the terminator and raised the deck's
+  visibility there. Judged only on close dusk views, where it looked subtle;
+  from the overview (the owner's view) its sharp edges drew a hard
+  grey-orange stripe down the whole terminator. Reverted (shader, the
+  shared `sunPath.glsl`, test, docs); the React 19 uniforms fix stays.
+- Checked at the owner's time and framing (12:24:32Z, overview), production
+  build on the real GPU: the revert matches the pre-#51 baseline (mean pixel
+  difference 0.13 in the terminator crop, vs 0.50 for the rim).
+- Lesson, as a rule: judge any Earth-shading change from the overview as well
+  as up close, against a baseline capture at a fixed time.
+
 ## Black Earth after the React 19 upgrade, fixed (2026-10-28)
 
 - **What happened**: #55 shipped with verify, Playwright 16/16 and the bench

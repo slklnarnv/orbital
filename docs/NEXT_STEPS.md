@@ -50,9 +50,11 @@
      precomputed-scattering model was weighed and not taken: ~100+
      exponentials per pixel over most of the frame does not fit the iGPU
      budget; revisit only with a measured reason.
-   - *Clouds*: soft cloud shadows on the ground at low sun, and a bright cloud
-     rim near the terminator where tops catch light after the ground goes
-     dark. Same-day cloud imagery (NASA GIBS, D.8) instead of the composite.
+   - *Clouds*: soft cloud shadows on the ground at low sun (needs the sun
+     direction in the rotating deck frame), and same-day cloud imagery (NASA
+     GIBS, D.8). A cloud rim past the terminator was tried (#53) and removed:
+     from the overview it drew a hard grey-orange stripe down the terminator.
+     Any retry must be judged from the overview, not only close dusk views.
    - *Surface up close*: detail under the station at Follow/Inspect (it softens
      in close shots), and an ocean glint that follows wave roughness and wind.
    - *Stars*: a real catalogue at true magnitude and colour plus the Milky
