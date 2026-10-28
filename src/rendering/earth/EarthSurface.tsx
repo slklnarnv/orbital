@@ -5,7 +5,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { cloudRotationAtEpoch } from './CloudMotion'
+import { cloudRotationAtEpoch, liveCloudRotation } from './CloudMotion'
 import type { LiveClouds } from './liveClouds'
 import { useEarthDetailUpgrade } from './useEarthDetailUpgrade'
 import { GibsDetailStream } from './GibsDetailStream'
@@ -158,7 +158,7 @@ export const EarthSurface = React.memo(function EarthSurface({ clouds }: { cloud
     uniformsRef.current.sunDirection.value.set(sunDir.x, sunDir.y, sunDir.z)
     // The surface shader samples the same cloud field to cast aligned soft shadows.
     // The same frame state as CloudLayer, so the shadows stay under the clouds.
-    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs))
+    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs), liveCloudRotation(simTime.epochMs, Date.now()))
     const u = uniformsRef.current
     u.cloudRotation.value = frame.rotationA
     u.cloudMap.value = frame.mapA ?? earthTextures.clouds

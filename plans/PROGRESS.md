@@ -8,6 +8,20 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Live clouds drift away from the present (2026-10-29)
+
+- **Owner**: the deck should move against the ground when the orbit tape or
+  the time rate moves the clock; static live clouds rode rigidly with the
+  Earth (the composite had drifted, once per 5 days).
+- **Now** (`CloudMotion.liveCloudRotation`): zero at the present (live
+  clouds are what the satellites saw), then the composite's eastward rate
+  as the simulation leaves it. Each map in a crossfade keeps its own drift
+  (`cloudFrame` offsets B by the difference). Measured on a bench build: 0°
+  now, 4.5° one tape orbit ahead, 18° at +6 h, 72° at +24 h, where the
+  same face of the Earth shows the Pacific weather moved over the Americas.
+  A stand-in for the prevailing winds, not a forecast.
+- Tests: `CloudMotion.test.ts`, `LiveClouds.test.ts`.
+
 ## Live clouds from NOAA's infrared mosaic (2026-10-29)
 
 - **Before**: one static NASA cloud composite, drifting once every 5 days;
@@ -42,7 +56,8 @@
   main thread to a one-channel texture (~11 MiB with mips, a quarter of the
   composite), crossfaded over 2.5 s through a second map in
   `cloudDensity.glsl`, in the shell and the surface shadows alike; checked
-  every 20 min, newer hours fade in the same way. Live clouds do not drift.
+  every 20 min, newer hours fade in the same way. Live clouds sit where the
+  satellites saw them at the present and drift away from there (next entry).
   About states the data time, or the composite when live has not loaded.
 - **Checked** (bench build, real map served to the page): one fetch,
   mid-fade blend 0.40, promoted after; frame times p50 16.7 / p99 17.4 ms,

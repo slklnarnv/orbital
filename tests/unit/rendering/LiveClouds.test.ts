@@ -10,23 +10,23 @@ describe('cloudFrame (live clouds crossfade)', () => {
   const newer = new THREE.Texture()
 
   it('shows the drifting composite until a live map arrives', () => {
-    const f = cloudFrame({ current: null, next: null, fadeStart: 0 }, 1000, 1.2)
+    const f = cloudFrame({ current: null, next: null, fadeStart: 0 }, 1000, 1.2, 0)
     expect(f).toEqual({ mapA: null, rotationA: 1.2, mapB: null, offsetB: 1.2 / (2 * Math.PI), blend: 0 })
   })
 
-  it('fades live in over the composite at the composite’s frame offset', () => {
-    const mid = cloudFrame({ current: null, next: live, fadeStart: 0 }, CLOUD_FADE_MS / 2, 1.2)
+  it('fades live in over the composite, each at its own drift', () => {
+    const mid = cloudFrame({ current: null, next: live, fadeStart: 0 }, CLOUD_FADE_MS / 2, 1.2, 0.2)
     expect(mid.mapB).toBe(live)
     expect(mid.rotationA).toBe(1.2)
-    // B is unrotated: in A's rotated frame it sits rotation/2π further east.
-    expect(mid.offsetB).toBeCloseTo(1.2 / (2 * Math.PI), 12)
+    // In A's frame (rotated 1.2) B (rotated 0.2) sits (1.2 − 0.2)/2π further east.
+    expect(mid.offsetB).toBeCloseTo(1.0 / (2 * Math.PI), 12)
     expect(mid.blend).toBeCloseTo(0.5, 12)
-    expect(cloudFrame({ current: null, next: live, fadeStart: 0 }, CLOUD_FADE_MS * 2, 1.2).blend).toBe(1)
+    expect(cloudFrame({ current: null, next: live, fadeStart: 0 }, CLOUD_FADE_MS * 2, 1.2, 0.2).blend).toBe(1)
   })
 
-  it('stops drifting once live, and fades hour to hour without an offset', () => {
-    const f = cloudFrame({ current: live, next: newer, fadeStart: 0 }, CLOUD_FADE_MS / 4, 1.2)
-    expect(f.rotationA).toBe(0)
+  it('drifts live clouds with the live rotation, and fades hour to hour without an offset', () => {
+    const f = cloudFrame({ current: live, next: newer, fadeStart: 0 }, CLOUD_FADE_MS / 4, 1.2, -0.3)
+    expect(f.rotationA).toBe(-0.3)
     expect(f.offsetB).toBe(0)
     expect(f.blend).toBeGreaterThan(0)
     expect(f.blend).toBeLessThan(0.5)
