@@ -11,8 +11,8 @@ import { prefersReducedMotion } from '@/utils/reducedMotion'
  * Three iris ghosts mirrored through the screen centre along the flare axis.
  * Deliberate omissions, each removed after review: no anamorphic streak (it
  * read as a laser line), no lens rings, and — since the sun glare (SunGlare,
- * in the scene for both pipelines) draws the camera's halo and diffraction
- * spikes — no halo of its own, which only doubled that glare.
+ * in the scene for both pipelines) draws the camera's halo — no halo of its
+ * own, which only doubled that glare.
  *
  * It is a POST pass, so the whole effect is added in LINEAR space before
  * OutputPass tone-maps the frame — the same space every other material works

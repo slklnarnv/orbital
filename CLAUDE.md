@@ -49,7 +49,9 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `scripts/` - GLB build pipeline (`build-iss-model.mjs`, `build-iss-locate-lod.mjs`),
   `refresh-fallback-tle.mjs`, `build-place-index.mjs` (offline place names,
   `npm run build:places`), asset/shader gates
-- `docs/` - deep docs; `plans/` - ledger + plan 001 + history
+- `docs/` - deep docs; `plans/` - ledger + history, plan 001 (ISS model
+  repair; model code cites its IDs) and plan 017 (display roadmap; its
+  R/V/I/A/X IDs are cited in code)
 
 ## Hard invariants (breaking any of these is a bug)
 
@@ -83,8 +85,9 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 1. `docs/NEXT_STEPS.md` - current state + ranked roadmap. Keep its top
    section fresh in the same commit as behavior changes; never ship an
    errata banner - fix the stale text instead.
-2. `plans/PROGRESS.md` - short ledger (current state, open items, canon
-   decisions). Full history: `plans/PROGRESS-history.md`.
+2. `plans/PROGRESS.md` - short ledger (recent changes, verification, canon
+   decisions). Full history: `plans/PROGRESS-history.md` (landed detail,
+   old roadmaps and session logs, archived verbatim).
 3. `CHANGELOG.md` - user-facing changes by release date. A PR with a
    user-facing change adds one line under "Unreleased".
 4. Deep docs, on demand only:

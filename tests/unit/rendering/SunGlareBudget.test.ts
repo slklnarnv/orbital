@@ -28,7 +28,9 @@ describe('sun glare bloom budget', () => {
     expect(sun).toContain('uKnee * (vec3(1.0) - exp(-x / uKnee))')
 
     const glare = read('src/rendering/shaders/sunGlare.frag')
-    expect(glare).toContain('min(1.0, halo + spikes)')
+    expect(glare).toContain('min(1.0, halo)')
+    // The spikes were removed after review: they read as artificial lines.
+    expect(glare).not.toContain('SPIKE_')
     // ±4% dither, matching GLARE_DITHER_HEADROOM.
     expect(glare).toContain('(hash21(gl_FragCoord.xy) - 0.5) * 0.08')
     expect(1 + 0.08 / 2).toBeCloseTo(GLARE_DITHER_HEADROOM, 12)

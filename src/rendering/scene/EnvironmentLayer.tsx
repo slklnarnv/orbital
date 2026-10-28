@@ -100,7 +100,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
   const sunMeshRef = useRef<THREE.Mesh>(null)
 
   // The camera point-spread function around the sun: the billboard's core
-  // uniforms, the screen-space halo/spikes overlay and the occlusion probe.
+  // uniforms, the screen-space halo overlay and the occlusion probe.
   const glare = useMemo(() => new SunGlare(), [])
   useEffect(() => () => glare.dispose(), [glare])
 
@@ -182,7 +182,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     gl.toneMappingExposure = THREE.MathUtils.damp(gl.toneMappingExposure, targetExposure, 4.0, delta)
 
     // Scale the glare by the exposure just chosen and aim the overlay/probe.
-    glare.apply(state.camera as THREE.PerspectiveCamera, _sunPoint, gl.toneMappingExposure, gl.domElement.height)
+    glare.apply(state.camera as THREE.PerspectiveCamera, _sunPoint, gl.toneMappingExposure)
   })
 
   return (
@@ -218,7 +218,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
         />
       </mesh>
 
-      {/* ─── Sun glare: halo + diffraction spikes, and the occlusion probe ───
+      {/* ─── Sun glare: the halo, and the occlusion probe ───
           The overlay (renderOrder 3) has no depth test: lens glare lies over
           everything in the frame. The probe draws no colour; an occlusion
           query on it tells the glare when the station hides the sun.

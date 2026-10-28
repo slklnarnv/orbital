@@ -45,7 +45,7 @@ function List({ items }: { items: string[] }): JSX.Element {
 /**
  * About — a text control beside the wordmark that opens a panel: what is
  * measured and what is illustrative, data sources and credits, the build id,
- * and ways into the guided tour and the keyboard-shortcut overlay.
+ * and, first in the panel, ways into the guided tour and the shortcuts.
  */
 export function AboutPanel(): JSX.Element {
   const { isOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('about', 'panel')
@@ -68,6 +68,22 @@ export function AboutPanel(): JSX.Element {
 
       {isOpen && (
         <HudPanel title="About Orbital" panelRef={panelRef} className="hud-panel--about">
+          {/* First, above the long text: the panel scrolls on short screens,
+              and these are what most people open About for. */}
+          <div className="hud-about__actions">
+            <button type="button" className="hud-label hud-btn-text" onClick={() => switchOverlay('tour')}>
+              Take the tour
+            </button>
+            <button
+              type="button"
+              className="hud-label hud-btn-text"
+              aria-keyshortcuts="?"
+              onClick={() => switchOverlay('help')}
+            >
+              Keyboard shortcuts <kbd className="hud-kbd">?</kbd>
+            </button>
+          </div>
+
           <div className="hud-panel__body">
             <p>
               The International Space Station, live: its position is computed in your browser from
@@ -108,19 +124,6 @@ export function AboutPanel(): JSX.Element {
           <div className="hud-panel__foot">
             <span className="hud-fine" style={{ color: 'var(--hud-lo)' }}>
               Build {__BUILD_ID__ || '—'}
-            </span>
-            <span className="hud-tour__actions">
-              <button type="button" className="hud-label hud-btn-text" onClick={() => switchOverlay('tour')}>
-                Take the tour
-              </button>
-              <button
-                type="button"
-                className="hud-label hud-btn-text"
-                aria-keyshortcuts="?"
-                onClick={() => switchOverlay('help')}
-              >
-                Keyboard shortcuts <kbd className="hud-kbd">?</kbd>
-              </button>
             </span>
           </div>
         </HudPanel>

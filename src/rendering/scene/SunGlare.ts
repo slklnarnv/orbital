@@ -18,9 +18,10 @@ import glareFrag from '../shaders/sunGlare.frag'
  *   core     drawn by the sun billboard itself (sun.frag): disc plus a
  *            blown-out core ~2x its size, depth-tested, so Earth and the
  *            station cut it per pixel. A soft knee caps it at SUN_CORE_KNEE.
- *   overlay  a screen-space quad (sunGlare.frag): wide halo and faint
- *            six-blade diffraction spikes, NOT depth-tested — veiling glare
- *            lies over everything in the frame, Earth's limb included.
+ *   overlay  a screen-space quad (sunGlare.frag): a veiling-glare halo,
+ *            NOT depth-tested — it lies over everything in the frame,
+ *            Earth's limb included. (No diffraction spikes: they read as
+ *            artificial.)
  *
  * Both layers are scene meshes, so Bloom on and Bloom off draw the same glare
  * (Bloom off stays the direct pipeline: no composer, no extra pass), and both
@@ -125,7 +126,6 @@ export class SunGlare {
     uSunNdc: { value: new THREE.Vector2() },
     uAspect: { value: 1 },
     uRadius: { value: GLARE_RADIUS_NDC },
-    uPixel: { value: 2 / 720 },
     uColor: { value: new THREE.Vector3() },
   }
 
@@ -182,7 +182,7 @@ export class SunGlare {
   }
 
   /** Aim and scale both layers and the probe for the frame about to render. */
-  apply(camera: THREE.PerspectiveCamera, sunPoint: THREE.Vector3, exposure: number, bufferHeight: number): void {
+  apply(camera: THREE.PerspectiveCamera, sunPoint: THREE.Vector3, exposure: number): void {
     const exposureRatio = Math.min(1, exposure / DARK_SKY_EXPOSURE)
     const s = this.foreground * exposureRatio
     const f = this.flux
@@ -207,11 +207,9 @@ export class SunGlare {
     // set at draw time from the drawing camera (constructor), because a flight
     // re-aims the camera after this callback. The culling test is therefore
     // only a coarse one, widened by the glare's own extent.
-    const o = this.overlayUniforms
     const peak = GLARE_PEAK * s
     this.sunPoint.copy(sunPoint)
     this.overlayColor.set(f.r * peak, f.g * peak, f.b * peak)
-    o.uPixel.value = 2 / Math.max(1, bufferHeight)
     this.overlay.visible = peak * Math.max(f.r, f.g, f.b) > MIN_GLARE
   }
 

@@ -12,8 +12,10 @@
   clouds, icon/loading screen/name, accessibility and keyboard shortcuts, an
   info/about panel, and (later) an exploded module explorer — merged with the
   open items in `docs/NEXT_STEPS.md`.
-- **Landed**: R1–R7 (responsive display), 2026-10-26; see
-  `docs/NEXT_STEPS.md` Current state for the before/after numbers.
+- **Landed** (2026-10-26/28): R1–R7, V1.1–V1.2, V2, V3, V4, I1, I2, A1–A4,
+  P and X1; detail in `plans/PROGRESS-history.md`. Open: I3 (the name) and
+  V1.3 (a better cloud source), both ranked in `docs/NEXT_STEPS.md`. Kept as
+  reference: code comments cite its track IDs (R2, V2, X1…).
 - **Evidence**: a viewport audit in headless Edge on the owner's GPU (nine
   sizes, 360×640 to 3440×1440, overview and Follow; per-cluster boxes,
   overlaps, off-screen, font sizes below 9 px, targets below 32 px),

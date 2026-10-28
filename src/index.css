@@ -1896,6 +1896,18 @@ body,
   border-top: 1px solid var(--hud-line);
 }
 
+/* About's first row: the tour and the shortcuts, above the long text. */
+.hud-about__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hud-line);
+  white-space: nowrap;
+}
+
 .hud-about__list {
   display: grid;
   gap: 4px;
