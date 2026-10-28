@@ -11,6 +11,8 @@ const initialAssets = [
   'public/textures/earth-clouds-4k.webp',
   'public/textures/earth-specular-4k.webp',
   'public/textures/starmap-4k.webp',
+  'public/textures/stars.bin',
+  'public/textures/moon.webp',
   'public/models/International Space Station (ISS) (A).glb',
   'public/fonts/space-grotesk-latin.woff2',
   'public/fonts/space-grotesk-latin-ext.woff2',

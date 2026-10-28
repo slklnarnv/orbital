@@ -5,7 +5,8 @@
 // versioned asset bytes change and stay STABLE otherwise — across docs/code
 // deploys and across checkouts with different line-ending settings.
 //
-// Only `.glb`, `.webp` and `.ktx2` (the deferred 8K Earth maps) files are hashed. The earlier version hashed every
+// Only `.glb`, `.webp`, `.ktx2` (the deferred 8K Earth maps) and `.bin` (the star
+// catalogue) files are hashed. The earlier version hashed every
 // file under those directories, which included `public/textures/README.md`:
 // git checks that out as LF on Linux/Vercel and CRLF on this Windows checkout,
 // so the same commit produced two different ids. Filtering to the actual
@@ -16,7 +17,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 export const ASSET_DIRS = ['public/models', 'public/textures']
-export const ASSET_EXTENSIONS = /\.(glb|webp|ktx2)$/i
+export const ASSET_EXTENSIONS = /\.(glb|webp|ktx2|bin)$/i
 
 export function listFiles(dir) {
   const files = []

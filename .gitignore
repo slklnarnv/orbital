@@ -37,8 +37,9 @@ pnpm-debug.log*
 # ISS asset build workspace (raw GLB intermediates, backups, audit dumps)
 .tmp-iss-build/
 
-# 8K Earth build workspace (NASA sources, flipped PNG masters)
+# 8K Earth and sky build workspaces (NASA sources, flipped PNG masters, tiles)
 .tmp-earth-build/
+.tmp-sky-build/
 
 # Throwaway card/render workspaces
 .tmp-og/

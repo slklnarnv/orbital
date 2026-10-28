@@ -52,6 +52,14 @@ describe('computeAssetBuildId', () => {
     expect(crlf).toMatch(/^[a-f0-9]{12}$/)
   })
 
+  it('changes when the star catalogue (.bin) changes', async () => {
+    const stars = path.join(root, 'public/textures/stars.bin')
+    await writeFile(stars, Buffer.from([1]))
+    const before = computeAssetBuildId(root)
+    await writeFile(stars, Buffer.from([2]))
+    expect(computeAssetBuildId(root)).not.toBe(before)
+  })
+
   it('changes when a versioned asset changes', async () => {
     const before = computeAssetBuildId(root)
     await writeFile(model, Buffer.from([1, 2, 3, 5]))

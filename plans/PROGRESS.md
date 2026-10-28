@@ -8,6 +8,42 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Real stars and the Moon (2026-10-28)
+
+- **Before**: 40,000 random points plus the starmap panorama on a sphere
+  around Earth's centre, hand-rotated "to look natural" (so the Milky Way sat
+  in the wrong place and stretched as the camera moved off-centre). No Moon.
+- **Stars** (`SkyLayer.tsx`, `stars.vert/frag`): the 9,096 stars of the
+  Yale Bright Star Catalogue (to V 6.5), packed by `npm run build:sky` into
+  `public/textures/stars.bin` (100 KB), precessed J2000 → date (the sun's
+  frame; 0.36° in 2026), Gaussian sprites sized and lit by magnitude
+  (`skyConfig.ts`; slope 0.28 so the constellations stand out, capped at 1.3
+  for Sirius), B−V colour as a pale tint. Fetched after first paint; a failed
+  fetch leaves the panorama.
+- **Milky Way** (`milkyWay.vert/frag`): the panorama turned out to be a
+  J2000 RA/Dec equirectangular map (RA 0h at the centre; the LMC, SMC and
+  galactic centre land on their catalogue positions), now sampled by
+  direction (`textureGrad` with a wrap-safe u derivative, so no seam line),
+  with the old opacity and blending. Catalogue stars sit on its own stars.
+- **Both at infinity**: drawn from the camera's direction only, on the far
+  plane, so no parallax and everything else hides them.
+- **Moon** (`MoonEphemeris.ts`, `MoonLayer.tsx`, `moon.vert/frag`): Meeus
+  ch. 47 main terms (~0.01°), in the sun model's frame; LRO WAC mosaic
+  (512×256, 42 KB); drawn at 240,000 km along its true direction from the
+  rendering camera at its true apparent size (in front of the sun billboard,
+  so it covers the sun in a solar eclipse); Lommel–Seeliger lighting,
+  earthshine by Earth's phase, Earth's umbra/penumbra (dim red) for lunar
+  eclipses; capped at 2.0 under the bloom threshold. Near side to Earth;
+  libration and the 1.5° axis tilt are left out.
+- **Checked** (production build, Edge on the GPU): the overview at
+  12:24:32Z matches main (mean difference 0.36 levels, all in the sky; the
+  zoomed view 0.01); Orion's seven bright stars land on their projected
+  positions; phases (full 26 Oct, waning gibbous, last quarter, crescent)
+  and the 2026-03-03 eclipse geometry look right.
+- Tests: `MoonEphemeris.test.ts` (Meeus 47.a and 21.b, the 2026 lunar and
+  solar eclipses, full/new Moon dates), `SkyBudget.test.ts`,
+  `skyBuild.test.ts` (catalogue parsing, the shipped file, Sirius).
+
 ## Atmosphere: twilight from the sun path (2026-10-28)
 
 - **Before**: the limb's twilight colour was a rose/gold window and its night

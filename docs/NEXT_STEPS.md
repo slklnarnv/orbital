@@ -22,7 +22,12 @@
   (`earthSurface.frag`), kept under the bloom threshold. The limb's twilight
   colour and shadow edge follow the sunlight path (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
-  diffraction spikes were removed 2026-10-28: they read as artificial).
+  diffraction spikes were removed 2026-10-28: they read as artificial;
+  signed off by the owner the same day). The sky is real: the 9,096 stars of
+  the Yale Bright Star Catalogue at true position, magnitude and colour over
+  the Milky Way panorama (now in its true J2000 orientation), and the Moon at
+  its true position and phase, with Earth's shadow for lunar eclipses
+  (`MoonEphemeris.ts`, `SkyLayer.tsx`, `MoonLayer.tsx`).
   Bloom and the lens flare are optional; Bloom off is the direct pipeline.
 - **HUD**: responsive from phones to ultrawide; the tool row (Passes,
   Modules, Settings) top right; a first-visit guided tour (replay from About,
@@ -31,7 +36,7 @@
   (offline city search, Web Worker); module explorer (pick, explode, focus);
   orbit tape scrubbing with a station-locked camera; `H` hides the HUD, the
   orbit line and the 3D ground track.
-- **Gate**: `npm run verify` (677 unit tests on 2026-10-28) is the merge
+- **Gate**: `npm run verify` (693 unit tests on 2026-10-28) is the merge
   gate and the only CI job. The Playwright smoke + viewport suites
   (`npm run test:e2e`) run locally, by hand; `npm run bench` for measured perf
   (baseline `docs/bench/baseline-2026-10-26.json`). Dependencies: React 19
@@ -57,32 +62,28 @@
      Any retry must be judged from the overview, not only close dusk views.
    - *Surface up close*: detail under the station at Follow/Inspect (it softens
      in close shots), and an ocean glint that follows wave roughness and wind.
-   - *Stars*: a real catalogue at true magnitude and colour plus the Milky
-     Way, dimmed by exposure in daylight and with the sun in view; then the
-     Moon at its real position and phase. (HYG is CC BY-SA: see Licensing.)
-2. **The sun, owner sign-off.** Toned down twice on 2026-10-28 (smaller core,
-   neutral tint, no amber veil, then no spikes). Awaits the owner's look and
-   a side-by-side with ISS photography at the limb.
-3. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
-   (ALL CAPS wordmark, blue limb, no new mark).
-4. **Human visual pass** on a real GPU: the rebuilt materials at Follow and
+   - ~~*Stars and the Moon*~~: landed 2026-10-28 (Yale BSC5 and the LRO WAC
+     mosaic, both public domain; the exposure already dims the stars with
+     the sun in view).
+2. **D.8 streamed NASA GIBS imagery** (owner, 2026-10-28: next). Spec below.
+3. **Human visual pass** on a real GPU: the rebuilt materials at Follow and
    Inspect, day and night (MLI blankets, ELC grating, iROSA wings); the
    penumbra fade at a terminator crossing (300x), the countdown, the ground
    track (HUD globe and 3D), the Bloom MSAA edges; on a throttled
    connection, Locate departs with the detailed LOD and the full model
    appears only below 200 km. Also a real-device iOS Safari pass
    (address-bar collapse with `100dvh`, notch insets in landscape).
-5. **Bench leftovers (A.2)**: the flare and 300x rows, the GPU-memory leak
+4. **Bench leftovers (A.2)**: the flare and 300x rows, the GPU-memory leak
    check (5 Bloom toggles, 3 model switches), and why Bloom off measures more
    GPU time than Bloom on (12.5 vs 9.2 ms at overview).
-6. **HUD over the bright daylight limb** (A4 follow-up): text falls to ~1.6:1
+5. **HUD over the bright daylight limb** (A4 follow-up): text falls to ~1.6:1
    at worst in Follow. A stronger scrim or a faint text shadow (removed
    earlier by request) is a design call.
-7. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
+6. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
    landed 2026-10-28 (one camera-controls copy, +37.6 KB gzip JS). Still
    open: three r18x, Vite 7/8, satellite.js 7. TypeScript 7 (#35, held)
    waits for typescript-eslint to accept it (install fails with ERESOLVE).
-8. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
+7. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
    and S4–S6 are one batch each; splitting needs a batching change in
    `build-iss-model.mjs`) and masses for the elements NASA's pages omit;
    passes: an observer marker on the globe, pass magnitude; a higher-
@@ -93,19 +94,13 @@
 ### Features
 
 - **B.1 second cut**: tint the orbit line's shadowed span.
-- **B.4 Share links.** `#t=<epochMs>&m=<mode>&q=<quality>`; parse with a
-  whitelist for enums and clamp for numbers (same rule as the settings
-  sanitizer). Write the hash at most once a second; apply once on load.
-- **B.5 More stations.** Generalise `ISSEntity` into a config-driven entity;
+- **B.5 More stations** (owner, 2026-10-28: future work, not next). Generalise `ISSEntity` into a config-driven entity;
   `/api/tle?id=` stays refused, add `/api/tle/<name>` routes from a fixed map
   (`iss`, `css`, `hst`). Start with CSS as a second marker and orbit line, no
   detailed model.
 - **B.6 Reboost detection.** On a TLE swap, compare mean motion and the
   propagated altitude at the same instant; above a threshold (≈0.3 km), emit
   a `TELEMETRY_EVENT` and show a toast "Reboost detected, +0.8 km".
-- **B.8 Ground observer view.** Camera mode at an observer's ECEF position
-  looking up, horizon mask, ISS as a bright point. Depends on B.3 for the
-  observer. Large; only after B.1–B.3.
 
 ### Engineering
 
@@ -125,28 +120,6 @@
   0.30, future 0.60) against the closed ring is a visual call.
 
 ### Borrowed ideas still open (from the youreyesinspace comparison, 2026-10-19)
-
-#### D.7 - Save-frame (screenshot)
-
-No capture path exists. Their `saveScreenshot` calls
-`renderer.domElement.toDataURL('image/png')` immediately after `render()` in
-the same rAF callback - no `preserveDrawingBuffer: true` needed, which is the
-part worth copying (the flag costs memory and bandwidth on every frame).
-Ours renders in the composer's priority-1 `useFrame`; capture from a
-priority-2 `useFrame` after `composer.render()` in the same frame, filename
-from the simulation epoch.
-
-Measured 2026-10-19 while building the OG card: reading the canvas from a
-`requestAnimationFrame` callback that is NOT the render frame returned an
-all-black image (mean 0, max 0 over a 300x158 sample) - the buffer had
-already been cleared. The same-frame constraint above is load-bearing, not
-a style preference.
-
-Touches: `Postprocessing.tsx` (capture hook or a store flag), one HUD button
-+ shortcut, `formatters` for the filename.
-Check: captures with Bloom on and off match the screen; no
-`preserveDrawingBuffer` added.
-Cost: half a session.
 
 #### D.8 - Streamed Earth imagery (NASA GIBS) for close-range detail - big
 
@@ -227,9 +200,9 @@ access, not log integrity.
   ~0.8 m precision and the scene spans 2e6 km. No need.
 - **Pointer-lock free flight (WASD/QE).** Fights drei CameraControls and the
   mode machine; our Free mode is a pan, not a flight.
-- **Tours / TTS / Academy / mission planner / Lambert solver / i18n / star
-  catalogue.** Different product. Their HYG binary is CC BY-SA
-  (share-alike) - do not copy it.
+- **Tours / TTS / Academy / mission planner / Lambert solver / i18n.**
+  Different product. Their HYG star binary is CC BY-SA (share-alike) - do not
+  copy it; our stars are the public-domain Yale BSC5.
 - **`frustumCulled = false` as a default.** They disable culling almost
   everywhere; keep culling.
 - **Unconditional composer.** Our bloom-off parity is a contract.
@@ -238,6 +211,13 @@ access, not log integrity.
   exposure would invalidate that. Render
   scale (D.6) is the safe lever.
 - **Their settings merge, nginx real-IP config, no-test CI.**
+
+### Owner decisions (2026-10-28)
+
+- **B.4 Share links**, **B.8 Ground observer view** and **D.7 Save-frame**:
+  dropped by the owner. The specs are in git history (`docs/NEXT_STEPS.md`
+  before this date) if ever wanted.
+- **The name** stays ORBITAL (017 I3 closed).
 
 ### From the 2026-10-24 improve audit
 
@@ -262,7 +242,10 @@ access, not log integrity.
   comment.
 - **Data: do not copy.** The HYG-derived catalogue is CC BY-SA 4.0. NASA
   imagery is public domain under the NASA media guidelines (no implied
-  endorsement); the GIBS layer ids are facts.
+  endorsement); the GIBS layer ids are facts. Ours: the Yale Bright Star
+  Catalogue (public domain, NASA ADC / CDS V/50) and the LRO WAC Moon mosaic
+  (NASA/GSFC/ASU, public domain, via NASA Moon Trek); see
+  `public/textures/README.md`.
 - **Brand: no borrowing.** The name and logo are trademarks of BigBrains.
 
 **Net:** D.1 and D.2 were the two changes with real user-visible payoff for
