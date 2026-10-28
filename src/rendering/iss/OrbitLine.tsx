@@ -38,6 +38,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import { useHudStore } from '@/stores/hudStore'
 import * as THREE from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
@@ -84,6 +85,7 @@ function addEndpointPair(geo: LineGeometry, start: string, end: string): void {
  * edge, dim along the past trail, constant ahead of the station.
  */
 export function OrbitLine(): JSX.Element {
+  const hudHidden = useHudStore((state) => state.hidden)
   const size = useThree((state) => state.size)
   const orbitLineStyle = useSettingsStore((state) => state.orbitLineStyle)
 
@@ -187,6 +189,7 @@ export function OrbitLine(): JSX.Element {
     refreshPath(generateOrbitPath(issEntity.engine, nowMs))
   })
 
-  // Render via primitive — the Line2 object owns the geometry and material
-  return <primitive object={line} />
+  // Render via primitive — the Line2 object owns the geometry and material.
+  // An annotation, so it hides with the HUD (`H`) for a clean view.
+  return <primitive object={line} visible={!hudHidden} />
 }

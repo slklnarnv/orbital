@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 // ─── One overlay system for every HUD popover and panel (roadmap 017 A1/A2/P) ─
-// Settings, Passes, Set time, About and the `?` help overlay share this
+// Settings, Passes, Set time, About, the `?` help overlay and the tour share this
 // store: one overlay is open at a time (opening one closes the other), Escape
 // closes whichever is open, and focus goes back to the trigger that opened
 // it. Keyboard opens (a shortcut, or Enter/Space on the trigger) move focus
@@ -12,10 +12,10 @@ import { create } from 'zustand'
 // already taken elsewhere is never stolen, and an outside click never pulls
 // it back.
 
-export type OverlayId = 'help' | 'about' | 'passes' | 'settings' | 'seek'
+export type OverlayId = 'help' | 'about' | 'passes' | 'settings' | 'seek' | 'tour'
 
 /** Overlays that hold focus and pause the other shortcuts while open. */
-export const MODAL_OVERLAYS: ReadonlySet<OverlayId> = new Set<OverlayId>(['help'])
+export const MODAL_OVERLAYS: ReadonlySet<OverlayId> = new Set<OverlayId>(['help', 'tour'])
 
 interface OverlayState {
   open: OverlayId | null

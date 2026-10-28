@@ -6,6 +6,42 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## HUD tools, tour, sun and glint polish (2026-10-28)
+
+From the owner's review of the live site (ten items; the Dependabot PRs,
+README and environment items are tracked separately).
+
+- **Glare moved during Locate/Reset.** `SunGlare.apply()` projected the sun
+  at frame priority 0, but flights set `camera.quaternion` later in the same
+  priority, so the overlay was aimed with the pre-flight orientation (up to
+  945 px off mid-flight). Now the overlay's `onBeforeRender` projects with the
+  drawing camera (`projectGlareCenter`); measured 0 px in tracking and in
+  flight. Test: `SunGlareAim.test.ts`.
+- **White square on the station.** Not reproduced in sweeps at the owner's
+  epoch, but the cause is general: with the sun light at 1.9, roughness ~0.3
+  at its mirror angle reflects ~9 linear, far over the 2.4 bloom threshold,
+  and a flat panel flashes as a whole. `highlightKnee.ts` patches every
+  station material (`onBeforeCompile`, one `customProgramCacheKey`, a WeakSet
+  because `clone()` copies userData but not the hook) to roll the peak off
+  from 1.8 to 2.3. Test: `HighlightKnee.test.ts`.
+- **Sun overdone.** `sun.frag` core gain 14, e-fold 0.0030, shoulder 0.32 /
+  0.006 (core ~1.6x the disc); `sunGlare.frag` halo core 0.026, slope 0.75,
+  spike gain 0.22 and falloff 0.045 with widening spikes, white-to-faint-warm
+  tint; `GLARE_PEAK` 0.28. `SunGlareBudget.test.ts` still holds.
+- **Hidden tools.** Tool row with icons and labels; Modules always works
+  (Locate, then open on arrival; Reset view cancels, 5 min lapse: CI's
+  software-WebGL Locate took 2.5 min, past a first 90 s window); `M` shortcut. Tests:
+  `moduleExplorerControl.test.ts`, shortcut table.
+- **Tour.** `src/ui/tour/` (pure `tourSteps.ts`: steps, spotlight, card
+  placement, seen flag; `TourOverlay.tsx`). First visit only; About and `?`
+  replay it. The card starts at opacity 0 until measured (visibility hidden
+  refused the keyboard focus); the spotlight moves without a transition
+  (a 260 ms one lagged a step behind under load). Tests: `tourSteps.test.ts`,
+  two e2e specs.
+- **Hide HUD hides the orbit line** and the 3D ground track (`hudStore`).
+- **Radiators**: checked against the TRRJ law, behaving as designed (a few
+  degrees of daylight motion at this beta; hold in eclipse; ≤ 12 deg/s).
+
 ## Wheel zoom while tracking (2026-10-28)
 
 - **Symptom** (A.2 bench session): with the clock running in Follow/Inspect,

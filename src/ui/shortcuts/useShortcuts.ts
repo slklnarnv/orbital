@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { useCameraStore } from '@/stores/cameraStore'
 import { useSimulationStore } from '@/stores/simulationStore'
+import { useHudStore } from '@/stores/hudStore'
 import { requestResetView } from '@/interaction/camera/resetView'
+import { toggleModuleExplorer } from '../clusters/moduleExplorerControl'
 import { closeOverlay, isModalOpen, toggleOverlay, useOverlayStore } from '../overlay/overlay'
 import { describeTarget, matchShortcut, type ShortcutAction } from './shortcutRegistry'
 
@@ -12,12 +14,15 @@ import { describeTarget, matchShortcut, type ShortcutAction } from './shortcutRe
  *
  * The hidden state lives on `document.documentElement` (not in React)
  * because `App` deliberately never re-renders: the scene must not be rebuilt
- * for a UI concern. CSS does the rest — `.hud-hidden` hides the HUD layers
+ * for a UI concern. `useHudStore` holds the flag and sets the class; CSS
+ * hides the HUD layers and the scene hides its annotations (orbit line,
+ * 3D ground track). `.hud-hidden` hides the HUD layers
  * and nothing else. Deliberately NOT persisted: a reload restores the HUD,
  * so a key press can never leave someone staring at a chrome-less screen.
  */
 function toggleHud(): void {
-  const hidden = document.documentElement.classList.toggle('hud-hidden')
+  const hidden = !useHudStore.getState().hidden
+  useHudStore.getState().setHidden(hidden)
   // A popover left open would sit invisible, holding focus.
   if (hidden && !isModalOpen()) closeOverlay({ restoreFocus: false })
 }
@@ -45,6 +50,9 @@ function run(action: ShortcutAction): void {
     case 'toggleOverlay':
       // A keyboard open moves focus into the panel.
       toggleOverlay(action.overlay, { focusIn: true })
+      return
+    case 'toggleModules':
+      toggleModuleExplorer()
       return
     case 'close':
       closeOverlay()

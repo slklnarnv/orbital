@@ -52,6 +52,7 @@ describe('shortcut table', () => {
     expect(id(press('4', 'Digit4'))).toBe('rate-300')
     expect(id(press('0', 'Digit0'))).toBe('live')
     expect(id(press('p', 'KeyP'))).toBe('passes')
+    expect(id(press('m', 'KeyM'))).toBe('modules')
     expect(id(press('g', 'KeyG'))).toBe('settings')
     expect(id(press('?', 'Slash', { shiftKey: true }))).toBe('help')
     expect(id(press('Escape', 'Escape'))).toBe('close')

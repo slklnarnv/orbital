@@ -8,6 +8,7 @@ import { scheduleLocatePrefetch } from '@/rendering/iss/prefetchDetail'
 import { geoLookupService } from '@/core/geo/GeoLookupService'
 import { useShortcuts } from '@/ui/shortcuts/useShortcuts'
 import { ShortcutHelp } from '@/ui/overlay/ShortcutHelp'
+import { TourOverlay } from '@/ui/tour/TourOverlay'
 import { SceneAnnouncer, SceneSummary, SCENE_SUMMARY_ID } from '@/ui/a11y/SceneAnnouncer'
 import { TopBar } from '@/ui/layout/TopBar'
 import { GaugesCluster } from '@/ui/clusters/GaugesCluster'
@@ -94,6 +95,7 @@ const HudOverlay = React.memo(function HudOverlay(): JSX.Element {
 
       <ModuleExplorerPanel />
       <ShortcutHelp />
+      <TourOverlay />
     </>
   )
 })

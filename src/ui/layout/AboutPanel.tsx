@@ -45,7 +45,7 @@ function List({ items }: { items: string[] }): JSX.Element {
 /**
  * About — a text control beside the wordmark that opens a panel: what is
  * measured and what is illustrative, data sources and credits, the build id,
- * and a way into the keyboard-shortcut overlay.
+ * and ways into the guided tour and the keyboard-shortcut overlay.
  */
 export function AboutPanel(): JSX.Element {
   const { isOpen, triggerRef, panelRef, onTriggerClick } = useOverlay('about', 'panel')
@@ -54,6 +54,7 @@ export function AboutPanel(): JSX.Element {
     <>
       <button
         ref={triggerRef}
+        id="btn-about"
         type="button"
         className="hud-label hud-btn-text"
         aria-expanded={isOpen}
@@ -108,14 +109,19 @@ export function AboutPanel(): JSX.Element {
             <span className="hud-fine" style={{ color: 'var(--hud-lo)' }}>
               Build {__BUILD_ID__ || '—'}
             </span>
-            <button
-              type="button"
-              className="hud-label hud-btn-text"
-              aria-keyshortcuts="?"
-              onClick={() => switchOverlay('help')}
-            >
-              Keyboard shortcuts <kbd className="hud-kbd">?</kbd>
-            </button>
+            <span className="hud-tour__actions">
+              <button type="button" className="hud-label hud-btn-text" onClick={() => switchOverlay('tour')}>
+                Take the tour
+              </button>
+              <button
+                type="button"
+                className="hud-label hud-btn-text"
+                aria-keyshortcuts="?"
+                onClick={() => switchOverlay('help')}
+              >
+                Keyboard shortcuts <kbd className="hud-kbd">?</kbd>
+              </button>
+            </span>
           </div>
         </HudPanel>
       )}
