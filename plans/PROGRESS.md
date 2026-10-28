@@ -8,6 +8,51 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Live clouds from NOAA's infrared mosaic (2026-10-29)
+
+- **Before**: one static NASA cloud composite, drifting once every 5 days;
+  About said "not today's weather".
+- **Source**: NOAA GMGSI longwave infrared (GOES-East/West, Meteosat 0° and
+  IODC, Himawari; hourly, ~35 min latency, public domain, AWS
+  `noaa-gmgsi-pds`): 4999×3000 Mercator to ±72.7°, 0–255 counts. NASA GIBS
+  was checked first and rejected: no Meteosat, so Europe, Africa and India
+  would be blank.
+- **`/api/clouds`** (`api/clouds.ts`, guarded like `/api/tle`): lists the
+  newest hour, reads the NetCDF4 with h5wasm, converts in ~2.6 s, serves a
+  1.5 MB WebP with `X-Clouds-Time` (edge 20 min + stale-while-revalidate;
+  warm memo; one shared conversion; stale-on-error; 502 → the app keeps the
+  composite). Measured end to end against NOAA from here: 7.8 s cold, 2 ms
+  warm.
+- **Conversion**, tuned with the owner on 2026-10-28 previews:
+  - high cloud: counts over 100 (+45 toward the poles, where the ground is
+    cold), ramp 110;
+  - low cloud over the sea only, at most 0.55: colder than a local
+    clear-sea reference (5th percentile of sea pixels, ~3°). The first cut
+    took land into the reference and drew every coastline at midday (12Z
+    Africa); the reference is now sea-only;
+  - the composite where satellites see the ground edge-on (past 60–72° from
+    every sub-satellite point), past 70° latitude and in missing data; a
+    seam between Meteosat and Himawari near 93°E read as a line until this
+    viewing-angle fade;
+  - stitching seams feathered over ±3° (detected per file).
+  Coverage over four hours of 2026-10-28: 44–45 % of the globe above light
+  haze, 22 % thick (the composite: 56 % and 22 %). The owner asked for a
+  middle ground, not full cover: land and the station stay visible.
+- **App** (`liveClouds.ts`): fetched 3 s after first paint, decoded off the
+  main thread to a one-channel texture (~11 MiB with mips, a quarter of the
+  composite), crossfaded over 2.5 s through a second map in
+  `cloudDensity.glsl`, in the shell and the surface shadows alike; checked
+  every 20 min, newer hours fade in the same way. Live clouds do not drift.
+  About states the data time, or the composite when live has not loaded.
+- **Checked** (bench build, real map served to the page): one fetch,
+  mid-fade blend 0.40, promoted after; frame times p50 16.7 / p99 17.4 ms,
+  one 33 ms frame at the upload (once an hour). check:visual unchanged
+  (vite preview has no `/api`, so the composite shows).
+- Tests: `CloudsHandler.test.ts` (newest hour, yesterday fallback, memo,
+  shared conversion, stale and 502, guards, seam feathering, reprojection,
+  the sea-only reference), `LiveClouds.test.ts` (fade frames, shader
+  contract).
+
 ## Zoom-aware drag near the ground (2026-10-28)
 
 - **Symptom** (owner): in Free, zoomed in, the view moved far too fast.

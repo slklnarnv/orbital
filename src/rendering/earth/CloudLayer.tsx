@@ -7,6 +7,7 @@ import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { CLOUD_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import { cloudRotationAtEpoch } from './CloudMotion'
+import type { LiveClouds } from './liveClouds'
 import vertexShader from '../shaders/clouds.vert'
 import fragmentShader from '../shaders/clouds.frag'
 
@@ -29,7 +30,7 @@ useTexture.preload(EARTH_TEXTURES.cloudMap)
  * 4. RepeatWrapping prevents seam artifacts at the prime meridian.
  * 5. depthWrite=false prevents alpha sorting artifacts with the atmosphere shell.
  */
-export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
+export const CloudLayer = React.memo(function CloudLayer({ clouds }: { clouds: LiveClouds }): JSX.Element {
   const { gl } = useThree()
 
   // Load the 4K cloud density map directly — covered by the loading gate
@@ -41,6 +42,10 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
   // Initialize uniforms with null texture — will be assigned after configuration
   const uniformsRef = useRef({
     cloudMap: { value: null as THREE.Texture | null },
+    // Live clouds fading in over the map above (liveClouds.ts).
+    cloudMapB: { value: null as THREE.Texture | null },
+    cloudOffsetB: { value: 0 },
+    cloudBlend: { value: 0 },
     // Drives the magnified-texel reconstruction in cloudDensity.glsl.
     cloudTexelSize: { value: new THREE.Vector2(1 / 4096, 1 / 2048) },
     sunDirection: { value: new THREE.Vector3(0, 0, 1) },
@@ -80,9 +85,14 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     // 1. Slow wind current drift (absolute rotation tied to simulation time).
     // Do not repeatedly integrate simDeltaMs here: the application runtime updates
     // it at 10 Hz while this render callback may read the same snapshot many times.
-    if (cloudMeshRef.current) {
-      cloudMeshRef.current.rotation.y = cloudRotationAtEpoch(simTime.epochMs)
-    }
+    // Live clouds (once faded in) do not drift: they are where the satellites saw them.
+    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs))
+    if (cloudMeshRef.current) cloudMeshRef.current.rotation.y = frame.rotationA
+    const u = uniformsRef.current
+    u.cloudMap.value = frame.mapA ?? cloudTexture
+    u.cloudMapB.value = frame.mapB
+    u.cloudOffsetB.value = frame.offsetB
+    u.cloudBlend.value = frame.blend
 
     // 2. Propagate dynamic sun vector uniform
     const sunDir = sunDirectionWorld(simTime.julianDate)

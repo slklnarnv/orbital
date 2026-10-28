@@ -8,22 +8,23 @@ import glsl from 'vite-plugin-glsl'
 import { computeAssetBuildId } from './scripts/asset-build-id.mjs'
 
 /**
- * Dev parity for the Vercel function: `vite dev` serves `/api/tle` through
- * the real handler in api/tle.ts (loaded via Vite's SSR loader, so it gets
+ * Dev parity for the Vercel functions: `vite dev` serves `/api/tle` and
+ * `/api/clouds` through the real handlers in api/*.ts (loaded via Vite's SSR loader, so it gets
  * HMR and no config-bundling coupling). Without this, every dev session
  * exercised only the browser fallback path and logged a bogus proxy failure.
  * Not applied to `vite build`/`preview`; production uses Vercel's runtime.
  */
-function devApiTle(): Plugin {
+function devApi(): Plugin {
   return {
-    name: 'orbital-dev-api-tle',
+    name: 'orbital-dev-api',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? ''
-        if (url !== '/api/tle' && !url.startsWith('/api/tle?')) return next()
+        const name = ['tle', 'clouds'].find((n) => url === `/api/${n}` || url.startsWith(`/api/${n}?`))
+        if (!name) return next()
         try {
-          const mod = await server.ssrLoadModule('/api/tle.ts')
+          const mod = await server.ssrLoadModule(`/api/${name}.ts`)
           const method = req.method ?? 'GET'
           const handler = mod[method] ?? mod.GET
           const response: Response = await handler(
@@ -111,7 +112,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    devApiTle(),
+    devApi(),
     previewProductionHeaders(),
     tailwindcss(),
     glsl({

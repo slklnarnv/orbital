@@ -63,6 +63,16 @@ float sampleCloudMap(sampler2D map, vec2 uv, vec2 texSize) {
   return mix(hardware, sampleCloudMapBicubic(map, uv, texSize), bicubicWeight);
 }
 
+// Density from up to two maps (liveClouds.ts): A is the map showing (the
+// composite, or the live map) and B a newer live map fading in over it at
+// its own coordinates. Each is sampled only while it contributes; `blend` is
+// a uniform, so the branches are uniform and the derivatives inside defined.
+float sampleCloudMaps(sampler2D mapA, vec2 uvA, sampler2D mapB, vec2 uvB, float blend, vec2 texSize) {
+  float a = blend < 1.0 ? sampleCloudMap(mapA, uvA, texSize) : 0.0;
+  if (blend <= 0.0) return a;
+  return mix(a, sampleCloudMap(mapB, uvB, texSize), blend);
+}
+
 // Integer hash (pcg3d, Jarzynski & Olano 2020): no sin() precision loss at
 // the ~6,000 km lattice coordinates this domain uses.
 uvec3 cloudPcg3d(uvec3 v) {
@@ -142,9 +152,10 @@ float cloudDetailWeight(vec3 eyePosition) {
 // multiplicative form d·(1 + s·n·(1 − d)) stays inside [0, 1] for s ≤ 1, and
 // since n is zero-mean the large-scale field is unchanged on average.
 float cloudDensityAt(
-  sampler2D map, vec2 uv, vec2 texSize, vec3 cloudDir, vec3 eyePosition, int octaves
+  sampler2D mapA, vec2 uvA, sampler2D mapB, vec2 uvB, float blend,
+  vec2 texSize, vec3 cloudDir, vec3 eyePosition, int octaves
 ) {
-  float density = sampleCloudMap(map, uv, texSize);
+  float density = sampleCloudMaps(mapA, uvA, mapB, uvB, blend, texSize);
   float kmPerPixel = cloudKmPerPixel(cloudDir);
   float detail = cloudDetailWeight(eyePosition);
   if (detail > 0.0 && density > 0.0) {

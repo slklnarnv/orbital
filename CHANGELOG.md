@@ -14,6 +14,8 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- Today's clouds: the Earth shows the real weather from NOAA's geostationary
+  satellites, updated every hour, fading in after the page loads.
 - Sharper ground up close: near the station the Earth streams in NASA
   imagery down to about half a kilometre per pixel (Settings > Close-up
   imagery).

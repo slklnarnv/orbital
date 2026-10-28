@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
 import { cloudRotationAtEpoch } from './CloudMotion'
+import type { LiveClouds } from './liveClouds'
 import { useEarthDetailUpgrade } from './useEarthDetailUpgrade'
 import { GibsDetailStream } from './GibsDetailStream'
 import { DETAIL_LEVELS } from './surfaceDetail'
@@ -69,7 +70,7 @@ const configureTexture = (texture: THREE.Texture, isSRGB: boolean, maxAnisotropy
  * based on the Sun's dynamic angle, computing ocean specular highlights
  * on the dayside.
  */
-export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
+export const EarthSurface = React.memo(function EarthSurface({ clouds }: { clouds: LiveClouds }): JSX.Element {
   const { gl } = useThree()
   const meshRef = useRef<THREE.Mesh>(null)
 
@@ -89,6 +90,9 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     cloudMap: { value: null as THREE.Texture | null },
     cloudTexelSize: { value: new THREE.Vector2(1 / 4096, 1 / 2048) },
     cloudRotation: { value: 0 },
+    cloudMapB: { value: null as THREE.Texture | null },
+    cloudOffsetB: { value: 0 },
+    cloudBlend: { value: 0 },
     sunDirection: { value: new THREE.Vector3(0, 0, 1) },
     nightIntensity: { value: 4.2 },
   })
@@ -153,7 +157,14 @@ export const EarthSurface = React.memo(function EarthSurface(): JSX.Element {
     // Dynamically update the sun direction vector uniform (world space)
     uniformsRef.current.sunDirection.value.set(sunDir.x, sunDir.y, sunDir.z)
     // The surface shader samples the same cloud field to cast aligned soft shadows.
-    uniformsRef.current.cloudRotation.value = cloudRotationAtEpoch(simTime.epochMs)
+    // The same frame state as CloudLayer, so the shadows stay under the clouds.
+    const frame = clouds.frame(performance.now(), cloudRotationAtEpoch(simTime.epochMs))
+    const u = uniformsRef.current
+    u.cloudRotation.value = frame.rotationA
+    u.cloudMap.value = frame.mapA ?? earthTextures.clouds
+    u.cloudMapB.value = frame.mapB
+    u.cloudOffsetB.value = frame.offsetB
+    u.cloudBlend.value = frame.blend
   })
 
   // Uniforms go in through the constructor, which keeps this object by
