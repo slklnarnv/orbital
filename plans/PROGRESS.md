@@ -8,6 +8,23 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Zoom-aware drag near the ground (2026-10-28)
+
+- **Symptom** (owner): in Free, zoomed in, the view moved far too fast.
+  Measured on a production build: pan the overview (Free, pivot left ~500 km
+  from Earth's centre), zoom to 129 km up, and one pixel of drag slid the
+  ground under the view ~25 px (rotate and pan alike; 3.7 px at 980 km).
+  The sensitivity curves keyed on the eye and pivot distances, so they
+  could not see that the ground was 50× nearer than the pivot.
+- **Fix** (`CameraSensitivity.ts`): rotation and pan (now driven per frame,
+  `truckSpeed`) scale by `getNearGroundScale` = 2 × clearance / pivot
+  distance, capped at 1; the smoothing epsilon is relative so the small
+  speeds settle. Measured after: 0.98–1.00 px per px at 129 and 987 km;
+  the overview (2.48 / 0.77) and Follow (1.79 / 1.44) unchanged. Orbital at
+  its closest zoom shares the geometry and is slowed the same way.
+- Test: `CameraSensitivity.test.ts` (the measured case, untouched modes,
+  continuity, convergence).
+
 ## Close-range imagery from NASA GIBS, D.8 (2026-10-28)
 
 - **Before**: at Follow and Inspect the ground was the base map magnified,

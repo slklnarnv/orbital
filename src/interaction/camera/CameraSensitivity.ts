@@ -8,13 +8,38 @@ export const EARTH_ROTATION_SENSITIVITY = {
   closeMultiplier: 0.05,
   overviewMultiplier: 0.6,
   farMultiplier: 1.0,
+  /** Relative: speeds near the ground are a few thousandths. */
   updateEpsilon: 0.001,
 } as const
+
+/**
+ * Near-ground tracking. With the pivot far beyond the ground in view (a pan
+ * from the overview leaves it near Earth's centre, then the wheel brings the
+ * eye down to the surface), a drag moves the pivot by the cursor's angle but
+ * the ground under the view by pivotDistance / clearance times that: at 130 km
+ * up it slid ~25 screen pixels per pixel of drag (rotate and pan alike).
+ * Rotation and pan scale by NEAR_GROUND_TRACKING × clearance / pivotDistance,
+ * capped at 1, so the ground follows the cursor about 1:1 up close. At the
+ * overview (11,600 km over a pivot 18,000 km away) and whenever the pivot is
+ * nearer than the ground (Follow, Inspect) the factor is 1: unchanged.
+ */
+export const NEAR_GROUND_TRACKING = 2
+export const NEAR_GROUND_MIN_SCALE = 0.005
+
+export function getNearGroundScale(clearanceKm: number, pivotDistanceKm: number): number {
+  if (!(pivotDistanceKm > 0) || !Number.isFinite(clearanceKm)) return 1
+  const scale = (NEAR_GROUND_TRACKING * Math.max(0, clearanceKm)) / pivotDistanceKm
+  return Math.min(1, Math.max(NEAR_GROUND_MIN_SCALE, scale))
+}
+
+/** camera-controls' pan (truck) speed before near-ground scaling. */
+export const BASE_TRUCK_SPEED = 1
 
 export interface NavigationSpeedControls {
   azimuthRotateSpeed: number
   polarRotateSpeed: number
   dollySpeed: number
+  truckSpeed: number
 }
 
 function smoothstep01(value: number): number {
@@ -104,20 +129,20 @@ export function applyNavigationSensitivity(
     (distanceToTargetKm - ISS_MODEL_CLEARANCE_KM) / (3000 - ISS_MODEL_CLEARANCE_KM),
   )
   const localRotation = 0.35 + 0.65 * localScale
-  const rotation = localRotation + (getEarthRotationSensitivity(distanceToEarthCenterKm) - localRotation) * earthWeight
+  const nearGround = getNearGroundScale(distanceToEarthCenterKm - EARTH_RADIUS_KM, distanceToTargetKm)
+  const rotation = (localRotation + (getEarthRotationSensitivity(distanceToEarthCenterKm) - localRotation) * earthWeight) * nearGround
+  const truck = BASE_TRUCK_SPEED * nearGround
   const earthDolly = 0.08 + 0.92 * smoothstep01((distanceToEarthCenterKm - 6500) / 4000)
   const localDolly = 0.45 + 0.55 * localScale
   const dolly = localDolly + (earthDolly - localDolly) * earthWeight
   const blend = 1 - Math.exp(-12 * Math.max(0, deltaSeconds))
-  const epsilon = EARTH_ROTATION_SENSITIVITY.updateEpsilon
+  const settle = (current: number, goal: number) =>
+    Math.abs(current - goal) > EARTH_ROTATION_SENSITIVITY.updateEpsilon * goal
+      ? current + (goal - current) * blend
+      : current
 
-  if (Math.abs(controls.azimuthRotateSpeed - rotation) > epsilon) {
-    controls.azimuthRotateSpeed += (rotation - controls.azimuthRotateSpeed) * blend
-  }
-  if (Math.abs(controls.polarRotateSpeed - rotation) > epsilon) {
-    controls.polarRotateSpeed += (rotation - controls.polarRotateSpeed) * blend
-  }
-  if (Math.abs(controls.dollySpeed - dolly) > epsilon) {
-    controls.dollySpeed += (dolly - controls.dollySpeed) * blend
-  }
+  controls.azimuthRotateSpeed = settle(controls.azimuthRotateSpeed, rotation)
+  controls.polarRotateSpeed = settle(controls.polarRotateSpeed, rotation)
+  controls.dollySpeed = settle(controls.dollySpeed, dolly)
+  controls.truckSpeed = settle(controls.truckSpeed, truck)
 }

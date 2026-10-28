@@ -14,6 +14,7 @@ import { HudAwareFraming } from '@/interaction/camera/HudAwareFraming'
 import { cameraControlsRef } from './cameraControlsRef'
 import { useCameraStore } from '@/stores/cameraStore'
 import { CAMERA_ZOOM_RANGES } from '@/interaction/camera/CameraStateMachine'
+import { BASE_TRUCK_SPEED } from '@/interaction/camera/CameraSensitivity'
 import CameraControlsImpl from 'camera-controls'
 import { DprGovernor } from './DprGovernor'
 import { DEBUG_HOOKS, exposeDebugHook } from '@/utils/debugHooks'
@@ -101,7 +102,7 @@ const AppCameraControls = React.memo(function AppCameraControls(): JSX.Element {
       makeDefault={true}
       minDistance={minDistance} // Bound to reactive dynamic distance constraints
       maxDistance={100000}       // Cap maximum zoom-out distance (matches CAMERA_ZOOM_RANGES)
-      truckSpeed={1}
+      truckSpeed={BASE_TRUCK_SPEED} // scaled near the ground each frame (CameraSensitivity)
       mouseButtons={mouseButtons}
       touches={touches}
     />

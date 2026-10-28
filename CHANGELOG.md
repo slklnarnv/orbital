@@ -91,6 +91,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Fixed
 
+- Dragging near the ground in the free camera no longer races: the ground
+  now follows the pointer instead of sliding ~25× faster.
+
 - The Earth rendering black after an update on 28 October; it was rolled
   back within the hour and the cause fixed.
 

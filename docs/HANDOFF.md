@@ -262,7 +262,10 @@ this before touching them. Session logs moved to `plans/PROGRESS-history.md`
   35,000/33,000 km entry/exit band; all manual ISS modes share 70 km model clearance
   (`ISS_MODEL_CLEARANCE_KM` in `CameraStateMachine.ts`).
 - Rotation and dolly response follow pivot geometry continuously, so entering Free
-  does not reset sensitivity. Right-drag/touch pan releases tracking on actual motion;
+  does not reset sensitivity. Rotation and pan also scale by
+  `getNearGroundScale` (2 × clearance / pivot distance, capped at 1): with the
+  pivot far beyond the ground in view (Free after an overview pan, zoomed in;
+  Orbital at its closest) the ground tracks the cursor ~1:1 instead of ~25:1. Right-drag/touch pan releases tracking on actual motion;
   orbit and centered pinch retain lock. The zoom meter uses the actual pivot distance.
 - Reset View requests a 2.2 s Earth transition (plus up to ~0.8 s to settle roll:
   `initialRollErrorRad` × 250 ms) through the camera store. It
