@@ -29,7 +29,8 @@ README and environment items are tracked separately).
   spike gain 0.22 and falloff 0.045 with widening spikes, white-to-faint-warm
   tint; `GLARE_PEAK` 0.28. `SunGlareBudget.test.ts` still holds.
 - **Hidden tools.** Tool row with icons and labels; Modules always works
-  (Locate, then open on arrival; stale after 90 s); `M` shortcut. Tests:
+  (Locate, then open on arrival; Reset view cancels, 5 min lapse: CI's
+  software-WebGL Locate took 2.5 min, past a first 90 s window); `M` shortcut. Tests:
   `moduleExplorerControl.test.ts`, shortcut table.
 - **Tour.** `src/ui/tour/` (pure `tourSteps.ts`: steps, spotlight, card
   placement, seen flag; `TourOverlay.tsx`). First visit only; About and `?`

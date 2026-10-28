@@ -57,6 +57,13 @@ describe('toggleModuleExplorer', () => {
     expect(explorer().open).toBe(false)
   })
 
+  it('Reset view cancels a pending open', () => {
+    toggleModuleExplorer()
+    explorer().cancelOpenOnArrival()
+    explorer().setAvailability('available')
+    expect(explorer().open).toBe(false)
+  })
+
   it('a later Locate after closing does not reopen it', () => {
     toggleModuleExplorer()
     explorer().setAvailability('available')

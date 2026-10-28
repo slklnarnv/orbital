@@ -38,10 +38,16 @@ interface ExplorerState {
   setFocusOffsetKm: (km: number) => void
   /** Open the explorer once the station is tracked (the caller locates). */
   requestOpenOnArrival: (nowMs: number) => void
+  /** Drop a pending open: the user flew elsewhere (Reset view). */
+  cancelOpenOnArrival: () => void
 }
 
-/** A Modules click waits this long for the Locate it started to land. */
-export const PENDING_OPEN_MS = 90_000
+/**
+ * A Modules click waits this long for the Locate it started to land. Long,
+ * because the first Locate on a slow device waits for the station model
+ * (software WebGL in CI took 2.5 min); Reset view cancels it sooner.
+ */
+export const PENDING_OPEN_MS = 300_000
 
 const CLEARED = { hoveredId: null, selectedId: null, focused: false, exploded: false, focusOffsetKm: 0 } as const
 
@@ -62,6 +68,8 @@ export const useExplorerStore = create<ExplorerState>((set) => ({
   }),
 
   requestOpenOnArrival: (nowMs) => set({ pendingOpenAt: nowMs }),
+
+  cancelOpenOnArrival: () => set((state) => (state.pendingOpenAt === null ? state : { pendingOpenAt: null })),
 
   setOpen: (open) => set((state) => (
     state.open === open ? state : open ? { open, pendingOpenAt: null } : { open, pendingOpenAt: null, ...CLEARED }

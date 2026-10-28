@@ -267,14 +267,14 @@ test('first visit offers the tour; it steps through the tools and stays dismisse
   await expect(page.locator('.hud-panel--tour')).toHaveCount(0)
 })
 
-test('the tool row labels Passes, Modules and Settings; M opens the explorer from afar', async ({ page }) => {
+test('the tool row labels Passes, Modules and Settings; M from afar starts Locate', async ({ page }) => {
   await bootLive(page)
   for (const name of ['Passes', 'Modules', 'Settings']) {
     await expect(page.locator('.hud-corner--tr .hud-tool__label', { hasText: name })).toBeVisible()
   }
   await focusBody(page)
   await page.keyboard.press('m')
-  // Locate first (software WebGL loads the station slowly), then it opens.
-  await expect(page.getByRole('region', { name: 'Module explorer' })).toBeVisible({ timeout: 85_000 })
-  await expect(page.locator('#btn-module-explorer')).toHaveAttribute('aria-expanded', 'true')
+  // Locate first; the explorer opens on arrival (moduleExplorerControl.test.ts
+  // covers that rule: under software WebGL the flight takes minutes).
+  await expect(page.locator('#btn-locate-iss')).toHaveAttribute('aria-busy', 'true')
 })

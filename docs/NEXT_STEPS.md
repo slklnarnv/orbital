@@ -14,7 +14,7 @@
     the mid-left Modules button are gone. Modules (and the new `M` key)
     works from anywhere: away from the station it Locates and the explorer
     opens on arrival (`moduleExplorerControl.ts`, `pendingOpenAt` in
-    `explorerStore`, dropped after 90 s).
+    `explorerStore`; Reset view cancels it, and it lapses after 5 min).
   - *Tour*: an eight-step guided tour (`src/ui/tour/`), offered once on the
     first visit after the loading screen (`orbital-tour-seen` in
     localStorage, failures read as unseen), replayable from About and the
