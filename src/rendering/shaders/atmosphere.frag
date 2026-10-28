@@ -25,15 +25,6 @@ vec3 transmittance(float h) {
   return exp(-atmTau * exp(-h / atmScaleHeight));
 }
 
-// Airglow: the faint green band of the night limb in every ISS night photo
-// (atomic oxygen at 557.7 nm, a thin layer near 95 km). Emission is seen
-// edge-on where the view ray grazes that layer, so it is drawn as a narrow
-// band in tangent height, only where the air is in Earth's shadow.
-const float AIRGLOW_ALT = 95.0;   // km
-const float AIRGLOW_WIDTH = 6.0;  // km (1/e half-width of the band)
-const float AIRGLOW_GAIN = 0.06;
-const vec3 AIRGLOW_COLOR = vec3(0.42, 0.86, 0.36);
-
 // Sunlight reaching the air along the view ray. For a ray that misses Earth
 // the air is its tangent point; for one that hits, the ground point. `h` is
 // that point's height. Returns the height of the sunlight's own grazing path
@@ -193,13 +184,6 @@ void main() {
 
   float alpha = glow * extinction * 0.92 * proximityFade;
 
-  // Airglow, folded in like the sunrise band (additive in linear light).
-  vec3 extraRgb = vec3(0.0);
-  if (airH > 0.0) {
-    float band = exp(-pow((airH - AIRGLOW_ALT) / AIRGLOW_WIDTH, 2.0));
-    extraRgb += AIRGLOW_COLOR * (AIRGLOW_GAIN * band * (1.0 - extinction) * proximityFade);
-  }
-
   // ── Forward Scattering: The Sunrise Band ──────────────────────────────────
   // With the sun at or behind the limb, the air between camera and sun
   // scatters its light forward: a band along the limb, brightest under the
@@ -252,12 +236,6 @@ void main() {
         alpha += q;
       }
     }
-  }
-
-  float qExtra = dot(extraRgb, vec3(0.2126, 0.7152, 0.0722));
-  if (qExtra > 0.0) {
-    atmoColor = (atmoColor * alpha + extraRgb) / (alpha + qExtra);
-    alpha += qExtra;
   }
 
   gl_FragColor = vec4(atmoColor, alpha);

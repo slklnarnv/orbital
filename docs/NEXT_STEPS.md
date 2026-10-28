@@ -20,8 +20,7 @@
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
   City lights up close resolve into points of light inside a soft glow
   (`earthSurface.frag`), kept under the bloom threshold. The limb's twilight
-  colour and shadow edge follow the sunlight path, and the night limb shows
-  a faint airglow band (`atmosphere.frag`).
+  colour and shadow edge follow the sunlight path (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial).
   Bloom and the lens flare are optional; Bloom off is the direct pipeline.
@@ -45,8 +44,9 @@
    it is not lost). Measure each against the bench and keep Bloom-off parity.
    - ~~*Night lights up close*~~: landed 2026-10-28 (B-spline map, points
      of light inside each texel, a bloom-safe knee; overview unchanged).
-   - ~~*Atmosphere: twilight and airglow*~~: landed 2026-10-28 (limb colour
-     and shadow edge from the sunlight path, airglow at 95 km). A full
+   - ~~*Atmosphere: twilight*~~: landed 2026-10-28 (limb colour and shadow
+     edge from the sunlight path). An airglow band was tried and removed on
+     the owner's review: over a dark ocean it read as a drawn line. A full
      precomputed-scattering model was weighed and not taken: ~100+
      exponentials per pixel over most of the frame does not fit the iGPU
      budget; revisit only with a measured reason.

@@ -4,22 +4,16 @@
 // hand-placed window on the fragment's own normal. They now come from the
 // sunlight reaching the air the fragment shows (sunPathHeight: the height of
 // that sunlight's grazing path), the model SunAppearance.ts and the sunrise
-// band already use. The night limb carries a faint airglow band near 95 km.
+// band already use. (An airglow band at 95 km was tried and removed: over a
+// dark ocean it read as a drawn line.)
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { BLOOM_THRESHOLD } from '@/rendering/post/bloomConfig'
-import { ATMOSPHERE_RADIUS } from '@/rendering/earth/EarthConstants'
 import { EARTH_RADIUS_KM } from '@/utils/constants'
 
 const shader = readFileSync('src/rendering/shaders/atmosphere.frag', 'utf8')
 
-function constant(name: string): number {
-  const match = new RegExp(`const float ${name} = ([0-9.]+);`).exec(shader)
-  if (!match) throw new Error(`${name} not found`)
-  return Number(match[1])
-}
 
 /** JS mirror of the shader's sunPathHeight (km), for the continuity check. */
 function sunPathHeight(point: [number, number, number], h: number, sun: [number, number, number]): number {
@@ -48,10 +42,8 @@ describe('atmosphere twilight', () => {
     expect(sunPathHeight([-r, 0, 0], h, sun)).toBeLessThan(-6000) // anti-solar: deep in shadow
   })
 
-  it('places a faint airglow band inside the shell', () => {
-    const alt = constant('AIRGLOW_ALT')
-    expect(alt).toBeGreaterThan(80)
-    expect(alt).toBeLessThan(ATMOSPHERE_RADIUS - EARTH_RADIUS_KM)
-    expect(constant('AIRGLOW_GAIN')).toBeLessThan(0.2 * BLOOM_THRESHOLD)
+  it('draws no airglow line (removed after review: it read as a drawn line)', () => {
+    expect(shader).not.toContain('AIRGLOW')
   })
+
 })
