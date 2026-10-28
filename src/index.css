@@ -177,30 +177,17 @@ body,
   text-shadow: none;
 }
 
-/* Render-settings gear — a quiet inline glyph matching the elements-line
-   color; hover brightens it and adds a soft round halo so it reads as a
-   control without breaking the corner's typography. */
-.hud-btn-gear {
-  appearance: none;
+/* Tool row (Passes, Modules, Settings): a line icon and a visible label on
+   the bare text control, so each tool says what it is. Labels give way to
+   the icons alone only where the row cannot fit them (landscape phones). */
+.hud-tool {
   display: inline-flex;
   align-items: center;
-  border: 0;
-  background: transparent;
-  padding: 5px;
-  margin: -5px;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: color 140ms ease, background-color 140ms ease;
+  gap: 6px;
 }
 
-.hud-btn-gear:hover {
-  color: var(--hud-hi) !important;
-  background-color: rgba(159, 208, 160, 0.10);
-}
-
-.hud-btn-gear:focus-visible {
-  outline: 1.5px solid var(--hud-hi);
-  outline-offset: 3px;
+.hud-tool__icon {
+  flex: none;
 }
 
 /* Tiny ring on the model option currently loading. */
@@ -261,7 +248,7 @@ body,
 .hud-settings-popover {
   /* Viewport-anchored (not nested-absolute): some HUD stacking contexts sit
      above any z-index reachable from inside the corner cluster, so the panel
-     pins itself to the root layer directly under the gear. */
+     pins itself to the root layer directly under the tool row. */
   position: fixed;
   top: calc(48px + env(safe-area-inset-top));
   right: calc(max(22px, env(safe-area-inset-right)) + var(--hud-gutter));
@@ -1140,9 +1127,11 @@ body,
   gap: 18px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   /* Only the ephemeris line and its divider: a bare `.hud-fine` here also
-     hid every fine line inside the popovers opened from this corner. */
+     hid every fine line inside the popovers opened from this corner. Below
+     1100 px the labelled tool row and the identity corner need the room
+     (a touch tablet at 1024 px overlapped them). */
   .hud-corner--tr > .hud-corner__meta,
   .hud-corner--tr > .hud-corner__divider {
     display: none;
@@ -1158,7 +1147,7 @@ body,
     left: max(14px, env(safe-area-inset-left));
   }
 
-  /* The camera control owns the top-right on phones; the Passes + settings
+  /* The camera control owns the top-right on phones; the tool
      row sits under its reticle instead of on top of its mode label. */
   .hud-corner--tr {
     top: calc(68px + env(safe-area-inset-top));
@@ -1375,13 +1364,14 @@ body,
 }
 
 @media (max-width: 639px) {
+  /* Below the tool row, which sits under the camera control on phones. */
   .hud-explorer {
-    top: calc(96px + env(safe-area-inset-top));
+    top: calc(140px + env(safe-area-inset-top));
     transform: none;
   }
 
   .hud-explorer__panel {
-    max-height: calc(100vh - 360px);
+    max-height: calc(100vh - 400px);
   }
 }
 
@@ -1396,10 +1386,10 @@ body,
  */
 @media (max-height: 500px) {
   :root {
-    /* Layout width of the Passes + gear row plus a gap; the camera control
-       parks to its left. The viewport spec fails on any overlap if the row
-       grows. */
-    --hud-tr-width: 100px;
+    /* Layout width of the tool row (icons only here, 32 px apart on touch)
+       plus a gap; the camera control parks to its left. The viewport spec
+       fails on any overlap if the row grows. */
+    --hud-tr-width: 124px;
   }
 
   .hud-scrim--top {
@@ -1627,11 +1617,6 @@ body,
     gap: 24px;
   }
 
-  .hud-btn-gear {
-    padding: 15.5px;
-    margin: -15.5px;
-  }
-
   .hud-btn-text {
     min-height: 44px;
     padding: 15px 8px;
@@ -1671,7 +1656,7 @@ body,
 }
 
 /* Desktop frame on a touch screen (landscape tablets): the camera control
-   steps down so its reticle clears the taller Passes + gear hit areas. */
+   steps down so its reticle clears the tool row's taller hit areas. */
 @media (pointer: coarse) and (min-width: 900px) and (min-height: 501px) {
   .hud-camera {
     top: calc(54px + env(safe-area-inset-top));
@@ -1682,9 +1667,9 @@ body,
   }
 }
 
-/* Stacked composition on a touch screen: the Passes + gear row steps down
-   below the reach of Reset View's hit area, and in from the edge so the
-   gear's stays on screen. */
+/* Stacked composition on a touch screen: the tool row steps down below the
+   reach of Reset View's hit area, and in from the edge so the last tool's
+   stays on screen. */
 @media (pointer: coarse) and (max-width: 899px) and (min-height: 501px) {
   .hud-corner--tr {
     top: calc(88px + env(safe-area-inset-top));
@@ -1979,4 +1964,65 @@ body,
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* ─── Tool row on short viewports ──────────────────────────────────────── */
+/*
+ * Landscape phones: the tools keep their icons and drop the labels (each
+ * button's aria-label still names it). On touch each icon gets a 44 px
+ * square hit area, and the row spaces them so the areas never meet. After
+ * the coarse-pointer block, which it overrides.
+ */
+
+@media (max-height: 500px) {
+  .hud-tool__label {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) and (max-height: 500px) {
+  .hud-corner--tr {
+    gap: 32px;
+  }
+
+  .hud-tool {
+    min-height: 0;
+    padding: 15.5px;
+    margin: -15.5px;
+  }
+}
+
+/* ─── Guided tour ──────────────────────────────────────────────────────── */
+/*
+ * The spotlight is a ring whose outer shadow dims everything else; it never
+ * takes the pointer, so the control under it stays visible and real. The
+ * card is a HUD panel placed by tourSteps.ts (below, above or beside).
+ */
+
+.hud-tour-spot {
+  position: fixed;
+  z-index: 69;
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 4px;
+  box-shadow: 0 0 0 200vmax rgba(2, 4, 9, 0.62);
+  pointer-events: none;
+}
+
+.hud-panel--tour {
+  z-index: 70;
+  width: min(320px, calc(100vw - 24px));
+}
+
+.hud-tour__body {
+  margin-top: 8px;
+}
+
+.hud-tour__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hud-tour__foot {
+  align-items: center;
 }

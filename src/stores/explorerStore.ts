@@ -25,6 +25,9 @@ interface ExplorerState {
   /** Selected module's distance from the station centre at the requested
    *  explode (km), published by the visible model for the camera floor. */
   focusOffsetKm: number
+  /** Wall time of a Modules click made before the camera reached the
+   *  station: the explorer opens when it becomes available (Locate first). */
+  pendingOpenAt: number | null
 
   setAvailability: (availability: ExplorerAvailability) => void
   setOpen: (open: boolean) => void
@@ -33,23 +36,35 @@ interface ExplorerState {
   setFocused: (focused: boolean) => void
   setExploded: (exploded: boolean) => void
   setFocusOffsetKm: (km: number) => void
+  /** Open the explorer once the station is tracked (the caller locates). */
+  requestOpenOnArrival: (nowMs: number) => void
 }
+
+/** A Modules click waits this long for the Locate it started to land. */
+export const PENDING_OPEN_MS = 90_000
 
 const CLEARED = { hoveredId: null, selectedId: null, focused: false, exploded: false, focusOffsetKm: 0 } as const
 
 export const useExplorerStore = create<ExplorerState>((set) => ({
   availability: 'hidden',
   open: false,
+  pendingOpenAt: null,
   ...CLEARED,
 
   setAvailability: (availability) => set((state) => {
     if (state.availability === availability) return state
-    if (availability === 'available') return { availability }
-    return { availability, ...CLEARED, open: availability === 'hidden' ? false : state.open }
+    // A Modules click from far away asked for the explorer on arrival.
+    const pending = state.pendingOpenAt !== null && availability !== 'hidden'
+      && Date.now() - state.pendingOpenAt < PENDING_OPEN_MS
+    const opened = pending ? { open: true, pendingOpenAt: null } : {}
+    if (availability === 'available') return { availability, ...opened }
+    return { availability, ...CLEARED, open: availability === 'hidden' ? false : state.open, ...opened }
   }),
 
+  requestOpenOnArrival: (nowMs) => set({ pendingOpenAt: nowMs }),
+
   setOpen: (open) => set((state) => (
-    state.open === open ? state : open ? { open } : { open, ...CLEARED }
+    state.open === open ? state : open ? { open, pendingOpenAt: null } : { open, pendingOpenAt: null, ...CLEARED }
   )),
 
   hover: (id) => set((state) => (

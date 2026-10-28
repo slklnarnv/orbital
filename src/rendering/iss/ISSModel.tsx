@@ -65,6 +65,7 @@ import { parseRigMetadata, type RigMetadataParse } from './ISSJointKinematics'
 import { ISSAnimations } from './ISSAnimations'
 import { eclipseLighting } from './eclipseLighting'
 import { countMissingTextures, createPreparationTarget, withPreparationTarget } from './detailPreparation'
+import { applyHighlightKneeTo } from './highlightKnee'
 import { ktx2LoaderFor } from './ktx2Loader'
 import { sharedJointStates } from './ISSRigAnimator'
 import {
@@ -328,7 +329,11 @@ class FallbackModelErrorBoundary extends Component<
 
 function FallbackISSModel(): JSX.Element {
   const fallbackGltf = useGLTF(FALLBACK_MODEL_URL)
-  const fallbackScene = useMemo(() => fallbackGltf.scene.clone(), [fallbackGltf.scene])
+  const fallbackScene = useMemo(() => {
+    const clone = fallbackGltf.scene.clone()
+    applyHighlightKneeTo(clone)
+    return clone
+  }, [fallbackGltf.scene])
   return (
     <primitive
       object={fallbackScene}
@@ -383,6 +388,9 @@ function DetailedISSModel({ spec, quality, attempt, visible, onReady, onError }:
         object.receiveShadow = true
       }
     })
+    // Glints stay under the bloom threshold (highlightKnee.ts). Materials are
+    // shared through the GLTF cache, so this patches each one once.
+    applyHighlightKneeTo(clone)
     return clone
   }, [detailedGltf.scene])
   // Validated rig contract from the asset's scene extras (emitted by

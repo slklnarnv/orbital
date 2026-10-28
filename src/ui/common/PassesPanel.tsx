@@ -8,10 +8,10 @@ import { loadCityIndex } from '@/core/geo/cityIndexLoader'
 import { formatLatitude, formatLongitude } from '@/utils/formatters'
 import { closeOverlay } from '../overlay/overlay'
 import { useOverlay } from '../overlay/useOverlay'
+import { ToolIcon } from './ToolIcon'
 
 // ─── Visible passes (roadmap B.3) ────────────────────────────────────────────
-// A "Passes" control beside the render-settings gear (controls live top
-// right). The popover sets the observer — a city from the offline index,
+// A "Passes" control in the top-right tool row (Passes, Modules, Settings). The popover sets the observer — a city from the offline index,
 // typed coordinates, or the browser's location — and lists the next visible
 // passes over 48 h of simulation time. "Watch" seeks to just before a pass
 // and plays it at 1×.
@@ -264,16 +264,18 @@ export function PassesPanel(): JSX.Element {
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
       <button
         ref={triggerRef}
+        id="btn-passes"
         type="button"
         aria-label="Visible passes"
         aria-expanded={isOpen}
         aria-keyshortcuts="P"
         data-overlay=""
         onClick={onTriggerClick}
-        className="hud-label hud-btn-text"
+        className="hud-label hud-btn-text hud-tool"
         style={{ color: isOpen ? 'var(--hud-hi)' : undefined }}
       >
-        Passes
+        <ToolIcon name="passes" />
+        <span className="hud-tool__label">Passes</span>
       </button>
 
       {isOpen && (

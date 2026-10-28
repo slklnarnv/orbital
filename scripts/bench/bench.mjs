@@ -128,6 +128,10 @@ async function startPreview() {
 }
 
 async function stubNetwork(page) {
+  // The first-visit tour is a modal; a bench run is never a first visit.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem('orbital-tour-seen', '1') } catch { /* no storage */ }
+  })
   const fallback = JSON.parse(await readFile(path.join(root, 'src/data/fallback-tle.json'), 'utf8'))
   await page.route('**/api/tle', (route) => route.fulfill({
     status: 200,

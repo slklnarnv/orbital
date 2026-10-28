@@ -5,7 +5,38 @@
 > (see CLAUDE.md). Keep the Current state section fresh in the same commit as
 > behavior changes - never ship an errata banner, fix the stale text instead.
 
-## Current state (2026-10-26)
+## Current state (2026-10-28)
+
+- **HUD tools, tour, sun and glint polish (2026-10-28)**, from the owner's
+  live-site review:
+  - *Tool row*: Passes, Modules and Settings sit together top right, each a
+    line icon and a label (`ToolIcon.tsx`, `.hud-tool`); the bare gear and
+    the mid-left Modules button are gone. Modules (and the new `M` key)
+    works from anywhere: away from the station it Locates and the explorer
+    opens on arrival (`moduleExplorerControl.ts`, `pendingOpenAt` in
+    `explorerStore`, dropped after 90 s).
+  - *Tour*: an eight-step guided tour (`src/ui/tour/`), offered once on the
+    first visit after the loading screen (`orbital-tour-seen` in
+    localStorage, failures read as unseen), replayable from About and the
+    `?` overlay. A spotlight ring dims the rest; the card goes below, above
+    or beside its control (`placeCard`). Modal overlay `'tour'`. The e2e
+    fixture and the bench mark it seen.
+  - *Glare aim*: the glare overlay was aimed in a priority-0 frame callback,
+    before Locate/Reset flights set the camera's orientation, so mid-flight
+    it sat up to 945 px from the sun ("the shiny ray moves down"). It is now
+    aimed in `onBeforeRender` with the drawing camera (0 px measured).
+  - *Sun*: a smaller blown core (~1.6x the disc), thinner, shorter spikes
+    widening with distance, a lower peak and a neutral white tint; no amber
+    veil.
+  - *Station glints*: a highlight knee (`highlightKnee.ts`) rolls every
+    station fragment off from 1.8 toward 2.3, under the 2.4 bloom threshold,
+    so a flat panel at its mirror angle can no longer bloom into a white
+    square. Shared materials and the explorer's highlight copies use one
+    program key (no extra compile).
+  - *Hide HUD* (`H`) now also hides the orbit line and the 3D ground track
+    (`hudStore.ts`); HUD-aware framing stops reserving HUD space.
+  - Radiators checked, no change: in daylight the TRRJ edge-on target moves
+    only a few degrees at the current beta angle, and in eclipse it holds.
 
 - **Wheel zoom while tracking fixed (2026-10-28)**: the station-locked carry
   (2026-10-26 scrub fix) re-set camera-controls' pose with
@@ -368,7 +399,8 @@ read). Its order, merged with the older items:
 4. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
    (ALL CAPS wordmark, blue limb, no new mark); I1/I2 landed 2026-10-26.
 5. **017 V3** — the sun landed 2026-10-26 (round glare, limb fade and
-   reddening, sunrise band); it awaits the owner's side-by-side with ISS
+   reddening, sunrise band) and was toned down 2026-10-28 after the owner
+   found it overdone; it awaits the owner's side-by-side with ISS
    photography at the limb.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI

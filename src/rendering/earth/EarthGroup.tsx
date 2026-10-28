@@ -6,6 +6,7 @@ import { EarthSurface } from './EarthSurface'
 import { CloudLayer } from './CloudLayer'
 import { AtmosphereShell } from './AtmosphereShell'
 import { GroundTrack } from './GroundTrack'
+import { useHudStore } from '@/stores/hudStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 /**
@@ -18,6 +19,8 @@ import { useSettingsStore } from '@/stores/settingsStore'
 export function EarthGroup(): JSX.Element {
   const groupRef = useRef<THREE.Group>(null)
   const groundTrack = useSettingsStore((state) => state.groundTrack)
+  // The 3D track and footprint are annotations: they hide with the HUD (`H`).
+  const hudHidden = useHudStore((state) => state.hidden)
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -40,7 +43,7 @@ export function EarthGroup(): JSX.Element {
       <AtmosphereShell />
 
       {/* 4. Optional ground track + visibility footprint (Earth-fixed lines) */}
-      {groundTrack && <GroundTrack />}
+      {groundTrack && !hudHidden && <GroundTrack />}
     </group>
   )
 }

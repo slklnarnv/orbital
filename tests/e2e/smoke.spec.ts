@@ -19,9 +19,12 @@ async function clickByCoordinates(page: Page, locator: Locator): Promise<void> {
  * The full-screen loading overlay (z-9999) swallows pointer events until the
  * assets finish and it fades out, so clicks sent earlier are silently lost.
  * Software WebGL makes that window long; wait for the overlay to unmount.
+ * The percentage leaves first (the bar holds at "Ready" for 400 ms, still
+ * catching clicks), so wait for the overlay element itself too.
  */
 async function waitForLoadingScreenGone(page: Page): Promise<void> {
   await expect(page.getByText(/^Loading \d+%$/)).toHaveCount(0, { timeout: 90_000 })
+  await expect(page.locator('.boot')).toHaveCount(0, { timeout: 10_000 })
 }
 
 async function openSettings(page: Page): Promise<void> {
@@ -237,4 +240,41 @@ test('skip link, scene summary and a focus ring on every control', async ({ page
     if (!info.ringed) unringed.push(info.name)
   }
   expect(unringed).toEqual([])
+})
+
+test('first visit offers the tour; it steps through the tools and stays dismissed', async ({ page }) => {
+  await stubNetwork(page, { tour: true })
+  await page.goto('/')
+  await waitForLoadingScreenGone(page)
+  const tour = page.getByRole('dialog', { name: 'Welcome to Orbital' })
+  await expect(tour).toBeVisible({ timeout: 15_000 })
+  await expect(tour).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('dialog', { name: 'Find the station' })).toBeVisible()
+  // Modal: shortcuts pause while it is open.
+  await page.keyboard.press('g')
+  await expect(page.getByRole('dialog', { name: 'Render settings' })).toHaveCount(0)
+  for (const title of ['Control time', 'Scrub the orbit', 'See it from the ground', 'Explore the modules', 'Tune the view', 'Keys and the rest']) {
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('dialog', { name: title })).toBeVisible()
+  }
+  await expect(page.locator('.hud-tour-spot')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.hud-panel--tour')).toHaveCount(0)
+  await page.reload()
+  await waitForLoadingScreenGone(page)
+  await page.waitForTimeout(3_000)
+  await expect(page.locator('.hud-panel--tour')).toHaveCount(0)
+})
+
+test('the tool row labels Passes, Modules and Settings; M opens the explorer from afar', async ({ page }) => {
+  await bootLive(page)
+  for (const name of ['Passes', 'Modules', 'Settings']) {
+    await expect(page.locator('.hud-corner--tr .hud-tool__label', { hasText: name })).toBeVisible()
+  }
+  await focusBody(page)
+  await page.keyboard.press('m')
+  // Locate first (software WebGL loads the station slowly), then it opens.
+  await expect(page.getByRole('region', { name: 'Module explorer' })).toBeVisible({ timeout: 85_000 })
+  await expect(page.locator('#btn-module-explorer')).toHaveAttribute('aria-expanded', 'true')
 })

@@ -23,18 +23,21 @@ uniform float uPixel; // NDC-height units per drawing-buffer pixel
 
 varying vec2 vOffset;
 
-// Halo: a Lorentzian-like core with a shallow tail. HALO_CORE is the half-width
-// (~0.9°); the 0.55 slope keeps a visible veil out to ~0.5 (~11°), where real
-// stray light still lifts the black of space around the sun.
-const float HALO_CORE = 0.04;
-const float HALO_SLOPE = 0.55;
+// Halo: a Lorentzian-like core with a moderate tail. HALO_CORE is the
+// half-width (~0.6°); the 0.75 slope keeps the veil within ~5° — good optics
+// in vacuum, where nothing scatters, leave the black of space dark close to
+// the sun. (A 0.55 slope out to ~11° read as a grey-amber fog: 2026-10-28.)
+const float HALO_CORE = 0.026;
+const float HALO_SLOPE = 0.75;
 
 // Six-blade aperture: three lines through the centre, 60° apart, give six
 // spikes. Fixed to the screen (the aperture does not turn with the view),
 // tilted off the vertical so they do not line up with the HUD.
 const float SPIKE_TILT = 0.2618; // 15°
-const float SPIKE_GAIN = 0.2;
-const float SPIKE_FALLOFF = 0.05;
+// Thin and crisp rather than broad: strength for the cinematic read, width
+// kept to ~1 px near the sun so they look like diffraction, not streaks.
+const float SPIKE_GAIN = 0.22;
+const float SPIKE_FALLOFF = 0.045;
 
 // Hoskins' hash (see sun.frag for why the usual sin() hash is unusable here).
 float hash21(vec2 p) {
@@ -55,7 +58,7 @@ void main() {
   for (int i = 0; i < 3; i++) {
     float a = SPIKE_TILT + float(i) * 1.0471976;
     float across = dot(vOffset, vec2(-sin(a), cos(a)));
-    float w = uPixel * (1.3 + 6.0 * r);
+    float w = uPixel * (1.0 + 4.0 * r);
     spikes += exp(-(across * across) / (w * w));
   }
   spikes *= SPIKE_GAIN * SPIKE_FALLOFF / (SPIKE_FALLOFF + r);
@@ -68,8 +71,10 @@ void main() {
   // that the bloom budget is checked against.
   float profile = min(1.0, halo + spikes) * taper;
 
-  // White near the sun, warming outward like the old amber haze.
-  vec3 tint = mix(vec3(1.0), vec3(1.0, 0.80, 0.55), smoothstep(0.02, 0.35, r));
+  // Neutral: in vacuum nothing reddens the glare (the atmosphere's reddening
+  // at the limb is already in uColor). A trace of warmth keeps it from
+  // reading clinical.
+  vec3 tint = mix(vec3(1.0), vec3(1.0, 0.95, 0.88), smoothstep(0.02, 0.35, r));
 
   // Multiplicative dither: the halo is a long, very shallow gradient and
   // bands at 8 bits; scaling the noise by the signal keeps it off pure black.

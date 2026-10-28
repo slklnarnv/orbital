@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { applyHighlightKnee } from './highlightKnee'
 import { useCameraStore } from '@/stores/cameraStore'
 import { useExplorerStore } from '@/stores/explorerStore'
 import { FRAME_PRIORITY } from '../framePriority'
@@ -44,6 +45,9 @@ function highlightMaterial(base: THREE.Material, kind: HighlightKind): THREE.Mat
   if (!entry) {
     const make = (intensity: number, albedo = 1): THREE.Material => {
       const copy = base.clone()
+      // clone() drops onBeforeCompile: re-apply the highlight knee so the copy
+      // keeps the base's program key (no compile) and its glints stay rounded.
+      applyHighlightKnee(copy)
       if (copy instanceof THREE.MeshStandardMaterial) {
         if (intensity > 0) {
           copy.emissive.copy(HIGHLIGHT_COLOR)
