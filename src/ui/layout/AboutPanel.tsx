@@ -112,6 +112,7 @@ export function AboutPanel(): JSX.Element {
               </li>
               <li>ISS model: NASA IGOAL and NASA 3D Resources</li>
               <li>Earth and sky: NASA Blue Marble, Black Marble, a NASA cloud composite and star map</li>
+              <li>Stars: the Yale Bright Star Catalogue; the Moon: NASA Lunar Reconnaissance Orbiter</li>
               <li>Type: Space Grotesk by Florian Karsten and Chivo Mono by Omnibus-Type (SIL OFL 1.1)</li>
               <li>Built with three.js, React Three Fiber and satellite.js</li>
             </ul>

@@ -33,7 +33,10 @@ const TIMES = [
 mkdirSync(OUT, { recursive: true })
 console.log('[visual] building (vite build --mode bench) …')
 execSync(`npx vite build --mode bench --outDir ${DIST} --emptyOutDir`, { cwd: ROOT, stdio: 'ignore' })
-const server = spawn('npx', ['vite', 'preview', '--outDir', DIST, '--port', String(PORT), '--strictPort'], { cwd: ROOT, shell: true })
+// Node runs vite directly, without a shell: killing a shell (`npx`, shell:
+// true) leaves the vite server running on Windows, holding the port.
+const VITE_BIN = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js')
+const server = spawn(process.execPath, [VITE_BIN, 'preview', '--outDir', DIST, '--port', String(PORT), '--strictPort'], { cwd: ROOT })
 const url = `http://localhost:${PORT}/`
 
 let failed = false

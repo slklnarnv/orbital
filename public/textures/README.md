@@ -71,3 +71,22 @@ its city lights sharp.
 On the GPU every 8K map transcodes to 1 byte per texel on desktops (BC7 or ASTC),
 42.7 MiB with mips, the same as the 4K RGBA8 map it replaces. That map's GPU copy
 is released after the swap.
+
+## Sky: stars and the Moon
+
+Built by `npm run build:sky` (`scripts/build-sky.mjs`), sources cached in
+`.tmp-sky-build/` and hash-checked:
+
+- `stars.bin` (100 KB): the Yale Bright Star Catalogue, 5th revised edition
+  (Hoffleit & Warren 1991; CDS V/50, public domain; fetched from the CfA
+  VizieR mirror, `catalog.gz`, SHA-256
+  `3dc44b1e90be8fbe5bcc7656032560f51275f985c7e3f783c9028e1838ec7bed`).
+  9,096 stars: J2000 unit vectors (int16), V magnitude (int16 × 1000) and an
+  sRGB tint from B−V. Layout in the script header.
+- `moon.webp` (512×256, 42 KB): the LRO LROC WAC global mosaic
+  (NASA/GSFC/Arizona State University, public domain), the 8×4 level-2 tiles
+  of NASA Moon Trek's equirectangular WMTS
+  (`LRO_WAC_Mosaic_Global_303ppd_v02`), stitched; longitude 0 at the centre.
+- `starmap-4k.webp` (the Milky Way) is equirectangular in J2000 right
+  ascension and declination, RA 0h at the centre and increasing to the left
+  (checked against the Magellanic Clouds and the galactic centre).

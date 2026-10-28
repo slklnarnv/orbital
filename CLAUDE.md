@@ -53,7 +53,8 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `api/tle.ts` - Vercel function; guarded (GET/HEAD only, query-refusal,
   warm memo + dedupe, stale-on-error)
 - `src/core/` - simulation truth: clock, runtime, SGP4, telemetry manager,
-  geo lookup, sun visibility / eclipse forecast / ground track. No React, no three.
+  geo lookup, sun visibility / eclipse forecast / ground track, Moon ephemeris.
+  No React, no three.
 - `src/interaction/` - camera state machine, flights, constraint, sensitivity
 - `src/rendering/` - scene graph: `earth/`, `iss/` (model + joints),
   `post/` (bloom + flare), `shaders/` (GLSL), `scene/`
@@ -61,7 +62,8 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 - `src/ui/` - HUD clusters; `src/index.css` is the HUD design system
 - `scripts/` - GLB build pipeline (`build-iss-model.mjs`, `build-iss-locate-lod.mjs`),
   `refresh-fallback-tle.mjs`, `build-place-index.mjs` (offline place names,
-  `npm run build:places`), asset/shader gates
+  `npm run build:places`), `build-sky.mjs` (star catalogue + Moon map,
+  `npm run build:sky`), asset/shader gates
 - `docs/` - deep docs; `plans/` - ledger + history, plan 001 (ISS model
   repair; model code cites its IDs) and plan 017 (display roadmap; its
   R/V/I/A/X IDs are cited in code)

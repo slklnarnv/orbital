@@ -14,6 +14,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- The real sky: the 9,096 naked-eye stars at their true positions, brightness
+  and colours, the Milky Way where it really is, and the Moon at its true
+  position and phase (it turns red in a lunar eclipse).
 - A short guided tour on the first visit, which spotlights each control in
   turn; replay it from About or the `?` overlay.
 - Passes, Modules and Settings now sit together top right with icons and

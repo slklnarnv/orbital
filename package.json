@@ -13,6 +13,7 @@
     "check:shaders": "node scripts/check-shader-ramps.mjs",
     "build:iss-lod": "node scripts/build-iss-locate-lod.mjs",
     "build:earth-8k": "node scripts/build-earth-8k.mjs",
+    "build:sky": "node scripts/build-sky.mjs",
     "build:places": "node scripts/build-place-index.mjs",
     "build:cities": "node scripts/build-city-index.mjs",
     "build:icons": "node scripts/build-icons.mjs",
