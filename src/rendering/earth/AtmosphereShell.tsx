@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
@@ -54,6 +54,12 @@ export function AtmosphereShell(): JSX.Element {
     u.limbProximity.value = 1 - THREE.MathUtils.smoothstep(elevation, SUNRISE_BAND_FULL_RAD, SUNRISE_BAND_NONE_RAD)
   })
 
+  // Uniforms go in through the constructor, which keeps this object by
+  // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
+  // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
+  // Memoized: R3F rebuilds the material whenever `args` changes identity.
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: uniformsRef.current }], [])
+
   return (
     <mesh position={[0, 0, 0]}>
       {/* Atmosphere shell is ~6,530 km in radius */}
@@ -61,7 +67,7 @@ export function AtmosphereShell(): JSX.Element {
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
-        uniforms={uniformsRef.current}
+        args={materialArgs}
         side={THREE.BackSide} // Render back faces to project glow outside Earth borders
         blending={THREE.AdditiveBlending} // Blend starlight behind the halo smoothly
         transparent={true}

@@ -52,3 +52,6 @@ playwright-report/
 
 # Bench build + results (npm run bench); committed baselines live in docs/bench/
 .bench/
+
+# npm run check:visual output
+.visual-check/

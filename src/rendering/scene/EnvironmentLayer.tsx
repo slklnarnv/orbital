@@ -186,6 +186,12 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
     glare.apply(state.camera as THREE.PerspectiveCamera, _sunPoint, gl.toneMappingExposure)
   })
 
+  // Uniforms go in through the constructor, which keeps this object by
+  // reference: R3F 9 copies a `uniforms` prop into new uniform objects, so
+  // later writes to ours never reached the GPU (the black Earth, 2026-10-28).
+  // Memoized: R3F rebuilds the material whenever `args` changes identity.
+  const materialArgs = useMemo<[THREE.ShaderMaterialParameters]>(() => [{ uniforms: glare.billboardUniforms }], [glare])
+
   return (
     <>
       {/* Ambient background illumination so completely shadowed areas are slightly visible */}
@@ -211,7 +217,7 @@ export const EnvironmentLayer = React.memo(function EnvironmentLayer(): JSX.Elem
         <shaderMaterial
           vertexShader={sunVert}
           fragmentShader={sunFrag}
-          uniforms={glare.billboardUniforms}
+          args={materialArgs}
           transparent={true}
           blending={THREE.AdditiveBlending}
           depthWrite={false}

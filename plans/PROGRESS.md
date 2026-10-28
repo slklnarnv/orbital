@@ -64,6 +64,25 @@
 - Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
   weights, sane constants).
 
+## Black Earth after the React 19 upgrade, fixed (2026-10-28)
+
+- **What happened**: #55 shipped with verify, Playwright 16/16 and the bench
+  all green, and the live Earth rendered black (atmosphere ring only).
+  Reverted in #56 (live checked: disc brightness 66, no console errors).
+- **Cause**: R3F 9 applies a `uniforms` prop on `<shaderMaterial>` by copying
+  each uniform into new objects (`uniforms[name] = {...uniform}`). Earth,
+  clouds, atmosphere, sun billboard and station glint wrote textures and sun
+  vectors into their own objects after mount, which the material never saw:
+  `dayMap`/`nightMap`/`cloudMap` stayed null.
+- **Fix**: uniforms go in through memoized constructor args
+  (`args={materialArgs}`), which three keeps by reference.
+  `ShaderUniformsByReference.test.ts` forbids the prop.
+- **Why nothing caught it**: no check looked at pixels. `npm run
+  check:visual` now builds the production bundle, renders it in Edge on the
+  real GPU at three fixed times and fails on a dark Earth disc (it measured
+  0 on the broken build, 40–66 on working ones) or a page error. CLAUDE.md
+  Rule 2: run it before pushing rendering, shader or dependency changes.
+
 ## React 19 + R3F 9 + drei 10 + camera-controls 3 (2026-10-28)
 
 - **Install**: npm kept drei 9's peers (react-spring, react-composer, the
