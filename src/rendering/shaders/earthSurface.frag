@@ -18,6 +18,83 @@ const float TWO_PI = 6.28318530718;
 
 #include "./cloudDensity.glsl"
 
+// ── City lights up close ──────────────────────────────────────────────────────
+// The Black Marble map is ~5 km per texel at 8K (~10 km at 4K). From Follow
+// distances one texel spans 10–20 pixels, and three things made the lights
+// read as glowing blocks: bilinear magnification (texel diamonds), the 4.2x
+// gain putting city cores far over the bloom threshold (UnrealBloom turns a
+// compact HDR source square), and no structure inside a texel. Up close, so
+// the overview is untouched:
+//   1. a cubic B-spline replaces bilinear once a texel spans > 1 pixel;
+//   2. once a texel spans > 4 pixels, each texel splits into 4x4 cells and a
+//      lit area becomes discrete points of light (a stable integer hash per
+//      cell), brightness-conserving: brighter texels light more cells. The
+//      point radius is set in screen pixels (~0.7 px), so points stay crisp
+//      without shrinking to where they would shimmer;
+//   3. a soft knee keeps every light under the bloom threshold, the way the
+//      sun and the station highlights are kept (highlightKnee.ts).
+const float NIGHT_CELLS = 4.0;          // light points per texel edge
+const float NIGHT_POINT_PX = 0.7;       // point radius in screen pixels
+const float NIGHT_POINT_FLOOR = 0.25;   // share of the light left as soft glow
+const float NIGHT_POINT_GAIN_MAX = 24.0; // the knee below sets the real peak
+const float NIGHT_KNEE_START = 1.6;
+const float NIGHT_KNEE_CEILING = 2.2;   // < BLOOM_THRESHOLD (NightLightsBudget.test.ts)
+
+vec3 sampleNightBicubic(sampler2D map, vec2 uv, vec2 texSize) {
+  // Same B-spline as sampleCloudMapBicubic, on all three channels.
+  vec2 st = uv * texSize - 0.5;
+  vec2 i = floor(st);
+  vec2 f = st - i;
+  vec2 f2 = f * f;
+  vec2 f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+  vec2 w3 = f3 / 6.0;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / texSize;
+  vec2 h1 = (i + 1.5 + w3 / g1) / texSize;
+  vec3 t00 = textureLod(map, vec2(h0.x, h0.y), 0.0).rgb;
+  vec3 t10 = textureLod(map, vec2(h1.x, h0.y), 0.0).rgb;
+  vec3 t01 = textureLod(map, vec2(h0.x, h1.y), 0.0).rgb;
+  vec3 t11 = textureLod(map, vec2(h1.x, h1.y), 0.0).rgb;
+  return g0.y * (g0.x * t00 + g1.x * t10) + g1.y * (g0.x * t01 + g1.x * t11);
+}
+
+// Point-of-light factor at `st` (texel units): mean 1 over a texel, so the
+// texel's total light is unchanged. Each cell holds at most one point at a
+// fully random spot; the four cells nearest the pixel are summed, which
+// covers every point within half a cell (the Gaussian is < 1% beyond).
+float cityPoints(vec2 st, float lum, float cellPx) {
+  vec2 cs = st * NIGHT_CELLS;
+  float r = clamp(NIGHT_POINT_PX / cellPx, 0.08, 0.20);
+  float r2 = r * r;
+  // Dim texels light more, fainter points rather than a few hot ones; below
+  // the Black Marble noise floor (faint blue-violet speckle) none light.
+  float occupancy = clamp((sqrt(lum) - 0.12) * 1.5, 0.0, 1.0);
+  float mean = max(occupancy * 3.14159265 * r2, 1e-4);
+  vec2 base = floor(cs - 0.5);
+  float sum = 0.0;
+  for (int j = 0; j < 2; j++) {
+    for (int i = 0; i < 2; i++) {
+      vec2 cell = base + vec2(float(i), float(j));
+      vec3 h = vec3(cloudPcg3d(uvec3(uvec2(cell), 911u))) / 4294967295.0;
+      vec2 d = cs - (cell + h.xy);
+      sum += step(h.z, occupancy) * exp(-dot(d, d) / r2);
+    }
+  }
+  return min(sum / mean, NIGHT_POINT_GAIN_MAX);
+}
+
+vec3 nightKnee(vec3 c) {
+  float peak = max(max(c.r, c.g), c.b);
+  if (peak <= NIGHT_KNEE_START) return c;
+  float span = NIGHT_KNEE_CEILING - NIGHT_KNEE_START;
+  float kneed = NIGHT_KNEE_START + span * (1.0 - exp(-(peak - NIGHT_KNEE_START) / span));
+  return c * (kneed / peak);
+}
+
 void main() {
   vec3 normal = normalize(vNormal);
   vec3 viewDir = normalize(cameraPosition - vWorldPosition);
@@ -65,8 +142,26 @@ void main() {
   // We apply a photographic contrast curve (power 1.5) to crush background sensor noise
   // and emphasize dense urban cores as warm pinpoints.
   vec3 cityTint = vec3(1.0, 0.80, 0.48);
-  vec3 rawNight = texture2D(nightMap, vUv).rgb;
-  vec3 nightColor = pow(rawNight, vec3(1.5)) * nightIntensity * cityTint;
+  // Texel footprint first: derivatives are only defined outside the branch.
+  vec2 nightSize = vec2(textureSize(nightMap, 0));
+  vec2 nightSt = vUv * nightSize;
+  float pixelsPerTexel = 1.0 / max(max(length(dFdx(nightSt)), length(dFdy(nightSt))), 1e-6);
+  float smoothW = smoothstep(1.0, 2.0, pixelsPerTexel);
+  float pointsW = smoothstep(4.0, 8.0, pixelsPerTexel);
+  vec3 nightColor = vec3(0.0);
+  if (nightMask > 0.0) {
+    vec3 rawNight = texture2D(nightMap, vUv).rgb;
+    if (smoothW > 0.0) rawNight = mix(rawNight, sampleNightBicubic(nightMap, vUv, nightSize), smoothW);
+    vec3 lights = pow(rawNight, vec3(1.5));
+    if (pointsW > 0.0) {
+      float lum = dot(lights, vec3(0.2126, 0.7152, 0.0722));
+      float points = cityPoints(nightSt, lum, pixelsPerTexel / NIGHT_CELLS);
+      lights *= mix(1.0, NIGHT_POINT_FLOOR + (1.0 - NIGHT_POINT_FLOOR) * points, pointsW);
+    }
+    nightColor = lights * nightIntensity * cityTint;
+    // Up close only: from the overview the cores keep their bloom glow.
+    nightColor = mix(nightColor, nightKnee(nightColor), smoothW);
+  }
 
   // ── Ocean Specularity & Sky Fresnel Reflection ────────────────────────────────
   // Read the grayscale specular mask (1.0 for ocean, 0.0 for land)
