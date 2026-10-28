@@ -20,8 +20,10 @@
   split is per test, still one worker per shard). The three station-framing
   tests skip before booting on the production build instead of after a
   ~25 s boot each.
-- Split by test count: shard 1 holds Locate, so it stays the long pole
-  (~5 min of tests); the others take ~1.5–2 min.
+- **Measured** on PR #50: all checks done 6 min 22 s after the push, down
+  from 11 min 41 s (verify 53 s; shards 6:22, 3:46, 3:23 including ~40 s
+  of setup each). The split is by test count, so the shard holding Locate
+  (~2.5 min alone) is the long pole.
 
 ## Docs compaction, sun spikes removed, About actions (2026-10-28)
 
