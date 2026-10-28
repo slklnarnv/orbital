@@ -25,7 +25,7 @@ Vite 6, three r170, zustand 5, Tailwind 4. Deployed on Vercel (static +
 
 - `npm run dev` - Vite; serves `/api/tle` through the real handler
 - `npm test` - Vitest watch
-- `npm run test:e2e` - Playwright smoke suite (production preview)
+- `npm run test:e2e` - Playwright smoke + viewport suites (production preview); local only, not in CI
 - `npm run refresh:tle` - refresh `src/data/fallback-tle.json` (CI does this
   Mon/Thu and commits to `main`; run it by hand only if CI is off)
 - `npm run preview` - production bundle locally

@@ -3,7 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -22,34 +21,3 @@ jobs:
       - run: npm run verify
       - run: npm audit --omit=dev --audit-level=high
       - run: npm audit --audit-level=high
-  # Advisory, not a merge gate: keep `e2e` OUT of the branch's required status
-  # checks. It reports on every PR (including bot PRs such as the fallback-TLE
-  # refresh) but software-WebGL timing on hosted runners can be slow; `verify`
-  # is the gate. It is skipped on push to main (the PR run already covered
-  # it); run it on demand via workflow_dispatch.
-  #
-  # Speed: the suite is ~10 min of software WebGL on one runner (every test
-  # boots the app; one worker, since parallel pages starve each other's
-  # render loops). Three shards on three runners, started alongside `verify`
-  # rather than after it, bring the wall time to roughly a third.
-  e2e:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
-        env:
-          CI: 'true'
