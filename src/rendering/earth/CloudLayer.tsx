@@ -5,7 +5,6 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { simulationClock } from '@/core/clock/SimulationClock'
 import { sunDirectionWorld } from '@/core/orbital/CoordinateConversions'
-import { ATMOSPHERE_SCALE_HEIGHT_KM, SUN_TANGENT_TAU } from '@/core/orbital/SunAppearance'
 import { CLOUD_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import { cloudRotationAtEpoch } from './CloudMotion'
 import vertexShader from '../shaders/clouds.vert'
@@ -46,9 +45,6 @@ export const CloudLayer = React.memo(function CloudLayer(): JSX.Element {
     cloudTexelSize: { value: new THREE.Vector2(1 / 4096, 1 / 2048) },
     sunDirection: { value: new THREE.Vector3(0, 0, 1) },
     opacity: { value: 0.32 }, // Subtle, photographic cloud density
-    // Sunlight through the air (sunPath.glsl), for the tops lit past the terminator.
-    atmTau: { value: new THREE.Vector3(...SUN_TANGENT_TAU) },
-    atmScaleHeight: { value: ATMOSPHERE_SCALE_HEIGHT_KM },
   })
 
   // Configure and assign the cloud texture once it's loaded

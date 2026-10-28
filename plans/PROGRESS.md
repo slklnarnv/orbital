@@ -8,20 +8,6 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
-## Cloud rim past the terminator (2026-10-28)
-
-- Cloud tops (~10 km) keep the sun ~3.5 deg past the ground's terminator.
-  `clouds.frag` now adds that light where the day shading has run out
-  (`rimW`): the transmittance at the height of the sunlight's path to a
-  10 km top (`sunPathHeight`), gain 0.75, also raising the deck's visibility
-  there. The sun-path functions moved to `sunPath.glsl`, shared with
-  `atmosphere.frag`. Day-side cloud shading is untouched (same window as the
-  terrain). Cost: one branch, a few ALU ops and four exp, only near the
-  terminator.
-- Not done: long offset cloud shadows at low sun (needs the sun direction in
-  the deck's rotating frame).
-- Test: `CloudRim.test.ts`.
-
 ## Atmosphere: twilight from the sun path (2026-10-28)
 
 - **Before**: the limb's twilight colour was a rose/gold window and its night
@@ -63,6 +49,19 @@
   were a contended run (Firefox on the GPU).
 - Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
   weights, sane constants).
+
+## Cloud rim reverted (2026-10-28)
+
+- #53 lit cloud tops ~3.5 deg past the terminator and raised the deck's
+  visibility there. Judged only on close dusk views, where it looked subtle;
+  from the overview (the owner's view) its sharp edges drew a hard
+  grey-orange stripe down the whole terminator. Reverted (shader, the
+  shared `sunPath.glsl`, test, docs); the React 19 uniforms fix stays.
+- Checked at the owner's time and framing (12:24:32Z, overview), production
+  build on the real GPU: the revert matches the pre-#51 baseline (mean pixel
+  difference 0.13 in the terminator crop, vs 0.50 for the rim).
+- Lesson, as a rule: judge any Earth-shading change from the overview as well
+  as up close, against a baseline capture at a fixed time.
 
 ## Black Earth after the React 19 upgrade, fixed (2026-10-28)
 
