@@ -19,7 +19,9 @@
   in on capable desktops; bicubic clouds with near-deck detail and shadows;
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
   City lights up close resolve into points of light inside a soft glow
-  (`earthSurface.frag`), kept under the bloom threshold.
+  (`earthSurface.frag`), kept under the bloom threshold. The limb's twilight
+  colour and shadow edge follow the sunlight path, and the night limb shows
+  a faint airglow band (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial).
   Bloom and the lens flare are optional; Bloom off is the direct pipeline.
@@ -43,10 +45,11 @@
    it is not lost). Measure each against the bench and keep Bloom-off parity.
    - ~~*Night lights up close*~~: landed 2026-10-28 (B-spline map, points
      of light inside each texel, a bloom-safe knee; overview unchanged).
-   - *Atmosphere*: a physically based single-scattering model (precomputed
-     transmittance and in-scatter lookups) so the limb colour and the twilight
-     wedge follow the sun angle; a thin, faint airglow layer on the night limb
-     (the green-gold band in ISS night photos).
+   - ~~*Atmosphere: twilight and airglow*~~: landed 2026-10-28 (limb colour
+     and shadow edge from the sunlight path, airglow at 95 km). A full
+     precomputed-scattering model was weighed and not taken: ~100+
+     exponentials per pixel over most of the frame does not fit the iGPU
+     budget; revisit only with a measured reason.
    - *Clouds*: soft cloud shadows on the ground at low sun, and a bright cloud
      rim near the terminator where tops catch light after the ground goes
      dark. Same-day cloud imagery (NASA GIBS, D.8) instead of the composite.

@@ -25,6 +25,26 @@ vec3 transmittance(float h) {
   return exp(-atmTau * exp(-h / atmScaleHeight));
 }
 
+// Airglow: the faint green band of the night limb in every ISS night photo
+// (atomic oxygen at 557.7 nm, a thin layer near 95 km). Emission is seen
+// edge-on where the view ray grazes that layer, so it is drawn as a narrow
+// band in tangent height, only where the air is in Earth's shadow.
+const float AIRGLOW_ALT = 95.0;   // km
+const float AIRGLOW_WIDTH = 6.0;  // km (1/e half-width of the band)
+const float AIRGLOW_GAIN = 0.06;
+const vec3 AIRGLOW_COLOR = vec3(0.42, 0.86, 0.36);
+
+// Sunlight reaching the air along the view ray. For a ray that misses Earth
+// the air is its tangent point; for one that hits, the ground point. `h` is
+// that point's height. Returns the height of the sunlight's own grazing path
+// above the surface: large and positive on the day side, falling through 0
+// at the shadow edge. Continuous across the terminator (both branches give
+// `h` where the point's sun dot product is 0).
+float sunPathHeight(vec3 point, float h, vec3 sunDir) {
+  float along = dot(point, sunDir);
+  return along >= 0.0 ? h + along : length(point - along * sunDir) - EARTH_R;
+}
+
 float hgNormalised(float g, float cosTheta) {
   return pow((1.0 - g) * (1.0 - g) / (1.0 + g * g - 2.0 * g * cosTheta), 1.5);
 }
@@ -125,33 +145,40 @@ void main() {
   vec3 dayBlue   = vec3(0.08, 0.35, 0.90); // Deep restrained aerospace blue
   vec3 atmoColor = mix(dayBlue, limbWhite, colorBlend);
 
-  // ── Terminator Twilight Localization ─────────────────────────────────────────
-  // NOTE: sunDot uses the ORIGINAL outward normal (not -normal).
-  // The sun-facing test must determine if the fragment's location on the sphere
-  // is on the lit or unlit side of Earth — outward normal is correct for this.
-  float sunDot = dot(normal, normalize(sunDirection));
+  // ── Sun angle: twilight colour and the shadow edge ──────────────────────────
+  // The air each fragment shows is lit by sunlight that has itself crossed the
+  // atmosphere at a grazing height (sunPathHeight). Its transmittance sets the
+  // twilight colour — red where that path skims the ground, gold ~20 km up,
+  // white above ~40 km — and the air goes dark where the path enters Earth's
+  // shadow. Replaces a hand-placed rose/gold window keyed to the fragment's
+  // own normal, so the colour and the shadow edge now follow the sun angle
+  // (the same model as the sunrise band below and SunAppearance.ts).
+  vec3 sunDirN = normalize(sunDirection);
+  vec3 rayDirAir = -viewDir;
+  float bAir = dot(cameraPosition, rayDirAir);
+  float cAir = dot(cameraPosition, cameraPosition) - EARTH_R * EARTH_R;
+  float discAir = bAir * bAir - cAir;
+  vec3 airPoint;
+  float airH;
+  if (discAir > 0.0 && bAir < 0.0) {
+    airPoint = cameraPosition + rayDirAir * (-bAir - sqrt(discAir)); // ground hit
+    airH = 0.0;
+  } else {
+    airPoint = cameraPosition + rayDirAir * max(-bAir, 0.0);         // tangent point
+    airH = length(airPoint) - EARTH_R;
+  }
+  float hSunAir = sunPathHeight(airPoint, airH, sunDirN);
+  vec3 airLight = transmittance(max(hSunAir, 0.0));
+  vec3 airHue = airLight / max(max(airLight.r, airLight.g), max(airLight.b, 1e-3));
+  // Hue only, and only where the sun path is low: the day-side limb keeps its
+  // calibrated blue and white.
+  float twilight = 1.0 - smoothstep(10.0, 45.0, hSunAir);
+  atmoColor = mix(atmoColor, atmoColor * airHue, twilight * 0.85);
 
-  // Twilight window aligned with the terrain/cloud low-sun warmth: fades as the
-  // sun climbs, gated just past the terminator. The white/blue limb arc itself
-  // is untouched — only this warm segment softens.
-  float twilightWeight = (1.0 - smoothstep(0.02, 0.35, sunDot)) * smoothstep(-0.12, 0.04, sunDot);
-
-  // Restrained two-tier sunset gradient: rose at dense lowest altitudes,
-  // gold at higher, thinner altitudes. Half the old weight — warmth, not neon.
-  float altFactor = dotNV <= 0.22016 ? (dotNV / 0.22016) : clamp(1.0 - (dotNV - 0.22016) / 0.042, 0.0, 1.0);
-
-  vec3 twilightRose = vec3(0.95, 0.42, 0.18); // Dusty rose — deep atmospheric penetration
-  vec3 twilightGold = vec3(0.99, 0.74, 0.30); // Muted gold — shorter scatter path
-  vec3 twilightColor = mix(twilightRose, twilightGold, pow(altFactor, 1.5));
-
-  // Blend the twilight gradient into the base atmosphere color, restrained so
-  // the arc reads as warm near the terminator without going neon.
-  atmoColor = mix(atmoColor, twilightColor, twilightWeight * 0.35);
-
-  // ── Progressive Nightside Extinction ─────────────────────────────────────────
-  // The atmosphere disappears completely on the nightside.
-  // Transition: full at sunDot ≥ 0.08, completely dark at sunDot ≤ -0.15.
-  float extinction = smoothstep(-0.15, 0.08, sunDot);
+  // ── Shadow edge ──────────────────────────────────────────────────────────────
+  // The air goes dark where its sunlight path enters Earth's shadow, softened
+  // over a few km (the sun's disc spans ~0.5 deg, ~20 km of grazing height).
+  float extinction = smoothstep(-6.0, 14.0, hSunAir);
 
   // ── Final Alpha & Camera Proximity Fade ───────────────────────────────────────
   // The glow energy is modulated by the nightside extinction.
@@ -165,6 +192,13 @@ void main() {
   float proximityFade = smoothstep(6530.275, 6900.0, camDist);
 
   float alpha = glow * extinction * 0.92 * proximityFade;
+
+  // Airglow, folded in like the sunrise band (additive in linear light).
+  vec3 extraRgb = vec3(0.0);
+  if (airH > 0.0) {
+    float band = exp(-pow((airH - AIRGLOW_ALT) / AIRGLOW_WIDTH, 2.0));
+    extraRgb += AIRGLOW_COLOR * (AIRGLOW_GAIN * band * (1.0 - extinction) * proximityFade);
+  }
 
   // ── Forward Scattering: The Sunrise Band ──────────────────────────────────
   // With the sun at or behind the limb, the air between camera and sun
@@ -218,6 +252,12 @@ void main() {
         alpha += q;
       }
     }
+  }
+
+  float qExtra = dot(extraRgb, vec3(0.2126, 0.7152, 0.0722));
+  if (qExtra > 0.0) {
+    atmoColor = (atmoColor * alpha + extraRgb) / (alpha + qExtra);
+    alpha += qExtra;
   }
 
   gl_FragColor = vec4(atmoColor, alpha);
