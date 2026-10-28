@@ -6,6 +6,15 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## README refresh (2026-10-28)
+
+- Images re-shot after the sun and tool-row changes: `hero-follow.webp`,
+  `earth-overview.webp`, new `modules-exploded.webp` (follow-limb removed).
+  Headless Edge on the Radeon 780M (D3D11), dev server hooks to seek time
+  and steer the camera, `__orbitalEarth8k = 'on'`. Found while shooting:
+  close-range night lights render as soft blocks (5 km texels at ~1000x
+  scale), recorded in the environment notes.
+
 ## HUD tools, tour, sun and glint polish (2026-10-28)
 
 From the owner's review of the live site (ten items; the Dependabot PRs,

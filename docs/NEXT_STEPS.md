@@ -7,6 +7,11 @@
 
 ## Current state (2026-10-28)
 
+- **README refresh (2026-10-28)**: new hero (Follow above the limb over
+  Africa), overview (terminator with Asia's lights) and a module-explorer
+  exploded view; the limb shot is retired. Captured on the real GPU with
+  the 8K Earth forced on, at 1600x900 x1.5. Features and controls list the
+  module explorer, the tour and `M`.
 - **HUD tools, tour, sun and glint polish (2026-10-28)**, from the owner's
   live-site review:
   - *Tool row*: Passes, Modules and Settings sit together top right, each a
