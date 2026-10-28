@@ -47,6 +47,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Changed
 
+- Clouds just past sunset keep a dim red glow on their tops, as seen from
+  the station at every orbital sunset.
+
 - Earth's limb reddens and darkens where its air passes into Earth's
   shadow, following the real sun angle.
 
