@@ -7,6 +7,15 @@
 
 ## Current state (2026-10-26)
 
+- **Wheel zoom while tracking fixed (2026-10-28)**: the station-locked carry
+  (2026-10-26 scrub fix) re-set camera-controls' pose with
+  `setLookAt(…, false)` every frame the clock ran, which also reset the end
+  pose a smoothed dolly eases toward: in Follow/Inspect each wheel tick moved
+  ~1% (ten ticks 352 → 328 km; found by the A.2 bench session).
+  `carryControls` now carries both poses and keeps the user-control flags,
+  like `rotateOrbit`. Test: a dolly under continuous carry reaches the same
+  distance as without (~102 km); the old one-pose carry stalls above 300 km.
+
 - **017 V2 8K Earth (2026-10-26)**: first paint keeps the 4K WebP maps;
   ~2.5 s later, on capable desktops (`MAX_TEXTURE_SIZE` ≥ 8192, fine
   pointer, no Save-Data, a GPU compressed format; `earthDetail.ts`) an 8K
@@ -346,15 +355,6 @@ The display, visuals and polish roadmap is **`plans/017-display-visuals-polish-r
 (2026-10-26: viewport audit at nine sizes, sun/cloud/orbit captures, code
 read). Its order, merged with the older items:
 
-0. **Wheel zoom while tracking (regression from the 2026-10-26 scrub fix).**
-   In Follow/Inspect with the clock running each wheel tick dollies ~1%
-   (352 → 328 km over ten ticks; paused, six ticks go 354 → 102 km). The
-   carry in `CameraController.tsx` fires every frame (`MIN_CARRY_ANGLE_RAD`
-   is 1e-7) and its `setLookAt(…, false)` resets camera-controls' end pose,
-   so a smoothed dolly keeps one frame of progress; it also clears the
-   `_isUserControlling*` flags (the trap HANDOFF documents for
-   `FreeOrbitControls`). Carry the end pose too, then add a regression test
-   (a wheel dolly while carrying reaches the same radius as without).
 1. ~~**017 R1–R7 — responsive display.**~~ Landed 2026-10-26 (see Current
    state). Follow-up only if wanted: a real-device pass on iOS Safari
    (address-bar collapse with `100dvh`, notch insets in landscape).

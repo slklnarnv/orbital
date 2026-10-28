@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import type CameraControls from 'camera-controls'
+import { preserveUserControlFlags } from './FreeOrbitControls'
 
 /**
  * Station-locked tracking: the Follow/Inspect camera rides in the station's
@@ -51,3 +53,38 @@ export function carryPose(
 
 /** Rotations below this angle (rad) are skipped: re-basing the controls costs more than it shows. */
 export const MIN_CARRY_ANGLE_RAD = 1e-7
+
+const _eye = new THREE.Vector3()
+const _target = new THREE.Vector3()
+const _endEye = new THREE.Vector3()
+const _endTarget = new THREE.Vector3()
+const _up = new THREE.Vector3()
+
+/**
+ * Apply one frame's station rotation to camera-controls: the rendered pose
+ * AND the end pose it is easing toward, with the user-control flags kept.
+ *
+ * Carrying only the rendered pose (`setLookAt(…, false)`) also reset the end
+ * pose to it, every frame the clock ran: a wheel dolly kept one frame of its
+ * smoothing and stopped (ten ticks moved 352 → 328 km instead of ~100 km),
+ * and the cleared `_isUserControlling*` flags switched gestures to
+ * programmatic damping. Same pattern as `rotateOrbit` (FreeOrbitControls).
+ * Order as in `syncRenderedPoseToControls`: read both poses in the current
+ * up-space, adopt the carried up, then set them.
+ */
+export function carryControls(controls: CameraControls, rotation: THREE.Quaternion): void {
+  const camera = controls.camera
+  controls.getPosition(_eye, false)
+  controls.getTarget(_target, false)
+  controls.getPosition(_endEye, true)
+  controls.getTarget(_endTarget, true)
+  _up.copy(camera.up)
+  carryPose(_eye, _target, _up, rotation)
+  _endEye.sub(_endTarget).applyQuaternion(rotation).add(_endTarget)
+  camera.up.copy(_up)
+  controls.updateCameraUp()
+  preserveUserControlFlags(controls, () => {
+    void controls.setLookAt(_eye.x, _eye.y, _eye.z, _target.x, _target.y, _target.z, false)
+    void controls.setLookAt(_endEye.x, _endEye.y, _endEye.z, _endTarget.x, _endTarget.y, _endTarget.z, true)
+  })
+}

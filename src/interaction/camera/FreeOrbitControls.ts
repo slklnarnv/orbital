@@ -16,7 +16,7 @@ const vertical = new THREE.Quaternion()
  * or right-drag truck is still settling would otherwise silently switch that
  * motion to programmatic damping. Snapshot and restore them across the calls.
  */
-function preserveUserControlFlags(controls: CameraControls, run: () => void): void {
+export function preserveUserControlFlags(controls: CameraControls, run: () => void): void {
   const internals = controls as unknown as {
     _isUserControllingRotate?: boolean
     _isUserControllingDolly?: boolean

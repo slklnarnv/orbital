@@ -63,12 +63,14 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   behind Earth's limb or hides behind the station, and a red-to-gold
   sunrise band along the limb as it rises
   ([#43](https://github.com/slklnarnv/orbital/pull/43)).
-
-### Changed
-
 - The quietest HUD text is brighter (4.7:1 contrast on black, up from 3.1:1),
   and reduced motion now also stills the station glint and the lens flare's
   ghosts ([#40](https://github.com/slklnarnv/orbital/pull/40)).
+
+### Fixed
+
+- Mouse-wheel and pinch zoom work again while following the station with
+  the clock running (each tick had moved only about 1%).
 
 ## 2026-10-26
 
