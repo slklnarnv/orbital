@@ -207,6 +207,31 @@ landed through its own PR.
 - **Honest-instrument rule**: nothing renders without real data behind it —
   unknowns show "—", decoration that encodes nothing gets removed (the gauge
   tick-arcs were cut for exactly this reason).
+- **Responsive frame (plan 017 R1–R6)**, breakpoints in `src/index.css`:
+  - `max-width: 639px` (and touch tablets in portrait up to 899 px): one
+    bottom composition — clock row, then gauges | ground row (globe beside
+    its lines; the weather line is dropped on phones);
+  - `max-height: 500px` (landscape phones): one top row, one bottom row
+    (gauge values · time + transport · place + coordinates) and a thin tape
+    whose hit area runs under the row (the row passes touches through except
+    on buttons). Budget: the HUD stays ≤ 30% of the height;
+  - `pointer: coarse`: every control ≥ 44×44. Grow hit areas with padding
+    plus an equal negative margin, never with bigger glyphs, and widen gaps
+    where two hit areas would meet. Inputs are 16 px (iOS focus zoom);
+  - QHD and up: whole clusters `zoom: var(--hud-zoom)` (steps 1.15–1.9).
+    Under `zoom`, absolute lengths scale (vw-based ones included) and
+    percentages do not, so the ultrawide `--hud-gutter` is divided by the
+    zoom;
+  - type floor: nothing below 9 px (`--hud-fs-micro`, `--hud-fs-place`). A
+    line that does not fit at 9 px is hidden, not shrunk.
+- **HUD-aware framing (R2)**: while tracking, `HudAwareFraming` shifts the
+  projection (`camera.setViewOffset`) so the station centres in the band the
+  HUD leaves free. It measures cluster boxes (popovers excluded, the tape by
+  its line), so a new HUD cluster joins `HUD_SELECTORS` there. Anything that
+  projects to the screen by hand from fov and aspect must add the offset
+  (`viewOffsetNdc` in `SunFlare.ts`).
+- **Viewport audit**: `tests/e2e/viewport.spec.ts` asserts the above at nine
+  sizes; run it after any HUD layout change.
 
 ### Key files
 
@@ -224,6 +249,9 @@ landed through its own PR.
 | `src/ui/common/HudGauge.tsx` | Bare gauge readout |
 | `src/ui/loading/LoadingScreen.tsx` | Staged loading screen; pure stage logic in `bootProgress.ts`, store in `src/stores/bootStore.ts` |
 | `src/ui/common/telemetryModeVisual.ts` | Mode → label/dot/color mapping |
+| `src/interaction/camera/HudAwareFraming.tsx` + `hudFraming.ts` | R2 projection shift (DOM measure + pure band math) |
+| `src/rendering/scene/renderScale.ts` | DPR ceiling and the pinned render-scale override (`AdaptiveDpr` in SceneRoot) |
+| `tests/e2e/viewport.spec.ts` | Viewport audit (layout, 9 px floor, 44 px targets, station framing under `E2E_DEV=1`) |
 | `src/core/geo/GeoLookupService.ts` | Place + local time + weather service |
 | `src/stores/geoStore.ts` | Geo presentation state (written by the service only) |
 

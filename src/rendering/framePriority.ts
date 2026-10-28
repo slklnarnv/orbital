@@ -16,6 +16,11 @@ export const FRAME_PRIORITY = {
   stationPose: -2,
   /** drei CameraControls' own update (set by drei, not here). */
   cameraControls: -1,
+  /** HUD-aware framing writes the projection's view offset. Any slot before
+   *  the render works; sharing −1 keeps it ahead of every priority-0 reader
+   *  (the lens flare projects the sun by hand from it). Order against drei's
+   *  update is irrelevant: that touches the pose, never the projection. */
+  viewOffset: -1,
   /** Default scene work. */
   scene: 0,
   /** The Bloom composer renders the frame; any priority > 0 takes over R3F's render. */

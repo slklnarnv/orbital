@@ -14,6 +14,8 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- A render-scale setting (Auto, 100%, 75%, 50%) to trade sharpness for
+  frame rate ([#42](https://github.com/slklnarnv/orbital/pull/42)).
 - Keyboard shortcuts with a `?` overlay: `Space`, `1`–`4`, `0`, `L`, `R`,
   `H`, `P`, `G` and `Esc`, never while typing in a field
   ([#40](https://github.com/slklnarnv/orbital/pull/40)).
@@ -31,6 +33,10 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Changed
 
+- The HUD fits phones in both orientations, tablets and large screens: a
+  compact layout on landscape phones, the tracked station framed clear of
+  the HUD, no text under 9 px, 44 px touch targets, and a larger HUD on QHD
+  and ultrawide displays ([#42](https://github.com/slklnarnv/orbital/pull/42)).
 - A new site icon, an orbit with the station's glint, replaces the cyan
   wireframe globe ([#39](https://github.com/slklnarnv/orbital/pull/39)).
 - The loading screen appears straight away and shows what it is waiting for

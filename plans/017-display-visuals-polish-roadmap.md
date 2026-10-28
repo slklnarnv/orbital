@@ -12,6 +12,8 @@
   clouds, icon/loading screen/name, accessibility and keyboard shortcuts, an
   info/about panel, and (later) an exploded module explorer — merged with the
   open items in `docs/NEXT_STEPS.md`.
+- **Landed**: R1–R7 (responsive display), 2026-10-26; see
+  `docs/NEXT_STEPS.md` Current state for the before/after numbers.
 - **Evidence**: a viewport audit in headless Edge on the owner's GPU (nine
   sizes, 360×640 to 3440×1440, overview and Follow; per-cluster boxes,
   overlaps, off-screen, font sizes below 9 px, targets below 32 px),

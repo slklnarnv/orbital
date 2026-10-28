@@ -152,7 +152,15 @@ cold-Locate path were not measured — run the checklist below for those.
 and runs the Playwright smoke specs in `tests/e2e/` on software WebGL, with the
 network stubbed. It covers a clean boot, Locate reaching "Follow · Locked",
 Space pausing, `H` hiding the HUD, settings surviving a reload, and a TLE failure
-degrading to Cached, Recovery or Fallback. CI runs it as the `e2e` job after
+degrading to Cached, Recovery or Fallback. `viewport.spec.ts` (plan 017 R7)
+audits the HUD at nine sizes, 360×640 to 3440×1440, touch-emulated up to
+1024×768: no cluster overlaps, nothing off-screen, no horizontal scroll, no
+text below 9 px, no touch target below 44 px, the landscape-phone HUD at ≤ 30%
+of the height, and the large-screen zoom. Its station-framing check (the
+tracked station clear of the clock and gauges at 360×640, 390×844 and
+844×390) needs the DEV scene hooks, so it skips on the preview; run it with
+`E2E_DEV=1 npx playwright test viewport`, which serves the dev server on port
+4174 instead. CI runs it as the `e2e` job after
 `verify`; the job is advisory (not a required status check — `verify` is the
 merge gate), so a red `e2e` is a prompt to look, not a blocked merge. It does
 not replace the visual checks above.
