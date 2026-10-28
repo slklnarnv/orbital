@@ -5,7 +5,7 @@
 [![verify](https://github.com/slklnarnv/orbital/actions/workflows/verify.yml/badge.svg)](https://github.com/slklnarnv/orbital/actions/workflows/verify.yml)
 [**Live demo →**](https://orbitaliss.vercel.app)
 
-![The ISS in Follow mode over cloud tops, with the mission HUD: speed, altitude, UTC clock, time controls and the revolution tape](docs/images/hero-follow.webp)
+![The ISS in Follow mode above Earth's limb over Africa, with the mission HUD: speed, altitude, UTC clock, time controls and the revolution tape](docs/images/hero-follow.webp)
 
 Orbital propagates the station's published orbital elements with SGP4, places
 it in an inertial frame above an Earth that turns with sidereal time, and
@@ -15,8 +15,8 @@ point below, and the station's attitude.
 
 | | | |
 |:-:|:-:|:-:|
-| ![Earth overview with the day-night terminator, city lights and the ISS orbit ring](docs/images/earth-overview.webp) | ![The ISS above Earth's limb in Follow mode](docs/images/follow-limb.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
-| Earth overview | Follow: tracking the station at the limb | Inspect: the detailed model |
+| ![Earth overview with the day-night terminator over Africa, the lights of Asia on the night side, and the ISS orbit ring](docs/images/earth-overview.webp) | ![The module explorer: the station exploded into its parts above Earth's limb, with the card for the Cupola](docs/images/modules-exploded.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
+| Earth overview | Module explorer: the station exploded | Inspect: the detailed model |
 
 ## What you are looking at
 
@@ -55,6 +55,9 @@ point below, and the station's attitude.
   animated joints and sun-cast self-shadowing.
 - Camera modes from planetary to close inspection, with one-click Locate
   flights and a reset to the overview
+- Module explorer: point at the station to name a module, open a card with
+  its agency, launch year, mass and purpose, or explode the station into its
+  parts
 - Ground context: the country or ocean below, local time and weather, and a
   ground-track globe
 - Visible passes: when the ISS will next cross your night sky, from an offline
@@ -62,6 +65,8 @@ point below, and the station's attitude.
   in a Web Worker. Your location is never sent anywhere.
 - Optional HDR bloom, lens flare, 3D ground track and visibility footprint
 - Works offline: packaged and cached orbital data, and an offline place index
+- A short guided tour on the first visit, keyboard shortcuts for everything,
+  and screen-reader support
 
 ## How it works
 
@@ -112,12 +117,13 @@ station jump.
 | **Reset View** | Return to the Earth overview |
 | `Space` · `1`–`4` · `0` | Pause or resume · run at 1×, 10×, 60×, 300× · return to live time |
 | `L` · `R` · `H` | Locate the ISS · reset view · hide the HUD |
-| `P` · `G` · `?` · `Esc` | Passes · render settings · keyboard shortcuts · close the open panel |
+| `P` · `M` · `G` · `?` · `Esc` | Passes · module explorer · render settings · keyboard shortcuts · close the open panel |
 | 1× 10× 60× 300× · Live · Set time | Time rate, return to wall clock, seek to a UTC instant |
 | Revolution tape | Drag or click to scrub through the current orbit |
 | **Passes** | Set your location and see the next visible passes; **Watch** plays one |
-| Gear icon | Model quality, orbit style, bloom, lens flare, ground track, shadows |
-| **About** | What is measured and what is illustrative, data sources and credits |
+| **Modules** | Fly to the station and open the module explorer: pick, explode, focus |
+| **Settings** | Model quality, orbit style, bloom, lens flare, ground track, shadows, render scale |
+| **About** | What is measured and what is illustrative, credits, and the guided tour |
 
 Shortcuts pause while you type in a field. A skip link, a text summary of
 the view and spoken mode and sunrise/sunset changes support screen readers;
