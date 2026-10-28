@@ -6,6 +6,41 @@
 > Plan 001 (ISS model audit/repair) lives in `plans/001-*.md` + `plans/README.md`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## A.2 bench harness (2026-10-26)
+
+- `npm run bench` (`scripts/bench/`): bench-mode build (`vite build --mode
+  bench`: production bundle + `__orbital*` hooks via `src/utils/debugHooks.ts`;
+  production strips them), `vite preview` with the production CSP, installed
+  Edge headless on ANGLE/D3D11, 1280×720 at DPR 1.5, network stubbed, the
+  simulation seeked to ≥ 25 min of station daylight at 1× (`--at` pins it).
+- Scenarios × Bloom on/off: overview, Follow (Locate click), Follow tape
+  scrub (25 ↔ 75%, 4 s period), Inspect (wheel zoom to ≤ 130 km, full model
+  ready + 5 s), Inspect scrub. Per scenario: fps, p50/p90/p99/max, frames
+  > 20 ms; GPU ms per frame and per pass from timer queries cut at every
+  draw-framebuffer bind and blit (`page-probe.js`); tracked GPU memory from
+  every texture / renderbuffer / buffer allocation; app state (mode, DPR,
+  detail model, sunlit).
+- Contention guard (`contention.mjs`): refuses when another process uses a
+  GPU 3D/compute engine ≥ 10% or other processes take ≥ 15% of all cores;
+  samples both every second during the run and flags contended scenarios
+  (`--allow-busy-gpu` to measure anyway, exit 3). The CPU half exists
+  because sibling agents' SwiftShader browsers (~85% of 16 cores) stalled
+  frames for 200 ms while the GPU counters read idle.
+- **Baseline** (`docs/bench/baseline-2026-10-26.json`; recorded once the
+  guard found the machine idle, after refusing a game at ~90% GPU and
+  sibling sessions' browsers earlier that day). Radeon 780M, 1920×1080
+  buffer: 59.9 fps, p99 ≤ 17.7 ms in all ten rows. GPU mean (Bloom / no
+  Bloom): overview 9.2 / 12.5 ms, Follow 11.4 / 16.2, Inspect 15.3 / 16.1,
+  Inspect scrub 16.0 / 16.2 (p99 20–21). Tracked GPU memory 526 MiB at
+  overview, 1,081 MiB in Inspect; six 4K maps are 256 MiB. Table and
+  reading notes in `docs/bench/README.md`.
+- Found: wheel zoom while tracking with the clock running moves ~1% per
+  tick (the station-frame carry's per-frame `setLookAt(…, false)` cancels
+  camera-controls' smoothed dolly); the bench pauses the clock while it
+  zooms. Open in NEXT_STEPS (item 0).
+- Tests: `benchStats.test.ts` (percentiles, frame and GPU summaries, the
+  counter parser, CPU contention sums, process-tree walk).
+
 ## 017 V3 the sun (2026-10-26)
 
 - **Before.** A ~15 px disc with a faint amber haze, kept under the bloom

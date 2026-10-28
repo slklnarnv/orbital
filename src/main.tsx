@@ -7,6 +7,13 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 import { useSimulationStore } from './stores/simulationStore'
+import { useCameraStore } from './stores/cameraStore'
+import { useLoadingStore } from './stores/loadingStore'
+import { useSettingsStore } from './stores/settingsStore'
+import { useTelemetryStore } from './stores/telemetryStore'
+import { telemetryManager } from './core/telemetry/TelemetryManager'
+import { simulationClock } from './core/clock/SimulationClock'
+import { DEBUG_HOOKS, exposeDebugHook } from './utils/debugHooks'
 import { captureBootShellClock } from './ui/loading/bootShell'
 
 interface Props {
@@ -158,15 +165,20 @@ if (import.meta.env.DEV) {
   }
 }
 
-// DEV DEBUG HOOK: expose the simulation store for runtime diagnostics
-// (time acceleration during visual verification), matching __orbitalControls.
-if (import.meta.env.DEV) {
-  ;(window as unknown as Record<string, unknown>).__orbitalSimulation = useSimulationStore
-  import('./core/telemetry/TelemetryManager').then((m) => {
-    ;(window as unknown as Record<string, unknown>).__orbitalTelemetry = m.telemetryManager
-  })
-  import('./core/clock/SimulationClock').then((m) => {
-    ;(window as unknown as Record<string, unknown>).__orbitalClock = m.simulationClock
+// DEBUG HOOK (dev + bench builds): expose the simulation store for runtime
+// diagnostics (time acceleration during visual verification), matching
+// __orbitalControls. `__orbitalStores` lets `npm run bench` drive and read the
+// camera, detail-model, settings and telemetry state. Static imports: the app
+// imports all of these anyway.
+if (DEBUG_HOOKS) {
+  exposeDebugHook('__orbitalSimulation', useSimulationStore)
+  exposeDebugHook('__orbitalTelemetry', telemetryManager)
+  exposeDebugHook('__orbitalClock', simulationClock)
+  exposeDebugHook('__orbitalStores', {
+    camera: useCameraStore,
+    loading: useLoadingStore,
+    settings: useSettingsStore,
+    telemetry: useTelemetryStore,
   })
   import('./stores/explorerStore').then((m) => {
     ;(window as unknown as Record<string, unknown>).__orbitalExplorer = m.useExplorerStore

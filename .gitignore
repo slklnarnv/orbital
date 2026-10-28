@@ -46,3 +46,9 @@ pnpm-debug.log*
 # Playwright output (npm run test:e2e)
 test-results/
 playwright-report/
+
+# Bench build + results (npm run bench); committed baselines live in docs/bench/
+.bench/
+
+# 8K Earth build workspace (NASA sources, flipped PNG masters; plan 017 V2)
+.tmp-earth-build/
