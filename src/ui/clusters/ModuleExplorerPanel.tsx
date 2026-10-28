@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { useMemo, type KeyboardEvent } from 'react'
 import { ISS_MODULES, formatModuleMass } from '@/data/issModules'
 import { moduleById } from '@/rendering/iss/moduleExplorer'

@@ -10,8 +10,8 @@ import {
 
 export interface OverlayHandle<T extends HTMLElement> {
   isOpen: boolean
-  triggerRef: React.RefObject<T>
-  panelRef: React.RefObject<HTMLDivElement>
+  triggerRef: React.RefObject<T | null>
+  panelRef: React.RefObject<HTMLDivElement | null>
   /** onClick for the trigger: a keyboard click (detail 0) moves focus in. */
   onTriggerClick: (event: MouseEvent) => void
 }
