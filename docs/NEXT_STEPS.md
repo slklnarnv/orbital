@@ -28,6 +28,112 @@
   tracking with the clock running** (~1% per tick, ~19% when paused) — the
   station-frame carry's per-frame `setLookAt(…, false)` cancels each
   smoothed dolly (Next, item 0).
+- **017 V3 the sun (2026-10-26)**: the sun now reads as the blinding sun
+  seen from orbit instead of a bright star by the limb. A camera
+  point-spread function in two scene layers, so Bloom on and off draw the
+  same thing and Bloom off stays the direct pipeline: the billboard
+  (`sun.frag`) draws the disc and a blown-out core ~2x its size through one
+  soft knee (depth-tested, cut by Earth and the station), and a
+  screen-space overlay (`SunGlare.ts`, `sunGlare.frag`, no depth test)
+  draws the wide halo and faint six-blade spikes over everything. Both stay
+  under the bloom threshold (2.0 + 0.35 x 1.04 < 2.4, a unit test), so the
+  square artifact cannot return. The glare fades with the sun's apparent
+  flux (`SunAppearance.ts`: the disc integrated through the atmosphere
+  along each line of sight, reddening and dimming as it sinks into the
+  limb), an occlusion query when the station hides the sun, and the
+  exposure ratio; the camera now stops down only for a sun it actually
+  sees. The atmosphere adds a forward-scattering sunrise band at the limb
+  (red low down, gold, then white) while the sun is at or behind the limb,
+  and the limb thread near the sun takes the grazing sunlight's hue. The
+  lens flare stays off by default: it lost its halo (the glare draws it)
+  and shares the glare's gate. GPU time (timer queries, integrated AMD,
+  1920x1080, GPU shared with another process so provisional): overlay
+  0.37 ms with Bloom on, 0.11–0.14 ms off, only while the sun is near the
+  frame; billboard 0.01–0.03 ms; probe ~0; sunrise branch +0.01–0.02 ms.
+  With the sun out of view, frames are pixel-identical to before in both
+  pipelines (Earth, atmosphere, stars). Captures:
+  `docs/images/sun-before-after.webp`. Owner sign-off against ISS
+  photography is the remaining acceptance step.
+- **017 X1 module explorer landed (2026-10-26)**: in Inspect and close
+  Follow (a visible IGOAL tier), a "Modules" control on the left edge opens
+  the explorer. Hover tints a module light blue, a click (or the module
+  list, for keyboards) selects it and opens a card: name, agency, launch
+  year, mass, history and purpose for 45 elements (`src/data/issModules.ts`,
+  launch dates and masses from NASA's station assembly element pages, masses
+  converted from the published pounds, "—" where NASA gives none).
+  "Explode" moves the 39 hub-level parts out along their centroid vectors
+  (×1.6 the distance, 1.4 s, eased) while every joint parks on its authored
+  angle at the 12°/s wall-clock cap; "Assemble" reverses it and the SARJs
+  glide back onto their sun target. "Focus camera" moves the tracked point
+  onto the module and keeps the eye outside the (exploded) clearance sphere.
+  Reduced motion jumps instead of animating. The module map is derived at
+  runtime from the batch names (no GLB rebuild); legacy and Model A say
+  "Not available on this model". Picking tests batches in bounding-sphere
+  order and stops at the first sure hit, so a hover pick touches one to
+  three of the 217 batches.
+- **017 R1–R7 responsive display landed (2026-10-26)**: measured with a
+  viewport audit at ten sizes (360×640 to 3440×1440, overview and Follow,
+  headless Edge on the owner's GPU). Before → after:
+  - landscape phones: HUD 77% (844×390) and 84% (740×360) of the height →
+    26% and 28%. A `max-height: 500px` layout gives one compact bottom row
+    (gauge values · clock + transport · place and coordinates) and a thin
+    tape;
+  - Follow: the station overlapped the clock at 360×640, 390×844, 844×390
+    and 740×360 → clear at every size. `HudAwareFraming` shifts the
+    projection (`camera.setViewOffset`, never the pose) so the tracked
+    station centres in the band the HUD leaves free. It re-measures on
+    resize, rotation, `H` and every second, and eases in and out. On
+    desktop the shift is also on (76 px up at 1080p, clearing the clock). The
+    lens flare adds the same offset, so it stays on the sun billboard;
+  - text: six styles at 7–8.5 px → none below 9 px (clamp() floor tokens;
+    the phone weather line is dropped, not shrunk);
+  - touch: every control was under 44 px (Pause 23×15) → none under 44×44
+    on coarse pointers. Hit areas grow by padding with negative margins, so
+    the glyphs and layout keep their size. Touch tablets in portrait use
+    the stacked composition;
+  - QHD and up: whole clusters zoom (1.15/1.3/1.6/1.9 steps); ultrawide
+    pulls them in to an 18:9 frame (280 px each side at 3440×1440);
+  - render scale (D.6): a settings row (Auto, 100%, 75%, 50%) pins the pixel
+    ratio and pauses the governor. The DPR-2 ceiling on coarse pointers was
+    already in force (R3F default) and is now explicit.
+  Guarded by `tests/e2e/viewport.spec.ts` (station check under `E2E_DEV=1`).
+- **017 A1–A4 and P landed (2026-10-26): shortcuts, help overlay, focus,
+  screen readers, About.** One registry (`src/ui/shortcuts/shortcutRegistry.ts`)
+  drives the keys and the `?` overlay: `Space` pause, `1`–`4` rates, `0`
+  live, `L` locate, `R` reset view, `H` HUD, `P` passes, `G` settings, `?`
+  help, `Esc` closes. Nothing fires while typing (Escape excepted), with
+  Ctrl/Cmd/Alt, or — for Space — on a control Space presses; letters match
+  the typed character, with the physical key only on non-Latin layouts.
+  Settings, Passes, Set time, About and the help overlay share one overlay
+  system (`src/ui/overlay/`): one open at a time, keyboard opens move focus
+  in, closing returns it to the trigger. Also a skip link, a text summary of
+  the canvas (`aria-describedby`: place, daylight, countdown in whole
+  minutes), a polite live region for settled camera modes and sunrise/sunset
+  (silent at accelerated rates; the camera label is no longer a live region),
+  and an About panel beside the wordmark (measured vs illustrative, credits
+  from `NOTICE.md`, build id, link to the shortcuts). Contrast: `--hud-lo`
+  measured 3.1:1 on space black; raised from 38% to 50% white (4.7:1, pinned
+  by `HudContrast.test.ts`). Over the bright limb in Follow no HUD tone holds
+  AA (worst pixel 1.6:1 under the TLE line, 1.9:1 under the eclipse line) —
+  a scrim/legibility call, listed below. Reduced motion now also holds the
+  glint pulse still and drops the flare's sweeping ghosts (halo kept). Edge
+  on the owner's GPU: the smoke specs pass (11 run; Locate reached Follow ·
+  Locked separately), including six new ones (overlay, rates, typing in the
+  place search, focus return, About, a focus ring on every Tab stop).
+- **017 I1 icon + manifest, I2 staged loading screen (2026-10-26)**: a new
+  mark (an orbit ellipse brightening toward a station glint, `--hud-hi` on
+  `--space`) replaces the cyan globe: `favicon.svg`, a 16/32/48 `.ico`, a
+  180 px apple-touch-icon and `manifest.webmanifest` with 192/512 and a
+  maskable 512 icon, plus `theme-color`. All generated by
+  `npm run build:icons` (`scripts/build-icons.mjs`); CSP unchanged (all
+  same-origin). The loading screen now reads three stages: data link
+  (Connecting until the telemetry bootstrap settles, then the HUD's link
+  label), Earth and station ("2 of 5 files" from three's loading manager,
+  then "Ready"), over an overall file bar. A static copy in `index.html`
+  paints before the bundle runs: on the same throttled network (12 Mbps,
+  80 ms) first contentful paint went 840 → 520 ms and the 0.8 s blank page
+  is gone. Reduced motion parks the glint at its icon position. The share
+  image (`og-image.png`) is unchanged and waits on the name (I3).
 - **017 V1 close-range clouds landed (2026-10-26)**: the cloud shell and the
   surface's cloud shadows now read one shared field,
   `src/rendering/shaders/cloudDensity.glsl`. Magnified texels (more than one
@@ -233,20 +339,21 @@ read). Its order, merged with the older items:
    `_isUserControlling*` flags (the trap HANDOFF documents for
    `FreeOrbitControls`). Carry the end pose too, then add a regression test
    (a wheel dolly while carrying reaches the same radius as without).
-1. **017 R1–R4 + R7 — responsive display.** Landscape phones get the full
-   desktop HUD (~45% of the height, clock over the station); portrait
-   framing centres the station under the HUD; ground lines at 7 px and tape
-   labels at 8 px; controls down to 23×15 px on touch. Then commit the audit
-   as a Playwright spec.
+1. ~~**017 R1–R7 — responsive display.**~~ Landed 2026-10-26 (see Current
+   state). Follow-up only if wanted: a real-device pass on iOS Safari
+   (address-bar collapse with `100dvh`, notch insets in landscape).
 2. **017 V1 — close-range clouds**: V1.1 (bicubic reconstruction) and V1.2
    (altitude-faded detail) landed 2026-10-26; V1.3, a higher-resolution
    cloud source, waits for V2 / D.8.
-3. **017 A1 + P — shortcuts with a `?` help overlay, and the info/about
-   panel** (supersedes C.4 and B.7; today only `Space` and `H` exist).
-4. **017 I1 — icon and web manifest** (the cyan globe favicon clashes with
-   the HUD; no apple-touch-icon or manifest).
-5. **017 V3, I2** — the sun (round glare pass, limb scattering), staged
-   loading screen.
+3. **017 A1 + P** — shortcuts, help overlay and About landed 2026-10-26.
+   Follow-up from A4: HUD text over the bright daylight limb (Follow) falls
+   to ~1.6:1 at worst; any fix — a stronger scrim or a faint text shadow
+   (removed earlier by request) — is a design call.
+4. **017 I3 — the name** (owner's call). With it, refresh `og-image.png`
+   (ALL CAPS wordmark, blue limb, no new mark); I1/I2 landed 2026-10-26.
+5. **017 V3** — the sun landed 2026-10-26 (round glare, limb fade and
+   reddening, sunrise band); it awaits the owner's side-by-side with ISS
+   photography at the limb.
 6. Standing human visual pass: a human look at the rebuilt
    materials at Follow and Inspect, day and night, on a real GPU (MLI
    blankets, ELC grating, iROSA wings, night legibility). Then a human
@@ -258,9 +365,12 @@ read). Its order, merged with the older items:
    baseline it is gated on landed 2026-10-26). A.2 leftovers: the flare and
    300× rows, the leak check, and why Bloom off costs more GPU time than on.
 8. Deferred majors (React 19 + R3F 9 + drei 10, three r18x, Vite 7/8,
-   satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8; **017 X1**
-   exploded module explorer (later). B.3 follow-ups if wanted: an observer
-   marker on the globe, pass magnitude.
+   satellite.js 7); D.7 save-frame, D.8 GIBS tiles, B.4–B.8. **017 X1**
+   follow-ups if wanted: per-truss-segment entries (P4–P6 and S4–S6 are one
+   batch each, so splitting them needs a batching change in
+   `build-iss-model.mjs`), masses for the elements NASA's pages omit.
+   B.3 follow-ups if wanted: an observer marker on the globe, pass
+   magnitude.
 
 ## Roadmap (2026-10-04, after the gcdatlas comparison)
 
@@ -527,7 +637,7 @@ Earth-centre distance and at Follow range the track never flickers, the far
 limb is hidden behind the globe and the station occludes the track
 (`docs/verification.md`, "Ground track").
 
-#### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line pending B.7)
+#### D.4 - LICENSE, NOTICE and an on-screen imagery credit - LANDED 2026-10-19 (credit line landed with the About panel, 2026-10-26)
 
 **Problem (as of 2026-10-19, now fixed):** the repo shipped no LICENSE file,
 while `public/models/*.glb` are IGOAL/NASA derived, the textures are derived
@@ -568,7 +678,7 @@ artwork, not a screenshot: canvas `toDataURL` returns a cleared buffer under
 palette and self-hosted fonts. The generator is a throwaway script, not
 committed - regenerate from this description if the branding changes.
 
-#### D.6 - Mobile frame: safe-area insets, coarse-pointer sizing, render scale - LANDED 2026-10-19 (CSS half; render-scale override still open)
+#### D.6 - Mobile frame: safe-area insets, coarse-pointer sizing, render scale - LANDED (CSS half 2026-10-19; hit areas and render scale 2026-10-26, plan 017 R4/R6)
 
 **Problem (as of 2026-10-19, CSS half now fixed):** `src/index.css` had zero
 `env(safe-area-inset-*)` and no `(pointer: coarse)` branch; on a notched phone
@@ -590,8 +700,10 @@ Cost: one session, CSS + one settings field. Folds into C.3.
 `env(safe-area-inset-*)` through `max()`, so the old spacing is the floor and
 desktop layout is byte-identical. `index.html` gained `viewport-fit=cover` -
 without it `env()` reports zero on iOS and the whole change is inert.
-Still open: the `(pointer: coarse)` hit-area block and the pinned render-scale
-override.
+**Landed 2026-10-26 (plan 017 R4/R6):** the `(pointer: coarse)` block gives
+every HUD control a ≥ 44×44 hit area. "Render scale" in the settings popover
+(`renderScale.ts`) pins the DPR at 100/75/50% of the ceiling and stops the
+governor sampling; Auto starts a fresh governor.
 
 #### D.7 - Save-frame (screenshot)
 
@@ -666,7 +778,8 @@ Cost: one session. Low value for a tracker; listed for completeness.
 
 ### Small items that fold into existing work
 
-- `F1` help overlay + one shortcut registry (their `?` modal) -> C.4.
+- `F1` help overlay + one shortcut registry (their `?` modal) -> C.4 —
+  landed as 017 A1 (`?` overlay, `src/ui/shortcuts/shortcutRegistry.ts`).
 - Accent-folded place search (`normalizeQuery`: dotless i, NFD) -> B.3 —
   landed with the offline city search (`src/core/geo/CitySearch.ts`).
 - Render scale -> D.6.
@@ -684,7 +797,8 @@ Cost: one session. Low value for a tracker; listed for completeness.
   everywhere; keep culling.
 - **Unconditional composer.** Our bloom-off parity is a contract.
 - **Exposure / FOV sliders.** Bloom threshold 2.4 and the tonemapping are
-  calibrated to the sun core; a user exposure would invalidate that. Render
+  calibrated to the sun's glare budget (`sunGlareConfig.ts`); a user
+  exposure would invalidate that. Render
   scale (D.6) is the safe lever.
 - **Their settings merge, nginx real-IP config, no-test CI.**
 
@@ -714,10 +828,11 @@ the perf baseline.
 - **Quick wins (old item 1).** Orbit line/terminator/glint/bloom: done
   (2026-09-28/29). Lens flare: reworked 2026-10-04. Hide-HUD toggle (`H`):
   done 2026-10-19 (PR #14). Still open, small: Branding pass
-  (favicon/loading-screen assets exist), Info/About panel (doubles as
-  roadmap B.7 "What's real").
-- **Time controls (old item 2).** DONE 2026-09-28. Remaining: `L` / `R`
-  shortcuts -> roadmap C.4 (`H` is now the HUD toggle).
+  (icon set and loading screen landed 2026-10-26 as 017 I1/I2; the share
+  image waits on the name, I3). Info/About panel: landed 2026-10-26 (017 P,
+  was B.7 "What's real").
+- **Time controls (old item 2).** DONE 2026-09-28. `L` / `R` and the rate
+  shortcuts landed 2026-10-26 (017 A1).
 - **ISS attitude (old item 3).** DONE - LVLH/TEA in `ISSGroup`, SARJ
   tracking, BGA beta tilt landed 2026-10-04, TRRJ illustrative mode.
   The TRRJ law (edge-to-Sun in daylight, face-to-Earth in eclipse) is

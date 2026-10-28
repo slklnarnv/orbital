@@ -12,6 +12,8 @@
   clouds, icon/loading screen/name, accessibility and keyboard shortcuts, an
   info/about panel, and (later) an exploded module explorer — merged with the
   open items in `docs/NEXT_STEPS.md`.
+- **Landed**: R1–R7 (responsive display), 2026-10-26; see
+  `docs/NEXT_STEPS.md` Current state for the before/after numbers.
 - **Evidence**: a viewport audit in headless Edge on the owner's GPU (nine
   sizes, 360×640 to 3440×1440, overview and Follow; per-cluster boxes,
   overlaps, off-screen, font sizes below 9 px, targets below 32 px),
@@ -130,6 +132,10 @@ rounded square (documented in `sun.frag`).
    station's lighting).
 3. Revisit the lens flare default (exists, off by default).
 *Accept*: side-by-side with ISS photography at the limb, owner's sign-off.
+*Status (2026-10-26)*: implemented (glare billboard core + screen-space
+halo/spikes overlay, apparent-flux fade with an occlusion query, sunrise band
+and limb-thread hue; flare kept off, halo removed). Captures in
+`docs/images/sun-before-after.webp`; awaiting the owner's sign-off.
 
 **V4. Dashed orbit line — code, not looks.** The dashes look correct, but
 `OrbitLine.tsx` (361 lines) recomputes `dashSize`/`gapSize` from camera
@@ -160,7 +166,11 @@ the owner's call; options: keep it and lead with a descriptor in titles and
 the share card ("Orbital — the ISS, live"), or pick a distinctive name before
 wider sharing. No change is made without a decision.
 
-## A — Accessibility and keyboard (C.4)
+## A — Accessibility and keyboard (C.4) — LANDED 2026-10-26
+
+A1–A4 landed together with P; what was built and measured is in
+`plans/PROGRESS.md` ("017 A1–A4 + P"). Open from A4: legibility over the
+bright limb in Follow (worst pixel ~1.6:1), a design call.
 
 **A1. Shortcuts with a help overlay.** Today only `Space` (pause) and `H`
 (HUD) exist, plus arrows on the tape and in radio groups. Add one registry and
@@ -179,7 +189,7 @@ sunset in 26 minutes").
 background and the bright limb; extend the reduced-motion handling beyond
 flights (glint pulse, flare).
 
-## P — Info / about panel (B.7, "what's real")
+## P — Info / about panel (B.7, "what's real") — LANDED 2026-10-26
 
 An "About" text control next to the wordmark opens a panel: what is measured
 (position, TLE age, Sun, terminator, eclipse) versus illustrative (attitude
@@ -188,6 +198,9 @@ and credits (from `NOTICE.md`), the build id, and a link to the shortcut
 overlay. Static content, shares the overlay system with A1.
 
 ## X — Later: exploded view and module explorer
+
+**Status: X1 landed (2026-10-26)** — see `plans/PROGRESS.md` and
+`docs/NEXT_STEPS.md`.
 
 The IGOAL hierarchy names its modules and the batching keeps geometry per
 module, so per-module picking is possible. Needs:

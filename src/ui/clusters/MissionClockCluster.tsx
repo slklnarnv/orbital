@@ -13,33 +13,13 @@ export function MissionClockCluster(): JSX.Element {
   const { time, date } = formatUtcClockParts(simTime.epochMs)
 
   return (
-    <div
-      className="hud-bottom-center hud-text"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span className="hud-fine" style={{ fontSize: 10.5, letterSpacing: '0.14em' }}>
-        {date} UTC
-      </span>
-      <span
-        className="hud-num"
-        style={{
-          fontSize: 'clamp(30px, 7vw, 44px)',
-          fontWeight: 300,
-          lineHeight: 1.1,
-          letterSpacing: '0.03em',
-        }}
-      >
+    <div className="hud-bottom-center hud-text">
+      <span className="hud-fine hud-clock__date">{date} UTC</span>
+      <span className="hud-num hud-clock__time">
         {time}
         <span style={{ opacity: 0.5, marginLeft: 1 }}>Z</span>
       </span>
-      <span className="hud-label" style={{ marginTop: 2, color: 'var(--hud-hi)', fontWeight: 500 }}>
-        ISS · Zarya
-      </span>
+      <span className="hud-label hud-clock__caption">ISS · Zarya</span>
       <TimeControls />
     </div>
   )

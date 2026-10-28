@@ -623,6 +623,19 @@ silent in code and obvious only in render.
 - Do NOT trust a measurement that disagrees with §2 until you have ruled out
   §6 (read pattern, corner count, frame of reference, pre/post-multiply).
 
+## 8a. Module explorer (plan 017 X1)
+
+The explorer reads the batching contract, not extra metadata:
+`src/rendering/iss/moduleExplorer.ts` maps each batch to a catalogue entry
+(`src/data/issModules.ts`) by its name prefix or nearest catalogued
+ancestor, using `userData.name` (GLTFLoader drops the dots from `name`).
+Exploding writes translations on the hub (`SSREF_IGOAL`) children only —
+static batches and the nodes that hold rig parts (the SARJs, `Truss_P1/S1`
+with the TRRJs, `JEM_PM`, `MT_Location`, `Node2`, `USLab`) — so joint
+frames and pivots are unchanged. While exploded the rig parks every joint
+on its authored angle (`RigFrame.parked`). If a rebuild renames a module or
+changes the batching, `ModuleExplorer.test.ts` fails on the unmapped batch.
+
 ## 9. Open items (ranked)
 
 1. **TRRJ law** (re-reviewed 2026-10-25, kept): `trrjTargetAngle` runs
