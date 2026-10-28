@@ -14,6 +14,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Added
 
+- Sharper ground up close: near the station the Earth streams in NASA
+  imagery down to about half a kilometre per pixel (Settings > Close-up
+  imagery).
 - The real sky: the 9,096 naked-eye stars at their true positions, brightness
   and colours, the Milky Way where it really is, and the Moon at its true
   position and phase (it turns red in a lunar eclipse).

@@ -8,6 +8,51 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Close-range imagery from NASA GIBS, D.8 (2026-10-28)
+
+- **Before**: at Follow and Inspect the ground was the base map magnified,
+  ~4.9 km per texel (8K) or ~9.8 km (4K): soft under the station.
+- **Now**: near the ground the camera looks at (the view-centre ray's hit,
+  else the point below the camera), the surface shader swaps its day albedo
+  for NASA GIBS `BlueMarble_ShadedRelief_Bathymetry` tiles (500m set,
+  EPSG:4326): level 5 (9° tiles, ~2 km/px) below 4,500 km of altitude and
+  level 7 (2.25°, ~0.5 km/px) below 1,500 km. The layer was picked by
+  measurement: within 3–12 levels of the base map's colours, where
+  `BlueMarble_NextGeneration` (no bathymetry, near-black oceans) would have
+  drawn every coastline at the inset edge as a seam.
+- **How** (`surfaceDetail.ts`, `GibsDetailStream.ts`, `surfaceDetail.glsl`):
+  per level a 4×4 ring buffer of 512 px tiles in one 2048² sRGB texture
+  (16 MiB, no mips); a tile always sits in slot (col mod 4, row mod 4), so a
+  sliding window loads only new tiles. Fetch with CORS (4 in flight per
+  level, stale requests aborted), `createImageBitmap` off the main thread,
+  `copyTextureToTexture` at most one tile per frame. Per-globe streams, not a
+  module singleton; disposal aborts everything.
+- **No lines**: the inset fades by pixels per detail texel (0.7 → 1.3: never
+  minified, and from the overview it is exactly the base map), radially
+  from its centre (0.9 → 1.5 tiles, inside the window by construction), and
+  per tile as it arrives (~0.4 s). Tile coordinates are clamped half a texel
+  in (no bleed from the neighbouring slot); the antimeridian uses a
+  wrap-safe derivative. Only the albedo changes: lighting, terminator,
+  cloud shadows, ocean glint and city lights are the same code.
+- **Failure**: a failed tile retries after 20 s; six failures pause the
+  level for a minute. The base map always shows underneath.
+- **Setting**: Settings > Close-up imagery (on; Save-Data turns it off).
+  CSP connect-src allows `gibs.earthdata.nasa.gov`; credits in About and
+  NOTICE.
+- **Checked** (production build with the production CSP, Edge on the GPU):
+  35–36 tiles per session of four views, none failed; central Australia at
+  02:50:30Z (Follow, looking down and zoomed) visibly sharper with no tile
+  or inset edge; the antimeridian (22:58:15Z) shows no seam; the overview
+  loads nothing and is unchanged (both levels at weight 0).
+- **Measured** (`npm run bench --at 1793170179000`, against the sky branch,
+  both at Firefox's 13–17% GPU, marked contended): 60 fps in every row; GPU
+  time within ±0.4 ms (Follow 10.59 vs 11.23 ms with Bloom, Inspect 15.52
+  vs 15.21). The same run put the sky branch's Inspect rows back at 60 fps,
+  so their earlier dip (under Firefox at 36–38%) was contention.
+- Tests: `SurfaceDetail.test.ts` (grid, URLs, dateline wrap, pole clamp,
+  slots, the inset never leaving the window, shader contract),
+  `settingsStore.test.ts`, `ConnectSrcCsp.test.ts`.
+
 ## Real stars and the Moon (2026-10-28)
 
 - **Before**: 40,000 random points plus the starmap panorama on a sphere

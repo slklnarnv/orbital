@@ -37,6 +37,12 @@ describe('sanitizePersistedSettings', () => {
     expect(useSettingsStore.getState().groundTrack).toBe(false)
   })
 
+  it('keeps a boolean surfaceImagery setting, drops a non-boolean one, and defaults it on', () => {
+    expect(sanitizePersistedSettings({ surfaceImagery: false })).toEqual({ surfaceImagery: false })
+    expect(sanitizePersistedSettings({ surfaceImagery: 'yes' })).toEqual({})
+    expect(useSettingsStore.getState().surfaceImagery).toBe(true)
+  })
+
   it('keeps a boolean shadows setting, drops a non-boolean one, and defaults it on', () => {
     expect(sanitizePersistedSettings({ shadows: false })).toEqual({ shadows: false })
     expect(sanitizePersistedSettings({ shadows: 1 })).toEqual({})
