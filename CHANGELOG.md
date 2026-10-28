@@ -47,6 +47,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Changed
 
+- About opens with the guided tour and the keyboard shortcuts, so they no
+  longer sit at the foot of a scrolling panel.
+
 - The HUD fits phones in both orientations, tablets and large screens: a
   compact layout on landscape phones, the tracked station framed clear of
   the HUD, no text under 9 px, 44 px touch targets, and a larger HUD on QHD
@@ -65,11 +68,11 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   any time rate or while scrubbing
   ([#38](https://github.com/slklnarnv/orbital/pull/38)).
 - The sun reads as blinding from orbit: a round camera glare (bright core,
-  wide halo, faint six-point spikes) that fades and reddens as the sun sets
+  soft halo) that fades and reddens as the sun sets
   behind Earth's limb or hides behind the station, and a red-to-gold
   sunrise band along the limb as it rises
   ([#43](https://github.com/slklnarnv/orbital/pull/43)); since toned down to a
-  crisp white disc with thinner spikes and no amber haze.
+  crisp white disc, without the spike lines or the amber haze.
 - The quietest HUD text is brighter (4.7:1 contrast on black, up from 3.1:1),
   and reduced motion now also stills the station glint and the lens flare's
   ghosts ([#40](https://github.com/slklnarnv/orbital/pull/40)).

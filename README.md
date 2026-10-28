@@ -5,7 +5,7 @@
 [![verify](https://github.com/slklnarnv/orbital/actions/workflows/verify.yml/badge.svg)](https://github.com/slklnarnv/orbital/actions/workflows/verify.yml)
 [**Live demo →**](https://orbitaliss.vercel.app)
 
-![The ISS in Follow mode above Earth's limb over Africa, with the mission HUD: speed, altitude, UTC clock, time controls and the revolution tape](docs/images/hero-follow.webp)
+![The ISS in Follow mode, backlit by the sun rising over Earth's limb above the North Atlantic, with the mission HUD: speed, altitude, UTC clock, time controls and the revolution tape](docs/images/hero-follow.webp)
 
 Orbital propagates the station's published orbital elements with SGP4, places
 it in an inertial frame above an Earth that turns with sidereal time, and
@@ -16,7 +16,7 @@ point below, and the station's attitude.
 | | | |
 |:-:|:-:|:-:|
 | ![Earth overview with the day-night terminator over Africa, the lights of Asia on the night side, and the ISS orbit ring](docs/images/earth-overview.webp) | ![The module explorer: the station exploded into its parts above Earth's limb, with the card for the Cupola](docs/images/modules-exploded.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
-| Earth overview | Module explorer: the station exploded | Inspect: the detailed model |
+| Earth overview | Module explorer | Inspect |
 
 ## What you are looking at
 
@@ -168,15 +168,6 @@ are SGP4 estimates from public TLEs, not spacecraft telemetry, and degrade as
 the element set ages. The Earth is a sphere of 6,371 km (geodetic math uses
 WGS84). The station's attitude is modelled from its standard flight mode, not
 measured.
-
-## Documentation
-
-- [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md): current state and roadmap
-- [`docs/HANDOFF.md`](docs/HANDOFF.md): camera, geo and HUD internals, and a debugging playbook
-- [`docs/ISS_MODEL_CONTEXT.md`](docs/ISS_MODEL_CONTEXT.md): the model pipeline, rig contract and runtime loading
-- [`docs/MODEL_AUDIT.md`](docs/MODEL_AUDIT.md): forensics of the ISS assets
-- [`CHANGELOG.md`](CHANGELOG.md): notable changes by release date
-- [`plans/PROGRESS.md`](plans/PROGRESS.md): the change ledger
 
 ## Credits and license
 

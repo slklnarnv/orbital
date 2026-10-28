@@ -10,7 +10,7 @@ export const SUN_EXPOSURE_DROP = 0.30
 
 /** Soft-knee ceiling of the sun billboard (disc + core), linear radiance. */
 export const SUN_CORE_KNEE = 2.0
-/** Peak linear radiance of the glare overlay (halo + spikes) at full sun. */
+/** Peak linear radiance of the glare overlay (the halo) at full sun. */
 export const GLARE_PEAK = 0.28
 /** sunGlare.frag's multiplicative dither (±4%) can lift the overlay this much. */
 export const GLARE_DITHER_HEADROOM = 1.04

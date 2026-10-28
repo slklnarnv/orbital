@@ -4,9 +4,9 @@ varying vec3 vWorldPosition;
 
 // ─── The Sun ──────────────────────────────────────────────────────────────────
 // The disc and the blown-out core of the camera's point-spread function. The
-// wide halo and the diffraction spikes are the other half of the PSF, drawn by
-// the screen-space glare overlay (sunGlare.frag, SunGlare.ts): unlike this
-// billboard they are a lens effect and must not be cut by the depth buffer.
+// wide halo is the other half of the PSF, drawn by the screen-space glare
+// overlay (sunGlare.frag, SunGlare.ts): unlike this billboard it is a lens
+// effect and must not be cut by the depth buffer.
 //
 //   photosphere  ~0.66 deg across (the real disc is 0.53 deg; slightly
 //                oversized for presence), seen through the atmosphere PER
