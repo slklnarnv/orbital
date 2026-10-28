@@ -8,6 +8,21 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## Faster e2e in CI (2026-10-28)
+
+- **Measured** on PR #49: `verify` 50 s, then `e2e` 10 min 51 s, of which
+  10 min 18 s was the tests (one worker: parallel pages starve each other's
+  render loops under software WebGL). Locate alone is ~2.5 min.
+- **Changes** (`.github/workflows/verify.yml`, `playwright.config.ts`,
+  `tests/e2e/viewport.spec.ts`): e2e runs on pull requests only (and
+  `workflow_dispatch`), no longer after `verify` but alongside it, in three
+  shards on three runners (`--shard=N/3`, `fullyParallel: true` so the
+  split is per test, still one worker per shard). The three station-framing
+  tests skip before booting on the production build instead of after a
+  ~25 s boot each.
+- Split by test count: shard 1 holds Locate, so it stays the long pole
+  (~5 min of tests); the others take ~1.5–2 min.
+
 ## Docs compaction, sun spikes removed, About actions (2026-10-28)
 
 - **Sun**: the six diffraction spikes are gone from `sunGlare.frag` (owner:
