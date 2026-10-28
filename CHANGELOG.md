@@ -47,6 +47,9 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
 
 ### Changed
 
+- City lights up close resolve into points of light instead of glowing
+  blocks; from afar they look as before.
+
 - About opens with the guided tour and the keyboard shortcuts, so they no
   longer sit at the foot of a scrolling panel.
 

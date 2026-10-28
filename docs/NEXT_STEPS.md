@@ -18,6 +18,8 @@
 - **Earth and sky**: 4K WebP first paint, 8K KTX2 day and night maps streamed
   in on capable desktops; bicubic clouds with near-deck detail and shadows;
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
+  City lights up close resolve into points of light inside a soft glow
+  (`earthSurface.frag`), kept under the bloom threshold.
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial).
   Bloom and the lens flare are optional; Bloom off is the direct pipeline.
@@ -39,10 +41,8 @@
 
 1. **Environment and atmosphere** (owner review 2026-10-28, ranked first so
    it is not lost). Measure each against the bench and keep Bloom-off parity.
-   - *Night lights up close*: at Follow distance the Black Marble texels
-     (~5 km at 8K) render as soft blocks. A close-range detail layer (a fine
-     city sprinkle modulated by the lights map, faded in with altitude) and a
-     gentle emissive halo over bright cities.
+   - ~~*Night lights up close*~~: landed 2026-10-28 (B-spline map, points
+     of light inside each texel, a bloom-safe knee; overview unchanged).
    - *Atmosphere*: a physically based single-scattering model (precomputed
      transmittance and in-scatter lookups) so the limb colour and the twilight
      wedge follow the sun angle; a thin, faint airglow layer on the night limb

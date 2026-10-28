@@ -8,6 +8,27 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## City lights up close (2026-10-28)
+
+- **Symptom**: at Follow distance the night side showed glowing rectangles.
+  Three causes: bilinear magnification of ~5 km texels (10–20 px each), the
+  4.2x city gain putting cores far over the 2.4 bloom threshold (UnrealBloom
+  squares compact HDR sources), and no structure inside a texel.
+- **Fix** (`earthSurface.frag`), weighted by pixels per texel so the
+  overview path is unchanged (weights are 0 below one pixel per texel):
+  B-spline reconstruction from 1→2 px/texel; from 4→8 px/texel each texel
+  splits into 4x4 cells, each holding at most one point at a random spot
+  (pcg3d hash, four nearest cells summed), radius ~0.7 screen px, lit with a
+  probability from the texel's brightness so the mean is conserved; a soft
+  knee (1.6 → 2.2) keeps every light under the threshold. Dim texels below
+  the Black Marble noise floor light no points (it read as blue speckle).
+- **Measured** (`npm run bench --at 1793170179000`, night over the US, main
+  vs branch): 60 fps in every row; GPU time within noise (Follow 11.01 →
+  11.32 ms with Bloom, 15.96 → 16.11 without). Main's Inspect p99 spikes
+  were a contended run (Firefox on the GPU).
+- Test: `NightLightsBudget.test.ts` (knee under the threshold, close-range
+  weights, sane constants).
+
 ## Faster e2e in CI (2026-10-28)
 
 - **Measured** on PR #49: `verify` 50 s, then `e2e` 10 min 51 s, of which
