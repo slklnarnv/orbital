@@ -18,8 +18,10 @@ linked to its PR; detail lives in `plans/PROGRESS.md` and the PR itself.
   satellites, updated every hour, fading in after the page loads. Scrub the
   orbit tape or speed up time and the clouds drift over the ground.
 - Sharper ground up close: near the station the Earth streams in NASA
-  imagery down to about half a kilometre per pixel (Settings > Close-up
-  imagery).
+  imagery down to about half a kilometre per pixel, sharpest already in the
+  Follow view (Settings > Close-up imagery).
+- Real city lights up close: on the night side the lights near the station
+  stream in from NASA's Black Marble, so real towns and highways show.
 - The real sky: the 9,096 naked-eye stars at their true positions, brightness
   and colours, the Milky Way where it really is, and the Moon at its true
   position and phase (it turns red in a lunar eclipse).

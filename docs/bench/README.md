@@ -138,8 +138,9 @@ Read with care:
   MiB, buffers 280 MiB.
 - Added since (2026-10-28/29, not yet re-measured): the live cloud map is
   one-channel, ~11 MiB with mips, beside the composite it falls back to; the
-  close-range imagery keeps two 2048² sRGB atlases (16 MiB each, no mips)
-  below ~4,500 km; the Moon map is 512×256 and the stars 100 KB of vertices.
+  close-range imagery keeps up to two 2048² sRGB atlases per side below
+  ~4,500 km (day: 21 MiB each with mips; night: 16 MiB, on the night side
+  only), allocated on first use; the Moon map is 512×256 and the stars 100 KB of vertices.
   The 40,000 random star points they replaced are gone.
 
 ### 2026-10-26 — 017 V2, 8K Earth (`--earth-8k off` vs `on`)

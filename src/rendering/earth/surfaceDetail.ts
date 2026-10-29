@@ -4,7 +4,8 @@
 // equator; 4K: ~9.8 km). Near the ground the camera looks at, the surface
 // shader swaps its day albedo for NASA GIBS tiles of the same Blue Marble
 // product (`BlueMarble_ShadedRelief_Bathymetry`, measured within 3–12 levels
-// of the base map's colours), at two levels:
+// of the base map's colours), and on the night side its city lights for the
+// same Black Marble product (`VIIRS_Black_Marble`), at two levels:
 //
 //   level 5:  9° tiles, ~2 km per pixel   (the inset ~3,000 km across)
 //   level 7:  2.25° tiles, ~0.5 km per pixel (~750 km across)
@@ -46,19 +47,42 @@ export const DETAIL_ATLAS_PX = DETAIL_TILE_PX * DETAIL_WINDOW
 export const DETAIL_FULL_RADIUS = 0.9
 export const DETAIL_EDGE_RADIUS = 1.5
 
-// Level 5 pays off once its ~2 km texels are under ~3 screen px wide: below
-// ~4,500 km of altitude at the app's 45° field of view. Level 7 (~0.5 km)
-// below ~1,500 km: Follow and Inspect.
+// Level 5 pays off below ~4,500 km of altitude at the app's 45° field of
+// view, where its ~2 km texels start to beat the 8K base map on screen.
+// Level 7 (~0.5 km) below ~1,500 km: Follow and Inspect.
 export const DETAIL_LEVELS: readonly DetailLevel[] = [
   { level: 5, tileDeg: 9, cols: 40, rows: 20, maxAltitudeKm: 4500 },
   { level: 7, tileDeg: 2.25, cols: 160, rows: 80, maxAltitudeKm: 1500 },
 ]
 
-export const GIBS_LAYER = 'BlueMarble_ShadedRelief_Bathymetry'
 export const GIBS_HOST = 'https://gibs.earthdata.nasa.gov'
 
-export function detailTileUrl(level: number, row: number, col: number): string {
-  return `${GIBS_HOST}/wmts/epsg4326/best/${GIBS_LAYER}/default/500m/${level}/${row}/${col}.jpeg`
+/** A GIBS layer on the `500m` EPSG:4326 tile matrix set. */
+export interface DetailLayer {
+  id: string
+  ext: 'jpeg' | 'png'
+  /** WMTS time dimension, for layers that have one. */
+  time?: string
+  /**
+   * Mipmapped atlas: the shader may then show the layer minified (the day
+   * albedo, under the station in Follow); without, only magnified.
+   */
+  mipmaps: boolean
+}
+
+/** Day albedo: the base map's own product, with relief and bathymetry. */
+export const DAY_LAYER: DetailLayer = { id: 'BlueMarble_ShadedRelief_Bathymetry', ext: 'jpeg', mipmaps: true }
+/**
+ * Night lights: VIIRS Black Marble 2016, the product the base night map was
+ * made from (mean colour within half a level of it, measured 2026-10-29).
+ * PNG only, ~300–440 KB a tile, so it streams only while the inset centre is
+ * on the night side.
+ */
+export const NIGHT_LAYER: DetailLayer = { id: 'VIIRS_Black_Marble', ext: 'png', time: '2016-01-01', mipmaps: false }
+
+export function detailTileUrl(level: number, row: number, col: number, layer: DetailLayer = DAY_LAYER): string {
+  const time = layer.time ? `${layer.time}/` : ''
+  return `${GIBS_HOST}/wmts/epsg4326/best/${layer.id}/default/${time}500m/${level}/${row}/${col}.${layer.ext}`
 }
 
 /**

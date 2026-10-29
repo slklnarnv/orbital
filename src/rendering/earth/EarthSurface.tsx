@@ -9,7 +9,7 @@ import { cloudRotationAtEpoch, liveCloudRotation } from './CloudMotion'
 import type { LiveClouds } from './liveClouds'
 import { useEarthDetailUpgrade } from './useEarthDetailUpgrade'
 import { GibsDetailStream } from './GibsDetailStream'
-import { DETAIL_LEVELS } from './surfaceDetail'
+import { DAY_LAYER, DETAIL_LEVELS, NIGHT_LAYER } from './surfaceDetail'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { EARTH_RADIUS, EARTH_SPHERE_SEGMENTS, EARTH_TEXTURES } from './EarthConstants'
 import vertexShader from '../shaders/earthSurface.vert'
@@ -23,8 +23,12 @@ useTexture.preload(EARTH_TEXTURES.nightMap)
 useTexture.preload(EARTH_TEXTURES.specularMap)
 useTexture.preload(EARTH_TEXTURES.cloudMap)
 
-// Close-range imagery: at most one tile upload per frame across both levels.
+// Close-range imagery: at most one tile upload per frame across all streams.
 const DETAIL_UPLOADS_PER_FRAME = 1
+// Sun elevation (sine) at the inset centre that splits day from night
+// streaming, with an overlap across the terminator where both show.
+const DAY_STREAM_MIN_SUN = -0.2
+const NIGHT_STREAM_MAX_SUN = 0.2
 
 const _viewDir = new THREE.Vector3()
 const _hit = new THREE.Vector3()
@@ -99,8 +103,9 @@ export const EarthSurface = React.memo(function EarthSurface({ clouds }: { cloud
 
   // NASA GIBS close-range imagery (roadmap D.8), one ring buffer per level;
   // their uniforms join the surface material's by reference.
-  const detail = useMemo(() => DETAIL_LEVELS.map((level) => new GibsDetailStream(level)), [])
-  useEffect(() => () => detail.forEach((stream) => stream.dispose()), [detail])
+  const detail = useMemo(() => DETAIL_LEVELS.map((level) => new GibsDetailStream(level, DAY_LAYER)), [])
+  const nightDetail = useMemo(() => DETAIL_LEVELS.map((level) => new GibsDetailStream(level, NIGHT_LAYER)), [])
+  useEffect(() => () => [...detail, ...nightDetail].forEach((stream) => stream.dispose()), [detail, nightDetail])
   const surfaceImagery = useSettingsStore((state) => state.surfaceImagery)
   const saveData = useMemo(() => {
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
@@ -115,8 +120,15 @@ export const EarthSurface = React.memo(function EarthSurface({ clouds }: { cloud
       all[`detailSlots${i}`] = stream.uniforms.slots
       all[`detailOn${i}`] = stream.uniforms.on
     })
+    nightDetail.forEach((stream, i) => {
+      all[`detailNightMap${i}`] = stream.uniforms.map
+      all[`detailNightWindow${i}`] = stream.uniforms.window
+      all[`detailNightCenter${i}`] = stream.uniforms.center
+      all[`detailNightSlots${i}`] = stream.uniforms.slots
+      all[`detailNightOn${i}`] = stream.uniforms.on
+    })
     return all
-  }, [detail])
+  }, [detail, nightDetail])
 
   // Configure and assign the high-res textures once they are loaded
   useEffect(() => {
@@ -148,11 +160,15 @@ export const EarthSurface = React.memo(function EarthSurface({ clouds }: { cloud
     const streaming = surfaceImagery && !saveData && earth !== null
     const altitude = state.camera.position.length() - EARTH_RADIUS
     const center = streaming ? insetCenterUv(state.camera, earth) : null
-    let budget = DETAIL_UPLOADS_PER_FRAME
-    for (const stream of detail) budget -= stream.update(gl, center, altitude, delta, budget)
-
     const simTime = simulationClock.now()
     const sunDir = sunDirectionWorld(simTime.julianDate)
+    // Day tiles where the inset centre is lit, night tiles where it is dark.
+    const sunAtCenter = center ? (_hit.x * sunDir.x + _hit.y * sunDir.y + _hit.z * sunDir.z) / EARTH_RADIUS : 0
+    const dayCenter = center && sunAtCenter > DAY_STREAM_MIN_SUN ? center : null
+    const nightCenter = center && sunAtCenter < NIGHT_STREAM_MAX_SUN ? center : null
+    let budget = DETAIL_UPLOADS_PER_FRAME
+    for (const stream of detail) budget -= stream.update(gl, dayCenter, altitude, delta, budget)
+    for (const stream of nightDetail) budget -= stream.update(gl, nightCenter, altitude, delta, budget)
 
     // Dynamically update the sun direction vector uniform (world space)
     uniformsRef.current.sunDirection.value.set(sunDir.x, sunDir.y, sunDir.z)

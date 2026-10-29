@@ -53,7 +53,7 @@ point below, and the station's attitude.
   atmosphere, and today's clouds from NOAA's geostationary satellites, updated
   hourly (they drift over the ground when you move away from the present)
 - Close-up imagery: near the station the ground streams in from NASA GIBS,
-  down to about half a kilometre per pixel
+  down to about half a kilometre per pixel, and real city lights at night
 - The real sky: the 9,096 naked-eye stars at true position and colour, the
   Milky Way, and the Moon at its true position and phase (eclipses included)
 - NASA's IGOAL ISS model in two tiers: a fast level of detail for Follow and
