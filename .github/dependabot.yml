@@ -51,6 +51,10 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: satellite.js
         update-types: [version-update:semver-major]
+      # TypeScript 7 (the native compiler) waits for typescript-eslint to
+      # accept it; its only gain here is a faster type check (#35, closed).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
       # Node types track the runtime floor (.nvmrc, engines: Node 22).
       - dependency-name: '@types/node'
         update-types: [version-update:semver-major]
