@@ -121,7 +121,8 @@ cold-Locate path were not measured — run the checklist below for those.
 1. Open the production preview before collecting console messages.
 2. Confirm there are no WebGL shader compile or program-link errors.
 3. Inspect the Earth day side, city lights on the night side, the terminator, cloud
-   limb, atmosphere limb, sun disc, and lens ring for gross visual regressions.
+   limb, atmosphere limb, sun disc, stars, Moon and lens ring for gross visual
+   regressions.
 4. Record the browser, WebGL version, and renderer class with the smoke result.
 
 ## Penumbra and countdown
@@ -145,6 +146,40 @@ cold-Locate path were not measured — run the checklist below for those.
    station model must occlude the track where it passes in front.
 3. Switch it off again: the track and footprint disappear and the scene matches
    the calibrated default look.
+
+## Pixel check
+
+`npm run check:visual` builds the production bundle, renders it in Edge on
+the real GPU at three fixed times and fails on a dark Earth disc or a page
+error; open `.visual-check/*.png` afterwards. Run it before any push that
+touches rendering, shaders or dependencies (CLAUDE.md, Rule 2). `vite
+preview` has no `/api`, so it shows the packaged cloud composite.
+
+## Live clouds
+
+1. On the deployed site, `/api/clouds` answers 200 with `Content-Type:
+   image/webp` and an `X-Clouds-Time` within the last two hours; a query
+   string gets a 404.
+2. A few seconds after load the clouds crossfade from the composite to the
+   live map without a pop, and About reads "Clouds: NOAA satellite infrared
+   from HH:MM UTC".
+3. Scrub the orbit tape or run at 300×: the cloud deck drifts east over the
+   ground; at Live it sits still. No line or seam anywhere on the deck, at
+   the satellite boundaries (about 93°E and 22°E) or along coasts.
+
+## Close-up imagery
+
+1. Locate the station over land in daylight: within a few seconds the ground
+   under it sharpens (Settings > Close-up imagery is on), with no tile edge,
+   inset edge or line, also across 180° longitude.
+2. Switch Close-up imagery off: the base map returns. The overview never
+   requests `gibs.earthdata.nasa.gov` tiles.
+
+## Stars and Moon
+
+1. Look away from the Earth: the constellations are recognisable (Orion,
+   the Plough), the Milky Way sits on them, and no star doubles.
+2. The Moon shows the phase of the day and hides the stars behind it.
 
 ## Automated smoke
 

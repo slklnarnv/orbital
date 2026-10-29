@@ -13,12 +13,11 @@ renders NASA's IGOAL model of the station with its solar arrays tracking the
 Sun. Everything you see is derived live: position, speed, daylight, the ground
 point below, and the station's attitude.
 
-| | | |
-|:-:|:-:|:-:|
 | ![Earth overview over the Pacific with today's clouds from NOAA, including two typhoons, and the ISS orbit ring](docs/images/earth-overview.webp) | ![The module explorer: the station exploded into its parts above Earth's limb, with the card for the Cupola](docs/images/modules-exploded.webp) | ![Close inspection of the full ISS model: modules, truss, radiators and arrays](docs/images/inspect-detail.webp) |
-| Earth overview, today's clouds | Module explorer | Inspect |
-| ![Follow over central Australia with streamed NASA imagery: sharp terrain under the station](docs/images/closeup-imagery.webp) | ![Past Earth's twilit limb toward the Moon, among catalogue stars](docs/images/real-sky.webp) | |
-| Close-up imagery | The real sky and the Moon | |
+|:-:|:-:|:-:|
+| Earth overview | Module explorer | Inspect |
+| ![Follow over central Australia with streamed NASA imagery: sharp terrain under the station](docs/images/closeup-imagery.webp) | ![The station above the night side of the United States, city lights below and stars beyond](docs/images/city-lights.webp) | ![Past Earth's twilit limb toward the Moon, among catalogue stars](docs/images/real-sky.webp) |
+| Close-up imagery | City lights | Stars and Moon |
 
 ## What you are looking at
 
@@ -82,6 +81,7 @@ flowchart LR
   subgraph data [Orbital data]
     P["CelesTrak, wheretheiss.at"] --> F["/api/tle<br/>(Vercel function)"]
     C["IndexedDB cache<br/>packaged fallback"]
+    N["NOAA satellites<br/>(hourly infrared)"] --> K["/api/clouds<br/>(Vercel function)"]
   end
   subgraph core ["Simulation core (no React, no WebGL)"]
     R["SimulationRuntime<br/>10 Hz"] --> T["TelemetryManager<br/>TLE + SGP4"]
@@ -90,6 +90,7 @@ flowchart LR
   C --> T
   T -->|snapshots| I["Render interpolator<br/>60 fps"] --> S["Three.js scene<br/>Earth rotates by GMST"]
   T -->|throttled| H["Zustand stores"] --> U["HUD"]
+  K -->|cloud map| S
 ```
 
 The simulation core owns the truth: a clock that can pause, accelerate or
@@ -101,8 +102,9 @@ TEME coordinates map to the scene as `(x, z, −y)`.
 **Data resilience.** `/api/tle` races CelesTrak's two domains and
 wheretheiss.at, validates the first answer and caches it at the edge. The
 browser keeps the last good set in IndexedDB and ships a packaged fallback
-that GitHub Actions refreshes twice a week. The HUD reports which source is in
-use:
+that GitHub Actions refreshes twice a week. `/api/clouds` turns NOAA's latest
+hourly infrared mosaic into a cloud map; if it is unavailable the app keeps a
+packaged NASA cloud composite. The HUD reports which orbital source is in use:
 
 | Label | Meaning |
 |---|---|
@@ -144,7 +146,7 @@ Requires Node.js 22 or later.
 git clone https://github.com/slklnarnv/orbital.git
 cd orbital
 npm ci
-npm run dev          # http://localhost:5173, /api/tle served by the real handler
+npm run dev          # http://localhost:5173, /api/tle and /api/clouds served by the real handlers
 ```
 
 ```bash
