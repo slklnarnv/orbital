@@ -89,8 +89,11 @@
    earlier by request) is a design call.
 5. **Deferred majors**: React 19 + R3F 9 + drei 10 + camera-controls 3
    landed 2026-10-28 (one camera-controls copy, +37.6 KB gzip JS). Still
-   open: three r18x, Vite 7/8, satellite.js 7. TypeScript 7 (#35, held)
-   waits for typescript-eslint to accept it (install fails with ERESOLVE).
+   open: three r18x, Vite 7/8, satellite.js 7. TypeScript 7 (the native
+   compiler) was declined 2026-10-29 (#35 closed): its only gain here is a
+   faster type check (~7 s today), and typescript-eslint does not accept it
+   yet (install fails with ERESOLVE). Its majors are ignored in
+   dependabot.yml; revisit when typescript-eslint supports it.
 6. **Follow-ups if wanted**: module explorer per-truss-segment entries (P4–P6
    and S4–S6 are one batch each; splitting needs a batching change in
    `build-iss-model.mjs`) and masses for the elements NASA's pages omit;
