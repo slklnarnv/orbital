@@ -172,7 +172,11 @@ preview` has no `/api`, so it shows the packaged cloud composite.
 1. Locate the station over land in daylight: within a few seconds the ground
    under it sharpens (Settings > Close-up imagery is on), with no tile edge,
    inset edge or line, also across 180° longitude.
-2. Switch Close-up imagery off: the base map returns. The overview never
+   The sharp level loads in the default Follow view, without zooming in.
+2. Follow over the night side: the city lights near the view centre turn
+   into real towns and highways, no squares or tile edges; only
+   `VIIRS_Black_Marble` tiles load there, and only daytime tiles by day.
+3. Switch Close-up imagery off: the base map returns. The overview never
    requests `gibs.earthdata.nasa.gov` tiles.
 
 ## Stars and Moon

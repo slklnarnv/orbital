@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import {
+  DAY_LAYER,
   DETAIL_ATLAS_PX,
   DETAIL_TILE_PX,
   DETAIL_WINDOW,
+  type DetailLayer,
   type DetailLevel,
   detailTiles,
   detailTileUrl,
@@ -28,6 +30,15 @@ const BACKOFF_MS = 60_000
 const BITMAP_CACHE = 24
 /** A tile fades in over ~0.4 s; the level fades with activation alike. */
 const FADE_RATE = 8
+
+// Bound until a stream first activates, so an unused level never allocates
+// its 16–21 MiB atlas (at the overview none does).
+const PLACEHOLDER = (() => {
+  const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.needsUpdate = true
+  return t
+})()
 
 export interface DetailUniforms {
   map: { value: THREE.Texture }
@@ -63,21 +74,23 @@ export class GibsDetailStream {
   private active = false
   private disposed = false
 
-  constructor(private readonly level: DetailLevel) {
-    // Storage only: the slots are filled by copyTextureToTexture. No mips —
-    // the shader uses the level only while each texel spans ≥ 0.7 px.
+  constructor(private readonly level: DetailLevel, private readonly layer: DetailLayer = DAY_LAYER) {
+    // Storage only: the slots are filled by copyTextureToTexture, which
+    // regenerates the mips after each tile when the layer has them (the day
+    // albedo, shown minified; 16 MiB → 21 MiB). Without, the shader uses the
+    // level only while each texel spans ≥ 0.7 px.
     const texture = new THREE.DataTexture(null, DETAIL_ATLAS_PX, DETAIL_ATLAS_PX, THREE.RGBAFormat, THREE.UnsignedByteType)
     texture.colorSpace = THREE.SRGBColorSpace
-    texture.minFilter = THREE.LinearFilter
+    texture.minFilter = layer.mipmaps ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter
     texture.magFilter = THREE.LinearFilter
     texture.wrapS = THREE.ClampToEdgeWrapping
     texture.wrapT = THREE.ClampToEdgeWrapping
-    texture.generateMipmaps = false
+    texture.generateMipmaps = layer.mipmaps
     texture.source.dataReady = false
     texture.needsUpdate = true
     this.texture = texture
     this.uniforms = {
-      map: { value: texture },
+      map: { value: PLACEHOLDER },
       window: { value: new THREE.Vector4(0, 0, level.cols, level.tileDeg) },
       center: { value: new THREE.Vector2() },
       slots: { value: new Array<number>(DETAIL_WINDOW * DETAIL_WINDOW).fill(0) },
@@ -109,6 +122,7 @@ export class GibsDetailStream {
       return 0
     }
     this.active = true
+    this.uniforms.map.value = this.texture
 
     const center = uvToTile(centerUv.u, centerUv.v, this.level)
     const { col0, row0 } = detailWindow(center, this.level)
@@ -173,7 +187,7 @@ export class GibsDetailStream {
   private fetchTile(col: number, row: number, key: string): void {
     const controller = new AbortController()
     this.inFlight.set(key, controller)
-    fetch(detailTileUrl(this.level.level, row, col), { signal: controller.signal, mode: 'cors', credentials: 'omit' })
+    fetch(detailTileUrl(this.level.level, row, col, this.layer), { signal: controller.signal, mode: 'cors', credentials: 'omit' })
       .then((response) => {
         if (!response.ok) throw new Error(`GIBS ${response.status}`)
         return response.blob()

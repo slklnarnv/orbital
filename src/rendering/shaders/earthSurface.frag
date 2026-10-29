@@ -24,6 +24,17 @@ uniform vec4 detailWindow1;
 uniform vec2 detailCenter1;
 uniform float detailSlots1[16];
 uniform float detailOn1;
+// The same, for the night lights (VIIRS Black Marble).
+uniform sampler2D detailNightMap0;
+uniform vec4 detailNightWindow0;
+uniform vec2 detailNightCenter0;
+uniform float detailNightSlots0[16];
+uniform float detailNightOn0;
+uniform sampler2D detailNightMap1;
+uniform vec4 detailNightWindow1;
+uniform vec2 detailNightCenter1;
+uniform float detailNightSlots1[16];
+uniform float detailNightOn1;
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -159,8 +170,8 @@ void main() {
   float cloudTransmittance = 1.0 - cloudShadowDensity * cloudShadowDay * 0.18;
 
   vec3 albedo = texture2D(dayMap, vUv).rgb;
-  albedo = applyDetailLevel(albedo, detailMap0, detailWindow0, detailCenter0, detailSlots0, detailOn0, detailG0, detailPpt0);
-  albedo = applyDetailLevel(albedo, detailMap1, detailWindow1, detailCenter1, detailSlots1, detailOn1, detailG1, detailPpt1);
+  albedo = applyDetailLevel(albedo, detailMap0, detailWindow0, detailCenter0, detailSlots0, detailOn0, detailG0, detailPpt0, DETAIL_DAY_FADE0);
+  albedo = applyDetailLevel(albedo, detailMap1, detailWindow1, detailCenter1, detailSlots1, detailOn1, detailG1, detailPpt1, DETAIL_DAY_FADE1);
   vec3 dayColor = albedo * terrainLight * cloudTransmittance * sunWarmth;
 
   // ── City Lights — Warm Amber Tint & Photographic Response ────────────────────
@@ -179,11 +190,28 @@ void main() {
   if (nightMask > 0.0) {
     vec3 rawNight = texture2D(nightMap, vUv).rgb;
     if (smoothW > 0.0) rawNight = mix(rawNight, sampleNightBicubic(nightMap, vUv, nightSize), smoothW);
+    // NASA's own lights up close (the same Black Marble product, ~2 km then
+    // ~0.5 km per pixel), reconstructed like the base map so their pixels
+    // never show as squares.
+    vec2 nightSt0;
+    vec2 nightSt1;
+    float nightDetail0 = detailLevelWeight(detailNightWindow0, detailNightCenter0, detailNightSlots0, detailNightOn0, detailG0, detailPpt0, DETAIL_NIGHT_FADE, 0.0, nightSt0);
+    float nightDetail1 = detailLevelWeight(detailNightWindow1, detailNightCenter1, detailNightSlots1, detailNightOn1, detailG1, detailPpt1, DETAIL_NIGHT_FADE, 0.0, nightSt1);
+    if (nightDetail0 > 0.0) rawNight = mix(rawNight, sampleDetailBicubic(detailNightMap0, nightSt0), nightDetail0);
+    if (nightDetail1 > 0.0) rawNight = mix(rawNight, sampleDetailBicubic(detailNightMap1, nightSt1), nightDetail1);
     vec3 lights = pow(rawNight, vec3(1.5));
-    if (pointsW > 0.0) {
+    // Points of light: inside the base map's texels, and inside NASA's finest
+    // texels where those show, so real towns break into points the same way.
+    float basePointsW = pointsW * (1.0 - nightDetail1);
+    float detailPointsW = smoothstep(4.0, 8.0, detailPpt1) * nightDetail1;
+    float allPointsW = basePointsW + detailPointsW;
+    if (allPointsW > 0.0) {
       float lum = dot(lights, vec3(0.2126, 0.7152, 0.0722));
-      float points = cityPoints(nightSt, lum, pixelsPerTexel / NIGHT_CELLS);
-      lights *= mix(1.0, NIGHT_POINT_FLOOR + (1.0 - NIGHT_POINT_FLOOR) * points, pointsW);
+      float points = 0.0;
+      if (basePointsW > 0.0) points += basePointsW * cityPoints(nightSt, lum, pixelsPerTexel / NIGHT_CELLS);
+      if (detailPointsW > 0.0) points += detailPointsW * cityPoints(detailG1 * DETAIL_TILE_PX, lum, detailPpt1 / NIGHT_CELLS);
+      points /= allPointsW;
+      lights *= mix(1.0, NIGHT_POINT_FLOOR + (1.0 - NIGHT_POINT_FLOOR) * points, min(1.0, allPointsW));
     }
     nightColor = lights * nightIntensity * cityTint;
     // Up close only: from the overview the cores keep their bloom glow.

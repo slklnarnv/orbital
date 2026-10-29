@@ -21,10 +21,11 @@
   poles and as the fallback), bicubic with near-deck detail and shadows;
   atmosphere with a sunrise band; penumbra and a sunrise/sunset countdown.
   Below ~4,500 km the ground near the view centre streams in from NASA GIBS
-  (~2 km, then ~0.5 km per pixel below ~1,500 km; `surfaceDetail.ts`,
-  Settings > Close-up imagery). City lights up close resolve into points of
-  light inside a soft glow (`earthSurface.frag`), kept under the bloom
-  threshold. The limb's twilight
+  (~2 km, then ~0.5 km per pixel below ~1,500 km, under the station in
+  Follow; `surfaceDetail.ts`, Settings > Close-up imagery), and on the night
+  side NASA's Black Marble city lights the same way. City lights up close
+  resolve into points of light inside a soft glow (`earthSurface.frag`),
+  kept under the bloom threshold. The limb's twilight
   colour and shadow edge follow the sunlight path (`atmosphere.frag`).
   The sun is a disc with a blown core and a soft camera halo (the six
   diffraction spikes were removed 2026-10-28: they read as artificial;
@@ -68,9 +69,9 @@
      from the overview it drew a hard grey-orange stripe down the terminator.
      Any retry must be judged from the overview, not only close dusk views.
    - ~~*Surface up close*~~: landed with D.8 (GIBS imagery under the
-     station). Still open: an ocean glint that follows wave roughness and
-     wind; the night lights from GIBS (`VIIRS_Black_Marble`, 500 m) the same
-     way, if the procedural points ever fall short.
+     station; the night lights from GIBS `VIIRS_Black_Marble` landed
+     2026-10-29). Still open: an ocean glint that follows wave roughness and
+     wind.
    - ~~*Stars and the Moon*~~: landed 2026-10-28 (Yale BSC5 and the LRO WAC
      mosaic, both public domain; the exposure already dims the stars with
      the sun in view).

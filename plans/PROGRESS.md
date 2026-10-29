@@ -8,6 +8,40 @@
 > read them with `git show 27241be:plans/<file>`.
 > Front door: `CLAUDE.md`. Current state + ranked roadmap: `docs/NEXT_STEPS.md`.
 
+## NASA night lights up close; sharp ground in Follow (2026-10-29)
+
+- **Night**: on the night side the inset swaps the city lights for NASA GIBS
+  `VIIRS_Black_Marble` (2016, the product the base night map was made from;
+  mean colour within half a level of it, measured), the same two levels.
+  Real towns, highway chains and coastlines instead of the base map's ~4 km
+  blobs. Magnified ~10× up close, NASA's 500 m pixels showed as soft
+  squares: a slot-clamped B-spline (`sampleDetailBicubic`) reconstructs
+  them, and the points of light sit inside NASA's texels where those show.
+  The swap is before the photographic curve and the knee, so the bloom
+  budget is unchanged.
+- **Cost**: night tiles are PNG, ~300–440 KB each, so each layer streams
+  only on its side: day where the sun at the inset centre is above −0.2
+  (sine), night below +0.2 (both across the terminator). Atlases are now
+  allocated on first use (a 1×1 placeholder before), so the overview holds
+  none: 32 MiB less than before.
+- **Follow** (owner: the sharp ground only loaded after zooming in):
+  measured in the default Follow view, level 7 spans 0.33–0.5 px per texel
+  at the view centre (the camera is ~900 km from the ground there), under
+  the 0.7 gate, and level 5 1.3–1.6, just reaching full. The day atlases
+  now carry mips (regenerated per tile by `copyTextureToTexture`; 16 → 21
+  MiB each) and are sampled at the mip that matches (an explicit lod:
+  hardware derivatives jump at slot edges), with the edge clamp at half a
+  texel of the coarser mip. Each level shows while it beats the one below:
+  level 5 from 0.5 px per texel (vs the 8K base map), level 7 from 0.3 (vs
+  level 5). Level 7 now shows under the station in Follow. The night tiles
+  keep no mips and the 0.7 → 1.3 gate: minified, bright points would
+  sparkle.
+- **Checked** (bench build, Edge on the GPU): overview pixel-identical
+  (mean difference 0.001); 3,800 km unchanged; 2,500 km and Follow differ
+  only inside the inset, with no tile edge or line in an ×8 difference
+  image; no page errors.
+- Tests: `SurfaceDetail.test.ts`.
+
 ## Live clouds drift away from the present (2026-10-29)
 
 - **Owner**: the deck should move against the ground when the orbit tape or
@@ -99,13 +133,14 @@
   drawn every coastline at the inset edge as a seam.
 - **How** (`surfaceDetail.ts`, `GibsDetailStream.ts`, `surfaceDetail.glsl`):
   per level a 4×4 ring buffer of 512 px tiles in one 2048² sRGB texture
-  (16 MiB, no mips); a tile always sits in slot (col mod 4, row mod 4), so a
+  (16 MiB; the day atlases have mips since 2026-10-29, 21 MiB); a tile always sits in slot (col mod 4, row mod 4), so a
   sliding window loads only new tiles. Fetch with CORS (4 in flight per
   level, stale requests aborted), `createImageBitmap` off the main thread,
   `copyTextureToTexture` at most one tile per frame. Per-globe streams, not a
   module singleton; disposal aborts everything.
-- **No lines**: the inset fades by pixels per detail texel (0.7 → 1.3: never
-  minified, and from the overview it is exactly the base map), radially
+- **No lines**: the inset fades by pixels per detail texel (0.7 → 1.3 at
+  first; per level since 2026-10-29, see above; above 4,500 km nothing
+  streams, so the overview is exactly the base map), radially
   from its centre (0.9 → 1.5 tiles, inside the window by construction), and
   per tile as it arrives (~0.4 s). Tile coordinates are clamped half a texel
   in (no bleed from the neighbouring slot); the antimeridian uses a
