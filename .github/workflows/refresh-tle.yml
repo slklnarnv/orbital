@@ -1,9 +1,10 @@
 # Twice-weekly refresh of the packaged fallback TLE (src/data/fallback-tle.json).
-# When the data changed and `npm run verify` passes, the new element set is
-# committed straight to main; Vercel deploys main, so it goes live without a PR.
-#
-# If main ever gets a ruleset that requires pull requests or status checks,
-# add GitHub Actions to that ruleset's bypass list, or this push is rejected.
+# When the data changed and `npm run verify` passes, the element set lands on
+# main through its own pull request: the "main gate" ruleset requires every
+# change to arrive via a PR and lists no bypass actors, so pushing main
+# directly is rejected with GH013. The pull_request rule needs zero approving
+# reviews, so the bot opens and merges its own PR; Vercel deploys main, so it
+# still goes live unattended.
 name: refresh-tle
 on:
   schedule:
@@ -11,6 +12,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  pull-requests: write # open and merge the refresh PR via gh
 concurrency:
   group: refresh-tle
   cancel-in-progress: false
@@ -19,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # persist-credentials MUST stay true here: the push below uses the
-      # checkout's credentials.
+      # persist-credentials MUST stay true here: the branch push below uses
+      # the checkout's credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -31,22 +33,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run refresh:tle
-      - name: Commit to main if the fallback TLE changed
+      - name: Open and merge a refresh PR if the fallback TLE changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- src/data/fallback-tle.json; then
             echo "Fallback TLE unchanged"; exit 0
           fi
           npm run verify
           epoch=$(node -p "require('./src/data/fallback-tle.json').epoch.slice(0,10)")
+          title="Refresh packaged fallback TLE (epoch $epoch)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/fallback-tle.json
-          git commit -m "Refresh packaged fallback TLE (epoch $epoch)"
-          # main may have moved while verify ran: rebase the one-file commit
-          # onto it and retry, rather than force anything.
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then exit 0; fi
-            git pull --rebase origin main
-          done
-          echo "Could not push the refreshed TLE to main after 3 attempts" >&2
-          exit 1
+          git commit -m "$title"
+          # main-gate forbids direct pushes, so land the one-file commit via a
+          # scratch branch (ruleset guards only the default branch). Reuse one
+          # branch name and force-push it so a leftover branch from a failed
+          # run can never accumulate divergent history.
+          git push --force origin "HEAD:refs/heads/refresh-tle-bot"
+          if [ "$(gh pr list --head refresh-tle-bot --state open --json number --jq 'length')" -eq 0 ]; then
+            gh pr create --base main --head refresh-tle-bot \
+              --title "$title" \
+              --body "Automated fallback-TLE refresh from upstream element sets. The full \`npm run verify\` gate passed in the triggering run; GITHUB_TOKEN-created PRs do not re-trigger verify.yml, which is why it runs here."
+          fi
+          gh pr merge refresh-tle-bot --squash --delete-branch
