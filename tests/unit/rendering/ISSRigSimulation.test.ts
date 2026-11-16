@@ -27,7 +27,18 @@ import {
 import { RigAnimator } from '@/rendering/iss/ISSRigAnimator'
 import { lvlhAttitude } from '@/rendering/iss/stationAttitude'
 import { parseGlbJsonDeclarations } from '../../../scripts/iss-rig-manifest.mjs'
-import fallback from '../../../src/data/fallback-tle.json'
+
+// Pinned element set (the packaged fallback as of 2026-11-09). Do not read
+// src/data/fallback-tle.json here: refresh-tle.yml rewrites it twice a week,
+// which slides every sample date below, and an offset that lands in a
+// high-beta season (|beta| > ~70 deg) has no eclipse at all. That failed the
+// bot's verify gate on 2026-11-16 (+23 d from the new epoch = 2026-12-09,
+// beta -71 deg). Beta at each offset from this epoch is noted on the cases.
+const RIG_TLE = {
+  line1: '1 25544U 98067A   26313.20747964  .00008201  00000+0  15534-3 0  9995',
+  line2: '2 25544  51.6321 302.4538 0007297   5.2479 354.8585 15.49270212594231',
+  epoch: '2026-11-09T04:58:46Z',
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GlbJson = Record<string, any>
@@ -87,7 +98,7 @@ function mountStation(file: string): { station: THREE.Group; pivotRoot: THREE.Gr
   return { station, pivotRoot, asset }
 }
 
-const satrec = satellite.twoline2satrec(fallback.line1, fallback.line2)
+const satrec = satellite.twoline2satrec(RIG_TLE.line1, RIG_TLE.line2)
 const _vel = new THREE.Vector3()
 
 /** Place and orient the station at `epochMs` exactly as ISSGroup does (TEME → world: x, z, −y). */
@@ -187,11 +198,13 @@ function flyOrbits(file: string, startMs: number, orbits: number): OrbitStats {
   return stats
 }
 
-const EPOCH_MS = Date.parse(fallback.epoch)
+const EPOCH_MS = Date.parse(RIG_TLE.epoch)
 const DAY = 86_400_000
 
 describe('rig simulation on the published Locate LOD', () => {
   // Three seasons: the beta angle (and the eclipse fraction) differs widely.
+  // +0 d: beta +34 deg; +23 d: beta -59 deg (highest beta that still has
+  // eclipse); +47 d: beta +3.5 deg.
   for (const offsetDays of [0, 23, 47]) {
     it(`keeps the cells on the sun and the radiators edge-on over two orbits (epoch +${offsetDays} d)`, () => {
       const stats = flyOrbits('iss_igoal_locate.glb', EPOCH_MS + offsetDays * DAY, 2)
@@ -208,6 +221,19 @@ describe('rig simulation on the published Locate LOD', () => {
       }
     }, 60_000)
   }
+
+  // +28 d: beta -74 deg, inside a full-sun season (no eclipse for ~5 days,
+  // recurring every ~60 days). The rig must track through it with no
+  // light/shadow switch to re-target on.
+  it('keeps tracking through a full-sun, high-beta season (epoch +28 d)', () => {
+    const stats = flyOrbits('iss_igoal_locate.glb', EPOCH_MS + 28 * DAY, 2)
+    expect(stats.eclipseSamples).toBe(0)
+    expect(stats.daylightSamples).toBeGreaterThan(10_000)
+    for (const wing of WINGS) expect(stats.wingMinCos[wing], wing).toBeGreaterThan(Math.cos(3 * DEG2RAD))
+    for (const radiator of RADIATORS) {
+      expect(stats.radiatorMaxSunCos[radiator], radiator).toBeLessThan(Math.sin(2 * DEG2RAD))
+    }
+  }, 60_000)
 })
 
 describe('camera idle sweeps on the published high asset', () => {
