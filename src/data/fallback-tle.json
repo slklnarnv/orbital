@@ -1,7 +1,7 @@
 {
   "_comment": "Fallback TLE for ISS (NORAD 25544). Refresh before each release with `npm run refresh:tle`. Used when CelesTrak is unreachable and IndexedDB cache is empty. Accuracy degrades after ~7 days from TLE epoch.",
-  "line1": "1 25544U 98067A   26313.20747964  .00008201  00000+0  15534-3 0  9995",
-  "line2": "2 25544  51.6321 302.4538 0007297   5.2479 354.8585 15.49270212594231",
-  "epoch": "2026-11-09T04:58:46Z",
+  "line1": "1 25544U 98067A   26323.20494996  .00013991  00000+0  25715-3 0  9994",
+  "line2": "2 25544  51.6318 252.9634 0007402  42.1092 318.0465 15.49480324595789",
+  "epoch": "2026-11-19T04:55:07Z",
   "source": "fallback"
 }
